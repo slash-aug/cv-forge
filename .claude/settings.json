@@ -10,7 +10,11 @@
       "Edit(.claude/settings.json)",
       "Edit(.claude/settings.local.json)",
       "Edit(.github/**)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(gh:*)",
+      "Bash(git remote:*)",
+      "Edit(src/cvforge/guard.py)",
+      "Edit(.githooks/**)"
     ],
     "deny": [
       "Read(.env)",
@@ -36,7 +40,24 @@
       "Bash(ssh:*)",
       "Bash(nc:*)",
       "Bash(ncat:*)",
-      "Bash(netcat:*)"
+      "Bash(netcat:*)",
+      "Bash(rsync:*)",
+      "Bash(socat:*)",
+      "Bash(telnet:*)",
+      "Bash(ftp:*)",
+      "Bash(openssl s_client:*)",
+      "Bash(gh gist:*)",
+      "Bash(gh release:*)",
+      "Bash(gh repo create:*)",
+      "Bash(gh api:*)",
+      "Bash(curl --json:*)",
+      "Bash(curl -X post:*)",
+      "Bash(curl -sd:*)",
+      "Bash(curl -s -d:*)",
+      "Bash(curl -s -F:*)",
+      "Bash(curl -sF:*)",
+      "Bash(curl -s -X POST:*)",
+      "Bash(curl -sX POST:*)"
     ]
   }
 }
