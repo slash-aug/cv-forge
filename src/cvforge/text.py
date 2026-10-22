@@ -29,3 +29,15 @@ def contains_term(text: str, term: str) -> bool:
     if SEPARATORS.search(term):
         return fold(term) in fold(text)
     return squash(term) in squash(text)
+
+
+def _ascii(text: str) -> str:
+    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
+
+
+def slug(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", _ascii(text).lower()).strip("-")
+
+
+def file_part(text: str) -> str:
+    return re.sub(r"[^A-Za-z0-9]+", "_", _ascii(text)).strip("_")
