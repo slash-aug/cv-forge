@@ -151,3 +151,117 @@ def test_guard_msg(tmp_path, capsys):
     bad.write_text("x\n\nCo-Authored-By: Claude <noreply@anthropic.com>\n")
     assert main(["guard", "msg", str(good)]) == 0
     assert main(["guard", "msg", str(bad)]) == 1
+
+
+SCISSORS = "# " + "-" * 24 + " >8 " + "-" * 24
+
+
+def _data_dir(tmp_path, monkeypatch):
+    prof = tmp_path / "datadir" / "profile"
+    prof.mkdir(parents=True, exist_ok=True)
+    (prof / "master.yaml").write_text(
+        (Path(__file__).parents[1] / "examples/persona/master.yaml").read_text())
+    monkeypatch.setenv("CVFORGE_DATA_DIR", str(tmp_path / "datadir"))
+
+
+def test_staged_real_denylist_uppercase_email(tmp_path, monkeypatch, capsys):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _data_dir(tmp_path, monkeypatch)
+    monkeypatch.chdir(repo)
+    subprocess.run(["git", "init", "-q"], check=True)
+    (repo / "n.txt").write_text("mail ANA.EXEMPLO@EXAMPLE.COM")
+    _stage("n.txt")
+    assert main(["guard", "staged"]) == 1
+    assert "n.txt:" in capsys.readouterr().out
+
+
+def test_staged_file_name_checked(tmp_path, monkeypatch, capsys):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _data_dir(tmp_path, monkeypatch)
+    monkeypatch.chdir(repo)
+    subprocess.run(["git", "init", "-q"], check=True)
+    (repo / "ProjectZebra-notes.md").write_text("fine")
+    _stage("ProjectZebra-notes.md")
+    assert main(["guard", "staged"]) == 1
+    assert "ProjectZebra-notes.md:" in capsys.readouterr().out
+
+
+def test_rename_into_data_blocked(tmp_path, monkeypatch, capsys):
+    _repo(tmp_path, monkeypatch)
+    (tmp_path / "a.txt").write_text("some stable content here")
+    _stage("a.txt")
+    subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "x"], check=True)
+    (tmp_path / "data").mkdir()
+    subprocess.run(["git", "mv", "a.txt", "data/a.txt"], check=True)
+    assert main(["guard", "staged"]) == 1
+    assert "data/a.txt:" in capsys.readouterr().out
+
+
+def test_path_with_spaces_and_non_ascii(tmp_path, monkeypatch, capsys):
+    _repo(tmp_path, monkeypatch)
+    name = "my fíle ç.txt"
+    (tmp_path / name).write_text("cpf " + CPF)
+    _stage(name)
+    assert main(["guard", "staged"]) == 1
+    assert name + ":" in capsys.readouterr().out
+
+
+def test_staged_from_subdirectory(tmp_path, monkeypatch):
+    _repo(tmp_path, monkeypatch)
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "sub" / "a.txt").write_text("cpf " + CPF)
+    _stage("sub/a.txt")
+    monkeypatch.chdir(tmp_path / "sub")
+    assert main(["guard", "staged"]) == 1
+
+
+def test_missing_master_warns(tmp_path, monkeypatch, capsys):
+    _repo(tmp_path, monkeypatch)
+    (tmp_path / "ok.txt").write_text("fine")
+    _stage("ok.txt")
+    assert main(["guard", "staged"]) == 0
+    assert "no master profile at" in capsys.readouterr().err
+    f = tmp_path / "m"
+    f.write_text("feat: ok\n")
+    assert main(["guard", "msg", str(f)]) == 0
+    assert "denylist is empty" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("msg", [
+    "x\n\nCO-AUTHORED-BY: CLAUDE <a@b.c>",
+    "x\n\nco-authored-by: Someone <noreply@anthropic.com>",
+    "x\n\nCreated by Claude Code",
+    "x\n\nwritten using Anthropic tools",
+    "contact noreply@anthropic.com",
+])
+def test_attribution_variants_blocked(msg):
+    assert check_commit_message(msg)
+
+
+@pytest.mark.parametrize("text", ["a \\text" + "emdash b", "a &m" + "dash; b", "a &#82" + "12; b", "a &#x20" + "14; b"])
+def test_em_dash_variants_blocked(text):
+    assert check_content(text, denylist=[])
+
+
+def test_denylist_unicode_normalized():
+    assert check_content("José rocks", denylist=["José"])
+
+
+def _msg_file(tmp_path, monkeypatch, body):
+    _data_dir(tmp_path, monkeypatch)
+    f = tmp_path / "msg"
+    f.write_text(body)
+    return str(f)
+
+
+def test_msg_content_rules(tmp_path, monkeypatch):
+    for body in ["feat: projectzebra", "feat: cpf " + CPF, "feat: call " + PHONE]:
+        assert main(["guard", "msg", _msg_file(tmp_path, monkeypatch, body)]) == 1
+
+
+def test_msg_comments_and_scissors_stripped(tmp_path, monkeypatch):
+    body = ("feat: ok\n# projectzebra in a comment\n" + SCISSORS +
+            "\ndiff --git a/x b/x\n+projectzebra " + DASH + " " + CPF + "\n")
+    assert main(["guard", "msg", _msg_file(tmp_path, monkeypatch, body)]) == 0

@@ -163,7 +163,7 @@ def cmd_guard(args) -> int:
     if args.what == "staged":
         problems = check_staged(load_config())
     else:
-        problems = check_message_file(Path(args.file))
+        problems = check_message_file(Path(args.file), load_config())
     for problem in problems:
         print(problem)
     return 1 if problems else 0
