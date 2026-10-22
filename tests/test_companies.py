@@ -100,4 +100,29 @@ def test_cli_roundtrip(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "teamtailor" in out and "pt-tech-visa" in out
     assert main(["company", "show", "nobody"]) == 1
-    assert main(["company", "sponsor", "X", "--type", "bad", "--source", "s"]) != 0
+    capsys.readouterr()
+    assert main(["company", "sponsor", "X", "--type", "bad", "--source", "s"]) == 1
+    assert "unknown sponsor type" in capsys.readouterr().err
+
+
+def test_minimal_entry_works_everywhere(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("CVFORGE_DATA_DIR", str(tmp_path))
+    path = tmp_path / "companies.yaml"
+    path.write_text("- name: Foo\n", encoding="utf-8")
+    assert load_registry(path)[0] == {"name": "Foo", "aliases": [], "careers_url": None,
+                                      "ats": None, "sponsor": [], "notes": ""}
+    assert main(["company", "show", "Foo"]) == 0
+    assert main(["company", "add", "Foo", "--alias", "Fu"]) == 0
+    assert main(["company", "sponsor", "Foo", "--type", "nl-ind", "--source", "s"]) == 0
+    capsys.readouterr()
+    assert main(["company", "show", "Foo"]) == 0
+    assert "nl-ind" in capsys.readouterr().out
+
+
+def test_empty_name_key_rejected(tmp_path, capsys):
+    path = tmp_path / "companies.yaml"
+    with pytest.raises(CompanyError):
+        add_company(path, "!!!")
+    with pytest.raises(CompanyError):
+        add_sponsor(path, "  ", type="nl-ind", source="s", day=date(2026, 10, 22))
+    assert not path.exists()

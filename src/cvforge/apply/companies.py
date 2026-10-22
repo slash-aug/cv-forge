@@ -54,7 +54,11 @@ def load_registry(path: Path) -> list[dict]:
     problems = _problems(data)
     if problems:
         raise CompanyError(f"{path}: " + "; ".join(problems))
-    return data
+    return [{"name": e["name"], **_defaults(), **e} for e in data]
+
+
+def _defaults() -> dict:
+    return {"aliases": [], "careers_url": None, "ats": None, "sponsor": [], "notes": ""}
 
 
 def _stringify(entry):
@@ -98,10 +102,11 @@ def find_company(registry: list[dict], name: str) -> dict | None:
 
 
 def _ensure(registry: list[dict], name: str) -> dict:
+    if not name_key(name):
+        raise CompanyError(f"invalid company name '{name}'")
     entry = find_company(registry, name)
     if entry is None:
-        entry = {"name": name.strip(), "aliases": [], "careers_url": None, "ats": None,
-                 "sponsor": [], "notes": ""}
+        entry = {"name": name.strip(), **_defaults()}
         registry.append(entry)
     return entry
 
