@@ -26,6 +26,7 @@ from cvforge.apply.intake import (
     IntakeError,
     fetch_posting,
     posting_from_text,
+    refuse_linkedin,
     resolve_shortlink,
 )
 from cvforge.apply.posting import Posting, canonical_url
@@ -244,6 +245,7 @@ def cmd_intake(args) -> int:
                                         url="", today=today)
         else:
             url = canonical_url(resolve_shortlink(args.target, apply_http.get))
+            refuse_linkedin(url)
             if tracked(url=url):
                 return 3
             posting = fetch_posting(url, get=apply_http.get, today=today)
@@ -272,6 +274,8 @@ def cmd_track(args) -> int:
     path = cfg.data_dir / "tracker.csv"
     app_dir = cfg.data_dir / "applications" / args.slug
     today = _today()
+    if args.action == "show":
+        return _show_application(path, app_dir, args.slug, today)
     if args.action in ("stage", "done") and not any(
             r["slug"] == args.slug for r in tracker.load(path)
         ):
@@ -320,6 +324,34 @@ def cmd_track(args) -> int:
             print(str(exc.args[0]), file=sys.stderr)
             return 1
         print(f"stage done: {args.name}")
+    return 0
+
+
+SHOW_FIELDS = ("slug", "status", "channel", "date", "last_update", "company", "role", "url",
+               "notes", "skip_reason")
+
+
+def _show_application(path: Path, app_dir: Path, slug_: str, today: date) -> int:
+    """Read-only view of one tracker row and its stages."""
+    row = next((r for r in tracker.load(path) if r["slug"] == slug_), None)
+    if row is None:
+        print(f"unknown slug '{slug_}'", file=sys.stderr)
+        return 1
+    for key in SHOW_FIELDS:
+        print(f"{key}: {row[key] or '-'}")
+    try:
+        quiet = (today - date.fromisoformat(row["last_update"] or row["date"])).days
+    except ValueError:
+        quiet = None
+    print(f"days_quiet: {quiet if quiet is not None else '-'}")
+    try:
+        found = stages_mod.load_stages(app_dir)
+    except stages_mod.StagesError as exc:
+        print(f"bad stages file, {exc}", file=sys.stderr)
+        return 1
+    print("stages:" + ("" if found else " -"))
+    for st in found:
+        print(f"  {st.name} ({st.kind}) due {st.due or '-'}, {'done' if st.done else 'open'}")
     return 0
 
 
@@ -669,6 +701,8 @@ def _parser() -> argparse.ArgumentParser:
     t = track.add_parser("done", help="mark a stage done")
     t.add_argument("slug")
     t.add_argument("name")
+    t = track.add_parser("show", help="show an application's tracker row and stages")
+    t.add_argument("slug")
     p.set_defaults(func=cmd_track)
     p = sub.add_parser("intake", help="save a posting from a link or pasted text and track it")
     p.add_argument("target", help="job link, or - to read pasted text from stdin")

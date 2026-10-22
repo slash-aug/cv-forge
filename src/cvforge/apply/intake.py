@@ -20,19 +20,45 @@ NO_POSTING = "no readable posting; paste the text instead"
 WORKPLACE = {"remote": "remote", "hybrid": "hybrid", "onsite": "onsite", "on-site": "onsite"}
 
 
+LINKEDIN_REFUSED = ("LinkedIn pages are never fetched; paste the posting text with "
+                    "`intake - --company --role`, or use the employer's own link")
+
+
 class IntakeError(Exception):
     """The posting could not be read."""
 
 
+_on = http.on_domain
+is_linkedin = http.is_linkedin
+
+
+def refuse_linkedin(url: str) -> None:
+    """Refuse LinkedIn links (with or without a scheme) and anything that is not http(s)."""
+    url = url.strip()
+    scheme = urlsplit(url).scheme.lower()
+    if scheme not in ("http", "https"):
+        if "://" not in url and is_linkedin("https://" + url):
+            raise IntakeError(LINKEDIN_REFUSED)
+        raise IntakeError(f"not a web link: {url!r}; include https:// (or paste the text with `intake -`)")
+    if is_linkedin(url):
+        raise IntakeError(LINKEDIN_REFUSED)
+
+
 def resolve_shortlink(url: str, get: Get) -> str:
     """For lnkd.in, the first link in the interstitial that is not LinkedIn's; else the url unchanged."""
+    refuse_linkedin(url)
     if (urlsplit(url).hostname or "").lower() not in ("lnkd.in", "www.lnkd.in"):
         return url
+    to_linkedin_job = False
     for href in HREF.findall(get(url)):
         href = html.unescape(href)
-        host = (urlsplit(href).hostname or "").lower()
-        if not any(host == d or host.endswith("." + d) for d in ("linkedin.com", "licdn.com")):
+        parts = urlsplit(href)
+        host = http.host_of(href)
+        if not any(_on(host, d) for d in ("linkedin.com", "licdn.com")):
             return href
+        to_linkedin_job = to_linkedin_job or (_on(host, "linkedin.com") and "/jobs/" in parts.path)
+    if to_linkedin_job:
+        raise IntakeError(LINKEDIN_REFUSED)
     raise IntakeError("short link has no target; open it and paste the real link or the text")
 
 
@@ -205,6 +231,7 @@ def _jsonld(url: str, get: Get, today: date) -> Posting:
 
 def fetch_posting(url: str, *, get: Get = http.get, today: date) -> Posting:
     url = canonical_url(resolve_shortlink(url, get))
+    refuse_linkedin(url)
     parts = urlsplit(url)
     host, path = (parts.hostname or "").lower(), parts.path
     seg = [quote(s, safe="-_.~") for s in path.split("/") if s]

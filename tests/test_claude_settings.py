@@ -104,6 +104,8 @@ def _ignored(path: str) -> bool:
 
 def test_settings_tracked_eligible_but_agents_ignored():
     assert not _ignored(".claude/settings.json")
+    assert not _ignored(".claude/commands/apply.md")
+    assert not _ignored(".claude/commands/outcome.md")
     assert _ignored(".claude/agents/x.md")
 
 

@@ -183,3 +183,109 @@ def test_intake_reports_unreadable_posting(env, monkeypatch, capsys):
     monkeypatch.setattr(http, "get", lambda u, **k: "<html></html>")
     assert main(["intake", "https://x.example/job"]) == 1
     assert "paste the text instead" in capsys.readouterr().err
+
+
+def _no_fetch(url, **_kw):
+    pytest.fail(f"fetched {url}")
+
+
+@pytest.mark.parametrize("url", [
+    "https://www.linkedin.com/jobs/view/4000000001",
+    "https://linkedin.com/jobs/view/4000000001",
+    "https://br.linkedin.com/jobs/view/dev-at-acme-4000000001",
+    "https://WWW.LinkedIn.com/comm/jobs/view/4000000001?trk=x",
+])
+def test_intake_refuses_linkedin_before_any_request(tmp_path, monkeypatch, capsys, url):
+    monkeypatch.setenv("CVFORGE_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(http, "get", _no_fetch)
+    assert main(["intake", url]) == 1
+    err = capsys.readouterr().err
+    assert "LinkedIn pages are never fetched" in err
+    assert "intake - --company --role" in err
+    assert not (tmp_path / "tracker.csv").exists()
+    assert not (tmp_path / "applications").exists()
+
+
+def test_fetch_posting_refuses_linkedin_without_request():
+    with pytest.raises(IntakeError, match="LinkedIn pages are never fetched"):
+        fetch_posting("https://www.linkedin.com/jobs/view/1", get=_no_fetch, today=TODAY)
+
+
+def test_lookalike_hosts_are_not_linkedin():
+    from cvforge.apply.intake import is_linkedin
+    assert is_linkedin("https://uk.linkedin.com/jobs/view/1")
+    assert not is_linkedin("https://notlinkedin.com/jobs/1")
+    assert not is_linkedin("https://linkedin.com.evil.example/jobs/1")
+    assert not is_linkedin("https://lnkd.in/abc123")
+
+
+def test_shortlink_to_linkedin_job_is_refused(tmp_path, monkeypatch, capsys):
+    page = ('<a href="https://www.linkedin.com/legal/user-agreement">UA</a>'
+            '<p>You are leaving LinkedIn. <a href="https://www.linkedin.com/jobs/view/4000000001">'
+            'https://www.linkedin.com/jobs/view/4000000001</a></p>')
+    calls = []
+
+    def get(url, **_kw):
+        calls.append(url)
+        if url != "https://lnkd.in/xyz":
+            pytest.fail(f"fetched {url}")
+        return page
+
+    with pytest.raises(IntakeError, match="LinkedIn pages are never fetched"):
+        resolve_shortlink("https://lnkd.in/xyz", get)
+    monkeypatch.setenv("CVFORGE_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(http, "get", get)
+    assert main(["intake", "https://lnkd.in/xyz"]) == 1
+    assert "LinkedIn pages are never fetched" in capsys.readouterr().err
+    assert all(c == "https://lnkd.in/xyz" for c in calls)
+
+
+@pytest.mark.parametrize("url", [
+    "https://linkedin.com./jobs/view/1",
+    "https://www.linkedin.com./x",
+    "https://WWW.LINKEDIN.COM../jobs/view/1",
+])
+def test_trailing_dot_hosts_are_linkedin(tmp_path, monkeypatch, capsys, url):
+    from cvforge.apply.intake import is_linkedin
+    assert is_linkedin(url)
+    monkeypatch.setenv("CVFORGE_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(http, "get", _no_fetch)
+    assert main(["intake", url]) == 1
+    assert "LinkedIn pages are never fetched" in capsys.readouterr().err
+
+
+def test_http_refuses_redirect_to_linkedin():
+    import urllib.request
+    handler = http.NoLinkedInRedirect()
+    req = urllib.request.Request("https://jobs.example/42")
+    for target in ("https://www.linkedin.com/jobs/view/1", "https://linkedin.com./x",
+                   "https://uk.linkedin.com/jobs/view/1"):
+        with pytest.raises(http.FetchError, match="redirect to LinkedIn refused"):
+            handler.redirect_request(req, None, 302, "Found", {}, target)
+    ok = handler.redirect_request(req, None, 302, "Found", {}, "https://careers.example/42")
+    assert ok is not None and ok.full_url == "https://careers.example/42"
+    assert any(isinstance(h, http.NoLinkedInRedirect) for h in http.OPENER.handlers)
+
+
+def test_http_get_refuses_linkedin_without_request(monkeypatch):
+    monkeypatch.setattr(http.OPENER, "open", lambda *a, **k: pytest.fail("opened"))
+    with pytest.raises(http.FetchError, match="LinkedIn"):
+        http.get("https://www.linkedin.com./jobs/view/1")
+
+
+@pytest.mark.parametrize("target", ["linkedin.com/jobs/view/1", "www.linkedin.com/jobs/view/1",
+                                    "uk.linkedin.com./jobs/view/1"])
+def test_schemeless_linkedin_is_refused(tmp_path, monkeypatch, capsys, target):
+    monkeypatch.setenv("CVFORGE_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(http, "get", _no_fetch)
+    assert main(["intake", target]) == 1
+    assert "LinkedIn pages are never fetched" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("target", ["careers.example/jobs/42", "ftp://careers.example/42"])
+def test_schemeless_or_other_scheme_needs_https(tmp_path, monkeypatch, capsys, target):
+    monkeypatch.setenv("CVFORGE_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(http, "get", _no_fetch)
+    assert main(["intake", target]) == 1
+    assert "include https://" in capsys.readouterr().err
+    assert not (tmp_path / "applications").exists()
