@@ -49,6 +49,7 @@ cvforge guard staged | tree | msg <file>       privacy checks used by the hooks 
 | 2 | Job discovery from public sources, with a ghost-job filter to drop stale or fake postings | Planned |
 | 3 | Salary estimates and drafted answers for common screening questions | Planned |
 | 4 | Application kit per posting and a tracker for where each application stands | Planned |
+| 5 | A clean local web UI to track every application and run cv-forge without the command line | Planned |
 
 ## Quick start
 
