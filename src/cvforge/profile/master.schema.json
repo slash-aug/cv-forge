@@ -152,6 +152,12 @@
           "x-international": {
             "type": "boolean"
           },
+          "x-category": {
+            "enum": [
+              "engineering",
+              "other"
+            ]
+          },
           "positions": {
             "type": "array",
             "items": {

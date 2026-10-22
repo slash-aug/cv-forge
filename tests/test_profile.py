@@ -23,7 +23,7 @@ def test_persona_valid():
 def test_persona_has_expected_shape():
     master = load_master(PERSONA)
     assert len(master["x-summaries"]) == 2
-    assert [w.get("x-international") for w in master["work"]] == [None, True]
+    assert [w.get("x-international") for w in master["work"]] == [None, True, None]
     assert master["work"][1]["positions"][0]["endDate"] is None
     assert master["x-confidential"] == ["projectzebra"]
 
