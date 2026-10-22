@@ -24,6 +24,7 @@ class Config:
     lualatex: str
     xelatex: str
     daily_cap: int = 10
+    clt_factor: float = 1.4
 
 
 def _engine(name: str) -> str:
@@ -49,6 +50,12 @@ def load_config(env: Mapping[str, str] | None = None, file: Path | None = None) 
     def pick(key: str) -> str | None:
         return env.get(f"CVFORGE_{key.upper()}") or cfg.get(key) or None
 
+    raw_factor = pick("clt_factor")
+    try:
+        clt_factor = float(raw_factor) if raw_factor is not None else 1.4
+    except (TypeError, ValueError):
+        raise ValueError(f"clt_factor must be a number, got {raw_factor!r}") from None
+
     default_build = WIN_BUILD_DIR if Path("/mnt/d").exists() else REPO_ROOT / "build"
     return Config(
         data_dir=Path(pick("data_dir") or REPO_ROOT / "data"),
@@ -56,4 +63,5 @@ def load_config(env: Mapping[str, str] | None = None, file: Path | None = None) 
         lualatex=pick("lualatex") or _engine("lualatex"),
         xelatex=pick("xelatex") or _engine("xelatex"),
         daily_cap=int(pick("daily_cap") or 10),
+        clt_factor=clt_factor,
     )
