@@ -4,7 +4,7 @@ Adapted from ai-job-search (MIT), `.claude/commands/outcome.md`: same flow, rewi
 
 You record what happened to a job application: the candidate submitted it, a test or interview was scheduled or done, an offer arrived, or the process ended. You also own the stretch before there is news: the **follow-up branch** (Step 2b) drafts a short follow-up for applications that went quiet, and the **stale sweep** (Step 2c) closes applications that never answered.
 
-Every write goes through `.venv/bin/cvforge track status`, `.venv/bin/cvforge track stage` or `.venv/bin/cvforge track done`, and what needs attention is read with `.venv/bin/cvforge due`. **Never read or edit `data/tracker.csv` directly.**
+Every write goes through `.venv/bin/cvforge track status`, `.venv/bin/cvforge track stage`, `.venv/bin/cvforge track done` or (for an application made outside `/apply`) `.venv/bin/cvforge track add <slug>`. What needs attention is read with `.venv/bin/cvforge due`, and one application's current row and stages with `.venv/bin/cvforge track show <slug>`. **Never read or edit `data/tracker.csv` directly.**
 
 Paths: `<slug>` is the application id; `<app>` is `data/applications/<slug>`.
 
@@ -19,7 +19,7 @@ Follow these steps **in order**.
 - Nothing: show what needs attention and ask which application to update.
 - A slug, or a company name with an optional role, e.g. `/outcome acme` or `/outcome acme backend`: target that application, then read the rest of the message as what happened (e.g. `/outcome acme-backend-engineer applied`).
 - `followup`: the follow-up branch (Step 2b) over every quiet application, threshold **10 days**.
-- `followup <N>`: the follow-up branch with an N-day threshold (N of 10 or more).
+- `followup <N>`: the follow-up branch with an N-day threshold, N from 10 up to 59. It only works below 60: `cvforge due` lists quiet applications for 10 to 59 days, and older ones are stale (use `stale <N>`).
 - `followup <slug or company>`: draft a follow-up for that application now, whatever its age.
 - `stale` or `sweep`: the stale sweep (Step 2c), threshold **60 days**.
 - `stale <N>` or `sweep <N>`: the stale sweep with an N-day threshold (N of 60 or more).
@@ -34,8 +34,19 @@ Follow these steps **in order**.
    - **Stale**: open applications with no update for 60 days or more.
 
    Each application line shows the slug, company, role, status and last update date.
-2. **With an argument:** find the slug. Match it against the lines of `cvforge due` and the folder names in `data/applications/` (each folder is a slug, `<company>-<role>`; `<app>/posting.json` holds the company and title). One match: proceed. Several: list them and ask. None: the application was made outside `/apply`; ask for the company, role and link, and send the candidate to `/apply` with the link (or pasted posting) so it gets a folder and a tracker row.
+2. **With an argument:** find the slug. Match it against the lines of `cvforge due` and the folder names in `data/applications/` (each folder is a slug, `<company>-<role>`; `<app>/posting.json` holds the company and title). One match: proceed. Several: list them and ask. None: the application was made outside `/apply`. Ask for the company, role, link and channel, and register it without a full `/apply`:
+   ```
+   .venv/bin/cvforge track add <slug> --company "<Company>" --role "<Role title>" --url "<link>" --channel <channel>
+   ```
+   Here `<slug>` is `<company>-<role>` in lowercase words joined by hyphens, and the channel is one of `easy-apply`, `external`, `trainee`, `platform`. Exit `3` means it is already tracked under the slug it prints: use that one. The new row starts as `drafted`; continue with Step 2 (usually **Submitted**).
 3. **Without an argument:** show the `cvforge due` output as a short table, flag overdue stages first, and ask which application to update. If any are listed under **Follow up**, add one line: "Some of these went quiet. Want a follow-up draft? (`/outcome followup`)". If any are listed under **Stale**, add: "Some have been quiet for 60+ days. Run `/outcome stale` to close them." If all three sections are empty, say so and stop.
+4. **Read the current state.** Once the slug is known, and before any write, run:
+   ```
+   .venv/bin/cvforge track show <slug>
+   ```
+   It prints the row (`status`, `channel`, `date`, `last_update`, `company`, `role`, `url`, `notes`, `skip_reason`), `days_quiet` (days since the last update) and the stages (`<name> (<kind>) due <date>, open|done`). Exit `1` means the slug is unknown: go back to point 2. Every status, date, days-quiet figure and stage you mention or act on comes from this output, never from memory or assumption.
+   - **`skipped`:** the job failed the eligibility check. Show the `skip_reason` and ask before writing anything; do not change the status unless the candidate confirms they applied anyway.
+   - **A final status** (see below): the application is closed. Ask before reopening it.
 
 ---
 
@@ -59,11 +70,11 @@ Stage kinds for `cvforge track stage --kind`: `test`, `interview`, `case`, `form
 
 Ask what happened if the message does not say, then map it to commands. Dates are `YYYY-MM-DD`. Notes are one short line, in the candidate's words where possible.
 
-**Submitted** (status was `drafted`):
+**Submitted** (only when `track show` says `drafted`):
 ```
 .venv/bin/cvforge track status <slug> applied
 ```
-This stamps today as the applied date. If the candidate says it was sent on an earlier day, add `--note "submitted <date>"`.
+This stamps today as the applied date, so never rerun it on a row that is already `applied` or later. If the candidate says it was sent on an earlier day, add `--note "submitted <date>"`.
 
 **Test, case or questionnaire** (online test, take-home, assessment, extra form):
 ```
@@ -113,7 +124,7 @@ When a test, case or interview stage is added, write `<app>/prep.md` (append a d
 
 Enter from the `followup` argument or from the offer in Step 1. Standard practice is a brief, polite follow-up one to two weeks after applying, at most twice.
 
-**Candidates.** Take the **Follow up** section of `cvforge due`. With `followup <N>`, keep only those whose last update is N or more days ago. Each follow-up is logged as a stage named `followup <date>` in `<app>/stages.yaml`: count them, and drop applications that already have **two**, or whose latest follow-up is less than the threshold ago. Present the rest as a table (company, role, status, days quiet, follow-ups sent) and draft only for the ones the candidate picks.
+**Candidates.** Take the **Follow up** section of `cvforge due`. With `followup <N>`, keep only those whose last update is N or more days ago. For each candidate run `.venv/bin/cvforge track show <slug>`: take days quiet from `days_quiet`, and count the stages named `followup <date>` (each follow-up is logged as one); and drop applications that already have **two**, or whose latest follow-up is less than the threshold ago. Present the rest as a table (company, role, status, days quiet, follow-ups sent) and draft only for the ones the candidate picks.
 
 **Drafting.** For each selected application:
 
@@ -163,7 +174,7 @@ A row the candidate says actually moved (an interview, a rejection) goes through
 Summarise what was recorded:
 
 > **Updated <Role> at <Company>** (`<slug>`)
-> - Status: <old> to <new>
+> - Status: <old> to <new> (`<old>` from `track show` before the change, `<new>` from the command's output)
 > - Stages: <added or done, with due dates>
 > - Files: <prep.md or followup note written, if any>
 
@@ -173,7 +184,7 @@ If an interview or test stage is coming up, point to `<app>/prep.md`. If the new
 
 ## Important rules
 
-1. **Writes only through `track status`, `track stage` and `track done`.** Never open, rewrite or reorder `data/tracker.csv` yourself.
+1. **Writes only through `track add`, `track status`, `track stage` and `track done`; reads through `due` and `track show`.** Never open, rewrite or reorder `data/tracker.csv` yourself.
 2. **Never fabricate.** Feedback is recorded as the candidate reports it. Follow-ups and thank-you notes add no new claims.
 3. **Never solve tests.** Prep notes cover what to review, never the answers.
 4. **Draft only, never send.** Follow-ups and thank-you notes are text for the candidate to send. Nothing is emailed, messaged or submitted, and nothing is automated on LinkedIn.

@@ -35,10 +35,35 @@ def _options(parser: argparse.ArgumentParser) -> set[str]:
 
 
 def _calls(text: str):
-    """(subcommand, rest of the line) for every `cvforge <sub>` mention."""
+    """(subcommand, rest of the line, offset) for every `cvforge <sub>` mention."""
     for m in CALL.finditer(text):
         rest = m.group(2).split("cvforge", 1)[0]
-        yield m.group(1), rest
+        yield m.group(1), rest, m.start()
+
+
+def _resolve(name: str, rest: str) -> tuple[argparse.ArgumentParser, list[str]]:
+    """The (sub)subparser a call names and the words after it."""
+    subs = _subparsers(_parser())
+    assert name in subs, f"unknown subcommand: cvforge {name}"
+    parser, words = subs[name], rest.split()
+    nested = _subparsers(parser)
+    if nested:
+        assert words and words[0] in nested, f"cvforge {name} needs one of {sorted(nested)}: {rest!r}"
+        parser, words = nested[words[0]], words[1:]
+    return parser, words
+
+
+def _check_positionals(parser: argparse.ArgumentParser, words: list[str], where: str) -> None:
+    """Literal positional values (not <placeholders>) must be among the parser's choices."""
+    positionals = [a for a in parser._actions if not a.option_strings]
+    tokens = []
+    for w in words:
+        if w.startswith(("-", "#", "<<")):
+            break
+        tokens.append(w)
+    for action, token in zip(positionals, tokens):
+        if action.choices and not token.startswith(("<", '"')):
+            assert token in action.choices, f"{where}: {token!r} not in {list(action.choices)}"
 
 
 def test_both_files_exist():
@@ -48,19 +73,29 @@ def test_both_files_exist():
 
 @pytest.mark.parametrize("path", FILES, ids=lambda p: p.name)
 def test_every_cvforge_call_matches_the_cli(path):
-    subs = _subparsers(_parser())
     calls = list(_calls(_text(path)))
     assert calls, "no cvforge calls found"
-    for name, rest in calls:
-        assert name in subs, f"unknown subcommand: cvforge {name}"
-        parser = subs[name]
-        nested = _subparsers(parser)
-        if nested:
-            words = rest.split()
-            assert words and words[0] in nested, f"cvforge {name} needs one of {sorted(nested)}: {rest!r}"
-            parser = nested[words[0]]
+    for name, rest, _ in calls:
+        parser, words = _resolve(name, rest)
+        _check_positionals(parser, words, f"cvforge {name}{rest}")
         for flag in re.findall(r"(?<![\w-])--[a-z][a-z-]*", rest):
             assert flag in _options(parser), f"cvforge {name}: unknown flag {flag}"
+
+
+@pytest.mark.parametrize("path", FILES, ids=lambda p: p.name)
+def test_prose_flags_belong_to_the_preceding_call(path):
+    """A backticked `--flag` in prose must exist on the closest cvforge call before it."""
+    text = _text(path)
+    calls = list(_calls(text))
+    checked = 0
+    for m in re.finditer(r"`(--[a-z][a-z-]*)[^`]*`", text):
+        before = [c for c in calls if c[2] < m.start()]
+        assert before, f"{m.group(1)} appears before any cvforge call"
+        name, rest, _ = before[-1]
+        parser, _ = _resolve(name, rest)
+        assert m.group(1) in _options(parser), f"{m.group(1)} is not a flag of cvforge {name}{rest}"
+        checked += 1
+    assert checked, "no prose flags found"
 
 
 @pytest.mark.parametrize("path", FILES, ids=lambda p: p.name)
@@ -97,3 +132,16 @@ def test_outcome_lists_exactly_the_statuses():
 def test_outcome_credits_upstream():
     header = "\n".join(_text(OUTCOME).splitlines()[:3])
     assert "ai-job-search (MIT)" in header
+
+
+def test_apply_keeps_linkedin_links_away_from_intake():
+    text = _text(APPLY)
+    assert "never passed to intake" in text
+    assert "exits 0 with no findings" in text
+
+
+def test_outcome_reads_status_with_track_show():
+    text = _text(OUTCOME)
+    assert "cvforge track show <slug>" in text
+    assert "cvforge track add <slug>" in text
+    assert "below 60" in text

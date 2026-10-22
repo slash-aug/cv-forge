@@ -37,7 +37,8 @@ Follow the steps **in order**. Every step can be rerun alone, so when one fails,
    (`easy-apply`: LinkedIn Easy Apply; `external`: the company's own site or ATS; `trainee`: a multi-stage trainee or graduate process; `platform`: a talent platform.)
 
 2. **Run intake.**
-   - **A link:**
+   - **A linkedin.com link** (any page on `linkedin.com` or its subdomains, including the usual Easy Apply job link): it is never passed to intake, and intake refuses it anyway. Ask the candidate to paste the posting text (then follow **Pasted text** below) or to give the employer's own link to the same job. `lnkd.in` short links are fine: intake follows them to the employer's page and refuses them if they lead back to LinkedIn.
+   - **Any other link:**
      ```
      .venv/bin/cvforge intake "<url>" --channel <channel>
      ```
@@ -161,7 +162,7 @@ recruiter_note:
 .venv/bin/cvforge audit <app>/tailored.yaml --master <master>
 ```
 
-Exit `1` prints findings (unknown id, number not in the master, keyword outside its group, confidential term, length, em dash). Fix every finding by changing the wording or refs in `tailored.yaml`, never by changing the master, and rerun until it prints `ok`.
+Exit `1` prints findings (unknown id, number not in the master, keyword outside its group, confidential term, length, em dash). Fix every finding by changing the wording or refs in `tailored.yaml`, never by changing the master, and rerun until it exits 0 with no findings (a clean audit prints nothing).
 
 ---
 

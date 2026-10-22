@@ -66,3 +66,37 @@ def test_due_reports_bad_stage_file_and_continues(data, capsys):
     out = capsys.readouterr()
     assert "good: Test" in out.out
     assert "bad" in out.err and "stages.yaml" in out.err
+
+
+def test_track_show_prints_row_and_stages(data, capsys):
+    main(["track", "add", "acme-dev", "--company", "Acme", "--role", "Dev", "--url", "http://x/1",
+          "--channel", "external"])
+    main(["track", "status", "acme-dev", "applied", "--note", "sent"])
+    main(["track", "stage", "acme-dev", "Online test", "--kind", "test", "--due", "2026-05-08"])
+    main(["track", "stage", "acme-dev", "Screen", "--kind", "interview"])
+    main(["track", "done", "acme-dev", "Screen"])
+    before = (data / "tracker.csv").read_text(encoding="utf-8")
+    capsys.readouterr()
+    assert main(["track", "show", "acme-dev"]) == 0
+    out = capsys.readouterr().out
+    for line in ("slug: acme-dev", "status: applied", "channel: external", "date: 2026-05-01",
+                 "company: Acme", "role: Dev", "url: http://x/1", "notes: sent", "skip_reason: -",
+                 "days_quiet: ", "stages:", "  Online test (test) due 2026-05-08, open",
+                 "  Screen (interview) due -, done"):
+        assert line in out, line
+    assert "last_update: " in out
+    assert (data / "tracker.csv").read_text(encoding="utf-8") == before
+
+
+def test_track_show_unknown_slug(data, capsys):
+    assert main(["track", "show", "nope"]) == 1
+    assert "unknown slug 'nope'" in capsys.readouterr().err
+
+
+def test_track_show_without_stages(data, capsys):
+    main(["track", "add", "a", "--company", "A", "--role", "R"])
+    capsys.readouterr()
+    assert main(["track", "show", "a"]) == 0
+    out = capsys.readouterr().out
+    assert "status: drafted" in out
+    assert "stages: -" in out
