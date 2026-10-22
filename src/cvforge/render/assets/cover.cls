@@ -16,6 +16,7 @@
 \usepackage{titlesec}
 \usepackage[absolute]{textpos}
 \usepackage{fontspec,xltxtra,xunicode}
+\usepackage{ragged2e}
 
 % Publications
 \usepackage{cite}
@@ -27,15 +28,24 @@
 \definecolor{headings}{HTML}{6A6A6A}
 \definecolor{subheadings}{HTML}{333333}
 
-% Set main fonts
-\setmainfont[Color=primary, Path = OpenFonts/fonts/lato/,BoldItalicFont=Lato-RegIta,BoldFont=Lato-Reg,ItalicFont=Lato-LigIta]{Lato-Lig}
-\setsansfont[Scale=MatchLowercase,Mapping=tex-text, Path = OpenFonts/fonts/raleway/]{Raleway-ExtraLight}
+% Set main fonts: the same Lato files as the CV, so both documents match.
+\setmainfont[Color=primary, Path = OpenFonts/fonts/lato/,BoldFont=Lato-Bol,ItalicFont=Lato-RegIta,BoldItalicFont=Lato-BolIta]{Lato-Reg}
+\setsansfont[Mapping=tex-text, Path = OpenFonts/fonts/lato/,BoldFont=Lato-Bol,ItalicFont=Lato-RegIta,BoldItalicFont=Lato-BolIta]{Lato-Reg}
+
+% Justified text keeps every word whole: a hyphenated line break splits a keyword
+% in the PDF text layer that ATS parsers read. Extra stretch avoids overfull lines.
+\hyphenpenalty=10000
+\exhyphenpenalty=10000
+\emergencystretch=3em
+% No first-line indent, like the CV; paragraphs are already separated by a blank line.
+\setlength{\parindent}{0pt}
+\setlength{\JustifyingParindent}{0pt}% ragged2e's \justifying restores this one
 
 % Date command
 \setlength{\TPHorizModule}{1mm}
 \setlength{\TPVertModule}{1mm}
 \newcommand{\lastupdated}{\begin{textblock}{60}(155,5)
-\color{date}\fontspec[Path = OpenFonts/fonts/raleway/]{Raleway-ExtraLight}\fontsize{8pt}{10pt}\selectfont 
+\color{date}\fontspec[Path = OpenFonts/fonts/lato/]{Lato-Reg}\fontsize{8pt}{10pt}\selectfont 
 Last Updated on \today
 \end{textblock}}
 
@@ -43,12 +53,12 @@ Last Updated on \today
 \newcommand{\namesection}[3]{
 \centering{
 \fontsize{40pt}{60pt}
-\fontspec[Path = OpenFonts/fonts/lato/]{Lato-Hai}\selectfont #1 
-\fontspec[Path = OpenFonts/fonts/lato/]{Lato-Lig}\selectfont #2
+\fontspec[Path = OpenFonts/fonts/lato/]{Lato-Reg}\selectfont #1 
+\fontspec[Path = OpenFonts/fonts/lato/]{Lato-Bol}\selectfont #2
 } \\[5pt]
 \centering{
 \color{headings}
-\fontspec[Path = OpenFonts/fonts/raleway/]{Raleway-Medium}\fontsize{11pt}{14pt}\selectfont #3}
+\fontspec[Path = OpenFonts/fonts/lato/]{Lato-Reg}\fontsize{11pt}{14pt}\selectfont #3}
 \noindent\makebox[\linewidth]{\color{headings}\rule{\paperwidth}{0.0pt}}
 \vspace{0pt}
 }
@@ -60,7 +70,7 @@ Last Updated on \today
 
 % Headings command
 \titleformat{\section}{\color{headings}
-\scshape\fontspec[Path = OpenFonts/fonts/lato/]{Lato-Lig}\fontsize{16pt}{24pt}\selectfont \raggedright\uppercase}{}{0em}{}
+\scshape\fontspec[Path = OpenFonts/fonts/lato/]{Lato-Bol}\fontsize{16pt}{24pt}\selectfont \raggedright\uppercase}{}{0em}{}
 
 % Subeadings command
 \titleformat{\subsection}{
@@ -71,11 +81,11 @@ Last Updated on \today
 
 % Descriptors command
 \newcommand{\descript}[1]{
-\color{subheadings}\raggedright\scshape\fontspec[Path = OpenFonts/fonts/raleway/]{Raleway-Medium}\fontsize{11pt}{13pt}\selectfont {#1 \\} \normalfont}
+\color{subheadings}\raggedright\scshape\fontspec[Path = OpenFonts/fonts/lato/]{Lato-Reg}\fontsize{11pt}{13pt}\selectfont {#1 \\} \normalfont}
 
 % Location command
 \newcommand{\location}[1]{
-\color{headings}\raggedright\fontspec[Path = OpenFonts/fonts/raleway/]{Raleway-Medium}\fontsize{10pt}{12pt}\selectfont {#1\\} \normalfont}
+\color{headings}\raggedright\fontspec[Path = OpenFonts/fonts/lato/]{Lato-Reg}\fontsize{10pt}{12pt}\selectfont {#1\\} \normalfont}
 
 % Bullet Lists with fewer gaps command
 \newenvironment{tightemize}{
@@ -85,13 +95,13 @@ Last Updated on \today
 % Cover Letter
 \newcommand{\companyname}[1]{\raggedright\fontspec[Path = OpenFonts/fonts/lato/]{Lato-Bol}\fontsize{12pt}{14pt}\selectfont {#1 \\} \normalfont}
 
-\newcommand{\companyaddress}[1]{\raggedright\fontspec[Path = OpenFonts/fonts/raleway/]{Raleway-Medium}\fontsize{11pt}{13pt}\selectfont {#1 \\}\mbox{}\\\mbox{}\\ \normalfont}
+\newcommand{\companyaddress}[1]{\raggedright\fontspec[Path = OpenFonts/fonts/lato/]{Lato-Reg}\fontsize{11pt}{13pt}\selectfont {#1 \\}\mbox{}\\\mbox{}\\ \normalfont}
 
-\newcommand{\currentdate}[1]{\raggedleft\fontspec[Path = OpenFonts/fonts/raleway/]{Raleway-Medium}\fontsize{11pt}{13pt}\selectfont {#1 \\} \normalfont}
+\newcommand{\currentdate}[1]{\raggedleft\fontspec[Path = OpenFonts/fonts/lato/]{Lato-Reg}\fontsize{11pt}{13pt}\selectfont {#1 \\} \normalfont}
 
 % Letter content command
-\newcommand{\lettercontent}[1]{\raggedright\fontspec[Path = OpenFonts/fonts/raleway/]{Raleway-Medium}\fontsize{11pt}{13pt}\selectfont {#1 \\}\mbox{}\\ \normalfont}
+\newcommand{\lettercontent}[1]{\justifying\fontspec[Path = OpenFonts/fonts/lato/]{Lato-Reg}\fontsize{11pt}{13pt}\selectfont {#1 \\}\mbox{}\\ \normalfont}
 
-\newcommand{\closing}[1]{\raggedright\fontspec[Path = OpenFonts/fonts/raleway/]{Raleway-Medium}\fontsize{11pt}{13pt}\selectfont {#1 \\}\mbox{}\\\mbox{}\\ \normalfont}
+\newcommand{\closing}[1]{\raggedright\fontspec[Path = OpenFonts/fonts/lato/]{Lato-Reg}\fontsize{11pt}{13pt}\selectfont {#1 \\}\mbox{}\\\mbox{}\\ \normalfont}
 
-\newcommand{\signature}[1]{\raggedright\fontspec[Path = OpenFonts/fonts/raleway/]{Raleway-Medium}\fontsize{11pt}{13pt}\selectfont {#1 \\} \normalfont}
+\newcommand{\signature}[1]{\raggedright\fontspec[Path = OpenFonts/fonts/lato/]{Lato-Reg}\fontsize{11pt}{13pt}\selectfont {#1 \\} \normalfont}
