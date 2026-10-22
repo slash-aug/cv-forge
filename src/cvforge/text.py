@@ -47,3 +47,9 @@ def slug(text: str) -> str:
 
 def file_part(text: str) -> str:
     return re.sub(r"[^A-Za-z0-9]+", "_", _ascii(text)).strip("_")
+
+
+def split_name(name: str) -> tuple[str, str]:
+    """First word and the rest, the split used for PDF file names and the kit."""
+    first, _, last = name.strip().partition(" ")
+    return first, last.strip()

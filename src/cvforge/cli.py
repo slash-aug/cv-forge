@@ -5,6 +5,7 @@ import argparse
 import json
 import math
 import shutil
+import subprocess
 import sys
 from dataclasses import asdict
 from datetime import date
@@ -34,6 +35,8 @@ from cvforge.build import LatexError, compile_tex
 from cvforge.checks.ats import AtsReport, ats_check
 from cvforge.config import Config, load_config
 from cvforge.guard import GuardError, check_message_file, check_staged, check_tree
+from cvforge.kit.data import build_kit
+from cvforge.kit.render import render_kit
 from cvforge.money.normalise import Money
 from cvforge.money.rates import MoneyError, load_rates
 from cvforge.profile.model import ProfileError, load_master, localized
@@ -42,7 +45,7 @@ from cvforge.render.letter import ASSETS_DIR, letter_context, render_letter_cont
 from cvforge.salary.market import load_market, match_market
 from cvforge.salary.suggest import Suggestion, below_floor, displays, suggest
 from cvforge.tailor.audit import Finding, audit, audit_rendered, load_tailored
-from cvforge.text import file_part, slug
+from cvforge.text import file_part, slug, split_name
 from cvforge.track import stages as stages_mod
 from cvforge.track import tracker
 from cvforge.track.due import due_report
@@ -52,7 +55,7 @@ LARGE_PAGE_CAP = 1000
 
 
 def name_parts(name: str) -> tuple[str, str]:
-    first, _, last = name.strip().partition(" ")
+    first, last = split_name(name)
     return file_part(first), file_part(last.replace(" ", "_"))
 
 
@@ -535,6 +538,45 @@ def cmd_salary(args) -> int:
     return 0
 
 
+def _windows_path(path: Path) -> str | None:
+    """The Windows form of a WSL path, or None when wslpath is missing or fails."""
+    try:
+        done = subprocess.run(["wslpath", "-w", str(path)], check=False, capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return done.stdout.strip() or None if done.returncode == 0 else None
+
+
+def cmd_kit(args) -> int:
+    """Write kit.json and kit.html for an application and print where to open them."""
+    cfg = load_config()
+    app_dir = cfg.data_dir / "applications" / args.slug
+    if not (app_dir / "posting.json").exists():
+        print(f"unknown slug '{args.slug}'", file=sys.stderr)
+        return 1
+    if not (app_dir / "tailored.yaml").exists():
+        print(f"no tailored.yaml for '{args.slug}'", file=sys.stderr)
+        return 1
+    posting = Posting.load(app_dir)
+    master = load_master(Path(args.master) if args.master
+                         else cfg.data_dir / "profile" / "master.yaml")
+    tailored = load_tailored(app_dir / "tailored.yaml")
+    salary_path = app_dir / "salary.json"
+    salary = json.loads(salary_path.read_text(encoding="utf-8")) if salary_path.exists() else None
+    first, last = name_parts(master["basics"]["name"])
+    company = file_part(tailored["target"]["company"])
+    names = {"cv_pdf": f"{first}_{last}_CV_{company}.pdf",
+             "letter_pdf": f"{first}_{last}_Cover_Letter_{company}.pdf"}
+    files = {k: v for k, v in names.items() if (app_dir / v).exists()}
+    kit = build_kit(master, tailored, posting, salary, slug=args.slug, files=files)
+    (app_dir / "kit.json").write_text(
+        json.dumps(kit, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    html = app_dir / "kit.html"
+    html.write_text(render_kit(kit), encoding="utf-8")
+    print(_windows_path(html) or html)
+    return 0
+
+
 def _track(path: Path, slug_: str, status: str, today: date, **kw) -> None:
     try:
         tracker.set_status(path, slug_, status, today, **kw)
@@ -662,6 +704,10 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--market", help="market CSV (default: <data_dir>/salary/market.csv)")
     p.add_argument("--master", help="master profile (default: <data_dir>/profile/master.yaml)")
     p.set_defaults(func=cmd_salary)
+    p = sub.add_parser("kit", help="write kit.json and kit.html to copy into application forms")
+    p.add_argument("slug")
+    p.add_argument("--master", help="master profile (default: <data_dir>/profile/master.yaml)")
+    p.set_defaults(func=cmd_kit)
     p = sub.add_parser("answers", help="answer bank lookup and knock-out facts")
     p.add_argument("slug")
     p.add_argument("--save", action="store_true",
