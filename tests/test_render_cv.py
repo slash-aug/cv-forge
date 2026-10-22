@@ -48,9 +48,10 @@ def test_render_contains_bullets_and_name():
     assert r"\name{Ana}{Exemplo}" in tex
     assert r"Integração de pagamentos \& reconciliação" in tex
     assert r"Cut load time by 40\% by reworking" in tex
-    assert r"\email{ana.exemplo@example.com}" in tex
-    assert r"\social[github]{ana-exemplo}" in tex
-    assert r"\social[linkedin]{ana-exemplo}" in tex
+    assert r"\href{mailto:ana.exemplo@example.com}{ana.exemplo@example.com}" in tex
+    assert r"\href{https://github.com/ana-exemplo}{github.com/ana-exemplo}" in tex
+    assert r"\href{https://www.linkedin.com/in/ana-exemplo}{linkedin.com/in/ana-exemplo}" in tex
+    assert "\\social" not in tex and "\\phone" not in tex and "\\email" not in tex
     assert "Ported from ai-job-search (MIT): cv/main_example.tex" in tex
     assert EM_DASH not in tex
 
@@ -136,15 +137,15 @@ def test_master_company_name_is_escaped():
     assert r"{A\&B 100\% x\_y}" in render_cv(T, master)
 
 
-def test_profile_handle_is_first_path_segment():
+def test_profiles_are_visible_urls_without_scheme_or_www():
     master = copy.deepcopy(M)
     master["basics"]["profiles"] = [
-        {"network": "GitHub", "url": "https://github.com/ana-exemplo/repo/"},
-        {"network": "Site", "url": "https://ana.example.com/me"},
+        {"network": "LinkedIn", "url": "https://uk.linkedin.com/in/ana-exemplo/"},
+        {"network": "Site", "url": "http://www.ana.example.com/me_x"},
     ]
     tex = render_cv(T, master)
-    assert r"\social[github]{ana-exemplo}" in tex
-    assert r"\homepage{ana.example.com/me}" in tex
+    assert r"\href{https://uk.linkedin.com/in/ana-exemplo}{uk.linkedin.com/in/ana-exemplo}" in tex
+    assert r"{ana.example.com/me\_x}" in tex
 
 
 @pytest.mark.latex
@@ -166,3 +167,7 @@ def test_compiled_text_layer_is_ats_clean(tmp_path):
         assert token not in text
     assert "Integração de pagamentos & reconciliação" in text
     assert "Jun 2024 - Present" in text
+    assert "github.com/ana-exemplo" in text
+    assert "linkedin.com/in/ana-exemplo" in text
+    assert "ana.exemplo@example.com" in text and "+351 900 000 000" in text
+    assert chr(0x2022) in text

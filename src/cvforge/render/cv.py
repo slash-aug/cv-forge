@@ -16,7 +16,6 @@ INTERNATIONAL = {
     "pt-PT": "(Freelance internacional remoto)",
 }
 REMOTE = {"en": "Remote", "pt-BR": "Remoto", "pt-PT": "Remoto"}
-SOCIAL = {"github": "github.com", "linkedin": "linkedin.com"}
 
 
 def _lookup(ids: dict, ref: str, kind: str) -> dict:
@@ -30,20 +29,18 @@ def _contact(basics: dict, lang: str) -> dict:
     first, _, last = basics["name"].partition(" ")
     location = basics.get("location") or {}
     address = ", ".join(p for p in (location.get("city"), location.get("countryCode")) if p)
-    socials, homepages = [], []
+    links = []
+    if basics.get("phone"):
+        links.append({"text": basics["phone"], "href": ""})
+    if basics.get("email"):
+        links.append({"text": basics["email"], "href": "mailto:" + basics["email"]})
     for profile in basics.get("profiles", []):
-        host, _, path = profile["url"].split("://", 1)[-1].strip("/").partition("/")
-        host = host.removeprefix("www.")
-        kind = profile["network"].lower()
-        handle = path.removeprefix("in/") if kind == "linkedin" else path
-        if kind in SOCIAL and host == SOCIAL[kind] and handle:
-            socials.append((kind, handle.split("/")[0]))
-        else:
-            homepages.append(f"{host}/{path}" if path else host)
+        bare = profile["url"].split("://", 1)[-1].strip("/").removeprefix("www.")
+        links.append({"text": bare, "href": "https://" + profile["url"].split("://", 1)[-1].strip("/")})
     label = basics.get("label")
     return {
-        "first": first, "last": last, "address": address, "email": basics.get("email"),
-        "phone": basics.get("phone"), "socials": socials, "homepages": homepages,
+        "first": first, "last": last, "address": address,
+        "links": links,
         "title": localized(label, lang, item_id="basics.label") if label else "",
     }
 

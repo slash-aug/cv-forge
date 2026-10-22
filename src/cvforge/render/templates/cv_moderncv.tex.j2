@@ -34,18 +34,19 @@
 %% if contact.address
 \address{\VAR{contact.address | tex}}{}{}
 %% endif
-%% if contact.phone
-\phone[mobile]{\VAR{contact.phone | tex}}
+% Contact goes through \extrainfo as plain visible text: no icons or letter labels in the text layer.
+\extrainfo{%
+%% for link in contact.links
+%% if link.href
+\href{\VAR{link.href | tex}}{\VAR{link.text | tex}}%
+%% else
+\VAR{link.text | tex}%
 %% endif
-%% if contact.email
-\email{\VAR{contact.email | tex}}
+%% if not loop.last
+\ \textbullet{}\ %
 %% endif
-%% for kind, user in contact.socials
-\social[\VAR{kind}]{\VAR{user | tex}}
 %% endfor
-%% for url in contact.homepages
-\homepage{\VAR{url | tex}}
-%% endfor
+}
 
 \begin{document}
 
