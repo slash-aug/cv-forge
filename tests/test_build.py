@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from pypdf import PdfReader
 
-from cvforge.build import LatexError, compile_tex
+from cvforge.build import JOBS_DIR, LatexError, compile_tex
 from cvforge.profile.model import load_master
 from cvforge.render.cv import render_cv
 from cvforge.render.letter import ASSETS_DIR, render_letter
@@ -48,12 +48,21 @@ def test_missing_engine_binary_raises(tmp_path):
 
 
 def test_fresh_job_dir_is_wiped(tmp_path):
-    job = tmp_path / "t"
-    job.mkdir()
+    job = tmp_path / JOBS_DIR / "t"
+    job.mkdir(parents=True)
     (job / "stale.txt").write_text("old")
     with pytest.raises(LatexError):
         compile_tex("x", engine="/nonexistent/lualatex", build_dir=tmp_path, jobname="t")
     assert not (job / "stale.txt").exists()
+
+
+def test_user_folder_named_like_the_job_is_kept(tmp_path):
+    mine = tmp_path / "cv"
+    mine.mkdir()
+    (mine / "keep.txt").write_text("mine")
+    with pytest.raises(LatexError):
+        compile_tex("x", engine="/nonexistent/lualatex", build_dir=tmp_path, jobname="cv")
+    assert (mine / "keep.txt").read_text() == "mine"
 
 
 @pytest.mark.latex
@@ -80,6 +89,15 @@ def test_persona_letter_compiles_to_one_page(cfg):
 
 
 @pytest.mark.latex
+def test_pt_br_letter_keeps_accents_on_one_page(cfg):
+    t = load_tailored(PERSONA / "tailored.pt-BR.yaml")
+    pdf = compile_tex(render_letter(t, M), engine=_need(cfg, "xelatex"),
+                      build_dir=cfg.build_dir / "test", jobname="letter_pt", assets=ASSETS_DIR)
+    assert len(PdfReader(pdf).pages) == 1
+    assert "integração e reconciliação" in " ".join(_text(pdf).split())
+
+
+@pytest.mark.latex
 def test_special_chars_round_trip(cfg):
     text = "Integração & testes 100% #1 a_b"
     tailored = copy.deepcopy(T)
@@ -87,6 +105,18 @@ def test_special_chars_round_trip(cfg):
     pdf = compile_tex(render_cv(tailored, M), engine=_need(cfg, "lualatex"),
                       build_dir=cfg.build_dir / "test", jobname="special")
     assert text in _text(pdf)
+
+
+@pytest.mark.latex
+def test_dashes_and_quotes_survive_without_ligatures(cfg):
+    text = 'Shipped v2 -- then v3 --- "fast"'
+    tailored = copy.deepcopy(T)
+    tailored["experience"][1]["positions"][0]["bullets"][0]["text"] = text
+    pdf = compile_tex(render_cv(tailored, M), engine=_need(cfg, "lualatex"),
+                      build_dir=cfg.build_dir / "test", jobname="ligatures")
+    layer = _text(pdf)
+    assert text in layer
+    assert "\u2014" not in layer and "\u2013" not in layer
 
 
 @pytest.mark.parametrize("jobname", ["", ".", "..", "../x", "a/b", "ABS", ".hidden", "a..b"])

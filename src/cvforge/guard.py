@@ -5,15 +5,15 @@ import fnmatch
 import re
 import subprocess
 import sys
-import unicodedata
 from collections.abc import Iterable
 from pathlib import Path
 
 from cvforge.config import Config
 from cvforge.profile.model import ProfileError, load_master
+from cvforge.text import contains_term, fold
 
 BLOCKED_PREFIXES = ("data/", ".claude/agents/", ".claude/local/", "docs/superpowers/", ".superpowers/")
-BLOCKED_NAMES = ("*.env", "cvforge.toml")
+BLOCKED_NAMES = ("*.env", ".env*", "cvforge.toml")
 CPF = re.compile(r"\b\d{3}\.\d{3}\.\d{3}-\d{2}\b")
 PHONE_BR = re.compile(r"\+55\s?\(?\d{2}\)?\s?9?\d{4}-?\d{4}")
 EM_DASH = "\u2014"
@@ -29,32 +29,25 @@ class GuardError(Exception):
     """The guard could not do its job; callers must fail closed."""
 
 
-def _fold(text: str) -> str:
-    return unicodedata.normalize("NFC", text).casefold()
-
-
 def check_paths(paths: Iterable[str]) -> list[str]:
     problems = []
     for path in paths:
         norm = path.replace("\\", "/").removeprefix("./")
-        name = norm.rsplit("/", 1)[-1]
-        if norm.startswith(BLOCKED_PREFIXES) or any(fnmatch.fnmatch(name, p) for p in BLOCKED_NAMES):
+        name = norm.rsplit("/", 1)[-1].lower()
+        if norm.startswith(BLOCKED_PREFIXES) or any(fnmatch.fnmatchcase(name, p) for p in BLOCKED_NAMES):
             problems.append(f"{path}: private path must not be committed")
     return problems
 
 
 def check_content(text: str, *, denylist: Iterable[str]) -> list[str]:
     problems = []
-    lowered = _fold(text)
-    for term in denylist:
-        term = _fold(term.strip())
-        if term and term in lowered:
-            problems.append("contains a denylisted term")
+    if any(contains_term(text, term) for term in denylist):
+        problems.append("contains a denylisted term")
     if CPF.search(text):
         problems.append("contains a CPF number")
     if PHONE_BR.search(text):
         problems.append("contains a Brazilian phone number")
-    if any(form in lowered for form in map(_fold, EM_DASH_FORMS)):
+    if any(form in fold(text) for form in map(fold, EM_DASH_FORMS)):
         problems.append("contains an em dash")
     return problems
 
@@ -63,7 +56,7 @@ def check_commit_message(msg: str) -> list[str]:
     problems = []
     if TRAILER.search(msg) or GENERATED.search(msg) or ANTHROPIC_NOREPLY.search(msg):
         problems.append("AI attribution is not allowed in commit messages")
-    if any(form in _fold(msg) for form in map(_fold, EM_DASH_FORMS)):
+    if any(form in fold(msg) for form in map(fold, EM_DASH_FORMS)):
         problems.append("em dash is not allowed in commit messages")
     return problems
 
@@ -99,11 +92,8 @@ def _denylist_warn(cfg: Config) -> list[str]:
     return load_denylist(cfg)
 
 
-def check_staged(cfg: Config) -> list[str]:
-    denylist = _denylist_warn(cfg)
-    top = _top()
-    raw = _git("diff", "--cached", "--name-only", "--diff-filter=d", "-z", cwd=top)
-    paths = [p for p in raw.decode("utf-8", errors="surrogateescape").split("\0") if p]
+def _check_index(paths: list[str], denylist: list[str], top: str) -> list[str]:
+    """Path rules plus content rules on each path's name and its index blob (binaries skipped)."""
     problems = check_paths(paths)
     for path in paths:
         problems += [f"{path}: {p}" for p in check_content(path, denylist=denylist)]
@@ -113,6 +103,24 @@ def check_staged(cfg: Config) -> list[str]:
         text = blob.decode("utf-8", errors="replace")
         problems += [f"{path}: {p}" for p in check_content(text, denylist=denylist)]
     return problems
+
+
+def _split_z(raw: bytes) -> list[str]:
+    return [p for p in raw.decode("utf-8", errors="surrogateescape").split("\0") if p]
+
+
+def check_staged(cfg: Config) -> list[str]:
+    denylist = _denylist_warn(cfg)
+    top = _top()
+    paths = _split_z(_git("diff", "--cached", "--name-only", "--diff-filter=d", "-z", cwd=top))
+    return _check_index(paths, denylist, top)
+
+
+def check_tree(cfg: Config) -> list[str]:
+    """Every tracked file, as the CI guard job runs it."""
+    denylist = _denylist_warn(cfg)
+    top = _top()
+    return _check_index(_split_z(_git("ls-files", "-z", cwd=top)), denylist, top)
 
 
 def strip_message(text: str) -> str:

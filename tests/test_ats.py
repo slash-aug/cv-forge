@@ -11,7 +11,8 @@ from cvforge.tailor.audit import load_tailored
 
 PERSONA = Path(__file__).resolve().parent.parent / "examples" / "persona"
 HEADINGS = ["Summary", "Experience", "Skills", "Education", "Certifications", "Languages"]
-REQUIRED = ["Ana Exemplo", "Integração de pagamentos & reconciliação"]
+REQUIRED = ["Ana Exemplo", "Payment integration & reconciliation"]
+PT_REQUIRED = ["Ana Exemplo", "Integração de pagamentos & reconciliação"]
 
 
 @pytest.fixture(scope="module")
@@ -40,6 +41,18 @@ def test_persona_cv_is_ok(cv_pdf):
     assert report.ok, report.problems
     assert report.pages <= 2
     assert report.extractor in ("pdftotext", "pypdf")
+
+
+@pytest.mark.latex
+def test_persona_pt_br_cv_is_ok(cfg):
+    if not cfg.lualatex:
+        pytest.skip("no lualatex engine")
+    m = load_master(PERSONA / "master.yaml")
+    t = load_tailored(PERSONA / "tailored.pt-BR.yaml")
+    pdf = compile_tex(render_cv(t, m), engine=cfg.lualatex,
+                      build_dir=cfg.build_dir / "test_ats", jobname="cv_ats_pt")
+    report = ats_check(pdf, max_pages=2, required=PT_REQUIRED, headings=PT_HEADINGS)
+    assert report.ok, report.problems
 
 
 @pytest.mark.latex
@@ -147,3 +160,36 @@ def test_heading_must_start_a_line(monkeypatch):
     _stub(monkeypatch, "Skills\n  I list Education here\n")
     report = ats_check(Path("x.pdf"), max_pages=1, headings=["Skills", "Education"])
     assert any("Education" in p for p in report.problems)
+
+
+def _pages(monkeypatch, pages):
+    monkeypatch.setattr(ats, "extract_text_layer", lambda p: ("text", len(pages), "pdftotext"))
+    monkeypatch.setattr(layout, "find_pdftotext", lambda: "/usr/bin/pdftotext")
+    monkeypatch.setattr(layout, "parse_pdf", lambda p: pages)
+
+
+def _line(top, left=50.0):
+    return layout.Line(top=top, bottom=top + 10, left=left, height=10.0, text="word")
+
+
+def _full_page():
+    return layout.Page(842.0, [_line(50 + 14 * i) for i in range(50)])
+
+
+def test_layout_hole_fails(monkeypatch):
+    _pages(monkeypatch, [layout.Page(842.0, [_line(50), _line(64), _line(400)])])
+    report = ats_check(Path("x.pdf"), max_pages=1)
+    assert not report.ok and any("hole" in p for p in report.problems)
+
+
+def test_layout_early_page_end_fails(monkeypatch):
+    _pages(monkeypatch, [layout.Page(842.0, [_line(50), _line(64)]), _full_page()])
+    report = ats_check(Path("x.pdf"), max_pages=2)
+    assert not report.ok and any("early" in p for p in report.problems)
+
+
+def test_layout_thin_last_page_is_only_a_note(monkeypatch):
+    _pages(monkeypatch, [_full_page(), layout.Page(842.0, [_line(50), _line(64)])])
+    report = ats_check(Path("x.pdf"), max_pages=2)
+    assert report.ok, report.problems
+    assert any(p.startswith("note: ") and "last page" in p for p in report.problems)

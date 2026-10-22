@@ -35,19 +35,20 @@ jobs:
   latex:
     name: Build example CV and letter
     runs-on: ubuntu-latest
+    # Official TeX Live image, pinned by digest, so CI uses the same current
+    # LaTeX packages as a local MiKTeX install and only changes on purpose.
+    container:
+      image: texlive/texlive:latest-full@sha256:e8148b126545105c4aeeaa212f8a7bd02d05b500351372881055e1e59ae67d33
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
-        with:
-          python-version: "3.12"
-      - name: Install TeX Live
-        # moderncv and fontawesome5 live in latex-extra and fonts-extra.
+      - name: Install Python and poppler
         run: |
-          sudo apt-get update
-          sudo apt-get install -y texlive-luatex texlive-xetex texlive-latex-extra \
-            texlive-fonts-extra poppler-utils
+          apt-get update
+          apt-get install -y --no-install-recommends python3 python3-venv poppler-utils
+          python3 -m venv /opt/venv
+          echo "/opt/venv/bin" >> "$GITHUB_PATH"
       - run: pip install -e '.[dev]'
       - run: pytest -q -m latex
       - name: Build the example persona
@@ -82,6 +83,10 @@ jobs:
             git ls-files data/
             exit 1
           fi
+      - name: Tracked files pass the content guard
+        # No master profile in CI, so the denylist is empty; the path, ID,
+        # phone and em dash rules still apply to every tracked file.
+        run: cvforge guard tree
       - name: Commit messages pass the guard
         env:
           EVENT: ${{ github.event_name }}

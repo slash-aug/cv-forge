@@ -164,3 +164,25 @@ def test_decimal_comma_grounded_by_decimal_point():
             item["impact"] = "Cut load time by 40% to 2.5 seconds."
     t = _variant(lambda d: _bullet(d, "h-load-time").update(text="Cut load time to 2,5 seconds."))
     assert audit(t, m) == []
+
+
+def test_rendered_values_scanned_with_field_path():
+    from cvforge.tailor.audit import audit_rendered
+
+    rendered = {"experience": [{"employer": "Acme"}, {"employer": "Project Zebra Labs"}],
+                "contact": {"links": [{"text": "x", "href": "https://projectzebra.example"}]}}
+    found = audit_rendered(M, cv=rendered)
+    assert [(f.kind, f.ref) for f in found] == [
+        ("confidential", "cv.experience.1.employer"),
+        ("confidential", "cv.contact.links.0.href"),
+    ]
+
+
+def test_rendered_values_clean():
+    from cvforge.tailor.audit import audit_rendered
+
+    assert audit_rendered(M, cv={"a": ["plain", {"b": "text"}]}, letter={"name": "Ana"}) == []
+
+
+def test_pt_br_persona_is_grounded():
+    assert audit(load_tailored(PERSONA / "tailored.pt-BR.yaml"), M) == []

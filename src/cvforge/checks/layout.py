@@ -334,6 +334,7 @@ def find_orphans(pages: list[Page]) -> list[str]:
 
 
 def report(path: Path, pages: list[Page]) -> list[str]:
+    """Empty pages, holes, early page ends, footer collisions and orphans."""
     problems: list[str] = []
 
     for i, page in enumerate(pages, 1):
@@ -360,11 +361,23 @@ def report(path: Path, pages: list[Page]) -> list[str]:
                 f"p{i} has body text inside the bottom margin band, colliding with the "
                 "footer; stop stretching the page with \\enlargethispage and cut content"
             )
-        if i == len(pages) > 1 and share > LAST_PAGE_THIN_FRACTION:
-            problems.append(
-                f"p{i} is the last page and {share * 100:.0f}% empty, which reads as an "
-                "unfinished document; restore the highest-relevance content previously cut"
-            )
 
     problems.extend(find_orphans(pages))
     return problems
+
+
+def find_thin_last_page(pages: list[Page]) -> list[str]:
+    """A final page emptier than LAST_PAGE_THIN_FRACTION, after at least one full page.
+
+    Kept apart from `report` because cv-forge treats it as advice, not a defect: a
+    tailored CV of one and a half pages is legitimate.
+    """
+    if len(pages) < 2 or pages[-1].empty:
+        return []
+    share = pages[-1].bottom_space / pages[-1].height
+    if share <= LAST_PAGE_THIN_FRACTION:
+        return []
+    return [(
+        f"p{len(pages)} is the last page and {share * 100:.0f}% empty, which reads as an "
+        "unfinished document; restore the highest-relevance content previously cut"
+    )]

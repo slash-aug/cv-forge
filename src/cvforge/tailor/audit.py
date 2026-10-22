@@ -1,6 +1,5 @@
 """Tailored selection loader and grounding audit against the master profile."""
 import re
-import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -11,6 +10,7 @@ from cvforge.profile.model import (
     read_yaml,
     schema_problems,
 )
+from cvforge.text import contains_term
 
 SCHEMA_FILE = "tailored.schema.json"
 NUMBER = re.compile(r"\d+(?:[.,]\d+)?")
@@ -160,21 +160,40 @@ def _audit_id_lists(tailored: dict, ids: dict, findings: list[Finding]):
             _resolve(ids, ref, kind, findings)
 
 
-def _fold(text: str) -> str:
-    return unicodedata.normalize("NFKC", text).casefold()
-
-
-def _squash(text: str) -> str:
-    return re.sub(r"[\s_-]+", "", _fold(text))
-
-
 def _audit_confidential(tailored: dict, master: dict, findings: list[Finding]):
     terms = [t for t in master.get("x-confidential", []) if t]
     for location, text in _strings(tailored):
-        folded, squashed = _fold(text), _squash(text)
         for term in terms:
-            if _fold(term) in folded or _squash(term) in squashed:
+            if contains_term(text, term):
                 findings.append(Finding("confidential", location, f"contains confidential term '{term}'"))
+
+
+def _leaves(value, path: str):
+    """Yield (dotted path, string) for every string inside nested dicts and lists."""
+    if isinstance(value, str):
+        yield path, value
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            yield from _leaves(item, f"{path}.{key}")
+    elif isinstance(value, list):
+        for i, item in enumerate(value):
+            yield from _leaves(item, f"{path}.{i}")
+
+
+def audit_rendered(master: dict, **rendered: dict | None) -> list[Finding]:
+    """Confidential terms in any value about to be rendered, master-derived fields included.
+
+    Each keyword names a document (cv=view, letter=context); a finding's ref is the
+    field path, such as cv.experience.0.employer.
+    """
+    terms = [t for t in master.get("x-confidential", []) if t]
+    return [
+        Finding("confidential", location, f"contains confidential term '{term}'")
+        for name, value in rendered.items()
+        for location, text in _leaves(value, name)
+        for term in terms
+        if contains_term(text, term)
+    ]
 
 
 def audit(tailored: dict, master: dict) -> list[Finding]:

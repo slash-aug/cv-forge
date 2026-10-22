@@ -20,7 +20,7 @@ experience:
           - ref: h-team-lead
             text: Led a team of 5 engineers through two product launches.
           - ref: h-payments-integration
-            text: "Integração de pagamentos & reconciliação"
+            text: "Payment integration & reconciliation"
       - ref: p-examplepay-dev
         bullets:
           - ref: h-load-time

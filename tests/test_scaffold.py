@@ -5,9 +5,21 @@ import cvforge
 
 def test_version():
     assert cvforge.__version__ == "0.1.0"
+
+
+def _ignored(path: str) -> bool:
+    return subprocess.run(["git", "check-ignore", "-q", path], check=False).returncode == 0
+
+
 def test_data_dir_is_ignored():
-    r = subprocess.run(["git", "check-ignore", "-q", "data/profile/master.yaml"], check=False)
-    assert r.returncode == 0
+    assert _ignored("data/profile/master.yaml")
+
+
 def test_local_ai_tools_are_ignored():
     for p in [".claude/agents/executor.md", ".claude/local/paradigms/1_coding_paradigm.md", "docs/superpowers/plans/x.md"]:
-        assert subprocess.run(["git", "check-ignore", "-q", p], check=False).returncode == 0, p
+        assert _ignored(p), p
+
+
+def test_env_files_are_ignored():
+    for p in [".env", ".env.local"]:
+        assert _ignored(p), p

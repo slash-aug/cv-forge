@@ -1,0 +1,42 @@
+lang: pt-BR
+angle: startup-generalist
+target:
+  company: Exemplo Ltda
+  role: Engenheira Full-stack Sênior
+summary:
+  ref: sum-generalist
+  text: Engenheira full-stack que entrega de ponta a ponta em times pequenos.
+experience:
+  - ref: w-sampleworks
+    positions:
+      - ref: p-sampleworks-eng
+        bullets:
+          - ref: h-onboarding
+            text: Reconstruiu o onboarding, dobrando a ativação de usuários em teste.
+  - ref: w-examplepay
+    positions:
+      - ref: p-examplepay-lead
+        bullets:
+          - ref: h-team-lead
+            text: Liderou um time de 5 engenheiros em dois lançamentos de produto.
+          - ref: h-payments-integration
+            text: "Integração de pagamentos & reconciliação"
+      - ref: p-examplepay-dev
+        bullets:
+          - ref: h-load-time
+            text: Reduziu o tempo de carregamento em 40% ao reformular o bundle do checkout.
+skills:
+  - ref: sk-backend
+    keywords: [Python, PostgreSQL, REST]
+  - ref: sk-frontend
+    keywords: [TypeScript, React]
+education: [ed-example-univ]
+certificates: [cert-cloud]
+languages: [lang-pt, lang-en]
+letter:
+  recipient: Equipe de Recrutamento
+  opening: Prezada equipe de recrutamento,
+  paragraphs:
+    - Construo e entrego funcionalidades de produto de ponta a ponta, e gostaria de levar essa experiência ao time de vocês.
+    - Na ExamplePay reduzi o tempo de carregamento em 40% e liderei um time de 5 engenheiros, com foco em integração e reconciliação.
+  closing: Atenciosamente,

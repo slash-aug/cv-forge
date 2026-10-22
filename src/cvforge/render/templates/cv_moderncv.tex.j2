@@ -34,16 +34,34 @@
 %% if contact.address
 \address{\VAR{contact.address | tex}}{}{}
 %% endif
-% Contact goes through \extrainfo as plain visible text: no icons or letter labels in the text layer.
+% Each contact item is its own header element, so moderncv wraps the line between
+% items instead of clipping it at the page edge. \extrainfo normally adds one element;
+% the patch lets it add several. Plain visible text: no icons or labels in the text layer.
+\usepackage{etoolbox}
+\makeatletter
+\patchcmd{\makehead}{\addtomakeheaddetails{\@extrainfo}}{\@extrainfo}{}%
+  {\PackageError{cvforge}{cannot patch moderncv \string\makehead\space for the contact line}{}}
+% Keep-with-next, like needspace's \Needspace: start a new page before a heading or an
+% entry unless #1 of space is left, so neither ends a page apart from what follows it.
+% It measures the space left instead of adding a preferred break, which under
+% \raggedbottom would end pages early.
+\newcommand*{\keepnext}[1]{\par\begingroup\setlength{\dimen@}{#1}%
+  \dimen@ii\pagegoal\advance\dimen@ii-\pagetotal
+  \ifdim\dimen@>\dimen@ii\ifdim\dimen@ii>\z@\vfil\fi\break\fi\endgroup}
+% Entry bullets. Banking's \cventry sets its description in an unbreakable minipage,
+% so a long entry jumps to the next page whole and leaves a hole; this list follows
+% the entry instead and breaks between items, never before the first one. Same look:
+% small type, no outer gap.
+\newenvironment{cvbullets}{\small\@beginparpenalty\@M\list{\labelitemi}{\setlength{\topsep}{0pt}%
+  \setlength{\partopsep}{0pt}\setlength{\itemsep}{0pt}\setlength{\parsep}{0pt}}}%
+  {\endlist\addvspace{.25em}}
+\makeatother
 \extrainfo{%
 %% for link in contact.links
 %% if link.href
-\href{\VAR{link.href | tex}}{\VAR{link.text | tex}}%
+\addtomakeheaddetails{\href{\VAR{link.href | url}}{\VAR{link.text | tex}}}%
 %% else
-\VAR{link.text | tex}%
-%% endif
-%% if not loop.last
-\ \textbullet{}\ %
+\addtomakeheaddetails{\VAR{link.text | tex}}%
 %% endif
 %% endfor
 }
@@ -53,26 +71,29 @@
 \makecvtitle
 
 %% if summary
+\keepnext{8\baselineskip}
 \section{\VAR{headings.summary | tex}}
 \cvitem{}{\VAR{summary | tex}}
 %% endif
 
 %% if experience
+\keepnext{8\baselineskip}
 \section{\VAR{headings.experience | tex}}
 %% for job in experience
-\cventry{\VAR{job.dates | tex}}{\VAR{job.title | tex}}{\VAR{job.employer | tex}}{\VAR{job.location | tex}}{}{%
+\keepnext{5\baselineskip}
+\cventry{\VAR{job.dates | tex}}{\VAR{job.title | tex}}{\VAR{job.employer | tex}}{\VAR{job.location | tex}}{}{}
 %% if job.bullets
-\begin{itemize}
+\begin{cvbullets}
 %% for bullet in job.bullets
 \item \VAR{bullet | tex}
 %% endfor
-\end{itemize}%
+\end{cvbullets}
 %% endif
-}
 %% endfor
 %% endif
 
 %% if skills
+\keepnext{8\baselineskip}
 \section{\VAR{headings.skills | tex}}
 %% for skill in skills
 \cvitem{\VAR{skill.name | tex}}{\VAR{skill.keywords | tex}}
@@ -80,13 +101,16 @@
 %% endif
 
 %% if education
+\keepnext{8\baselineskip}
 \section{\VAR{headings.education | tex}}
 %% for ed in education
+\keepnext{3\baselineskip}
 \cventry{\VAR{ed.dates | tex}}{\VAR{ed.degree | tex}}{\VAR{ed.institution | tex}}{}{}{}
 %% endfor
 %% endif
 
 %% if certificates
+\keepnext{8\baselineskip}
 \section{\VAR{headings.certificates | tex}}
 %% for cert in certificates
 \cvitem{\VAR{cert.date | tex}}{\VAR{cert.name | tex}, \VAR{cert.issuer | tex}}
@@ -94,6 +118,7 @@
 %% endif
 
 %% if languages
+\keepnext{8\baselineskip}
 \section{\VAR{headings.languages | tex}}
 %% for item in languages
 \cvitem{\VAR{item.name | tex}}{\VAR{item.detail | tex}}
