@@ -28,13 +28,29 @@ def contains_term(text: str, term: str) -> bool:
     "Project Zebra"); a term that has its own separators keeps them significant
     ("acme-corp" does not find "AcmeCorp"), so a hyphenated slug or a ticket
     prefix like "ACME-" does not match a plain name.
+
+    A match must start a word: the character before it is not a letter or digit,
+    so "KIT-" finds "KIT-123" and "(KIT-12)" but not "toolkit-esr".
     """
     term = term.strip()
     if not term:
         return False
+    folded = fold(text)
     if SEPARATORS.search(term):
-        return fold(term) in fold(text)
-    return squash(term) in squash(text)
+        needle, starts = fold(term), list(range(len(folded)))
+        haystack = folded
+    else:
+        needle = squash(term)
+        starts = [i for i, ch in enumerate(folded) if not SEPARATORS.match(ch)]
+        haystack = "".join(folded[i] for i in starts)
+    word_start_needed = needle[:1].isalnum()
+    at = haystack.find(needle)
+    while at != -1:
+        begin = starts[at]
+        if not word_start_needed or begin == 0 or not folded[begin - 1].isalnum():
+            return True
+        at = haystack.find(needle, at + 1)
+    return False
 
 
 def _ascii(text: str) -> str:
