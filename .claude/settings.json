@@ -1,0 +1,63 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv/bin/cvforge:*)",
+      "Bash(cvforge:*)",
+      "Bash(pdftotext:*)",
+      "Bash(pytest:*)"
+    ],
+    "ask": [
+      "Edit(.claude/settings.json)",
+      "Edit(.claude/settings.local.json)",
+      "Edit(.github/**)",
+      "Bash(git push:*)",
+      "Bash(gh:*)",
+      "Bash(git remote:*)",
+      "Edit(src/cvforge/guard.py)",
+      "Edit(.githooks/**)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(~/.ssh/**)",
+      "Read(~/.aws/**)",
+      "Read(~/.gnupg/**)",
+      "Bash(curl -d:*)",
+      "Bash(curl --data:*)",
+      "Bash(curl -F:*)",
+      "Bash(curl --form:*)",
+      "Bash(curl -T:*)",
+      "Bash(curl --upload-file:*)",
+      "Bash(curl -X POST:*)",
+      "Bash(curl -X PUT:*)",
+      "Bash(curl -XPOST:*)",
+      "Bash(curl --request POST:*)",
+      "Bash(wget --post-data:*)",
+      "Bash(wget --post-file:*)",
+      "Bash(wget --method=POST:*)",
+      "Bash(scp:*)",
+      "Bash(sftp:*)",
+      "Bash(ssh:*)",
+      "Bash(nc:*)",
+      "Bash(ncat:*)",
+      "Bash(netcat:*)",
+      "Bash(rsync:*)",
+      "Bash(socat:*)",
+      "Bash(telnet:*)",
+      "Bash(ftp:*)",
+      "Bash(openssl s_client:*)",
+      "Bash(gh gist:*)",
+      "Bash(gh release:*)",
+      "Bash(gh repo create:*)",
+      "Bash(gh api:*)",
+      "Bash(curl --json:*)",
+      "Bash(curl -X post:*)",
+      "Bash(curl -sd:*)",
+      "Bash(curl -s -d:*)",
+      "Bash(curl -s -F:*)",
+      "Bash(curl -sF:*)",
+      "Bash(curl -s -X POST:*)",
+      "Bash(curl -sX POST:*)"
+    ]
+  }
+}
