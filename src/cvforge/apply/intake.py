@@ -160,12 +160,16 @@ def _find_jobposting(node):
 
 
 def _names(value) -> list[str]:
+    """Names from a schema.org value or list; entries with no name (None, "", {}) are dropped."""
     items = value if isinstance(value, list) else [value]
-    return [(i.get("name") if isinstance(i, dict) else str(i)) for i in items if i]
+    names = [(i.get("name") if isinstance(i, dict) else i) for i in items]
+    return [str(n).strip() for n in names if n is not None and str(n).strip()]
 
 
 def _place(loc: dict) -> str:
     address = loc.get("address") or {}
+    if isinstance(address, list):  # some sites send a list; the first postal address counts
+        address = next((a for a in address if isinstance(a, dict)), {})
     if isinstance(address, str):
         return address
     country = address.get("addressCountry")

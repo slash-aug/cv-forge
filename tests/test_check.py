@@ -319,3 +319,21 @@ def test_pass_keeps_later_status(env, capsys):
     tracker.set_status(env / "tracker.csv", "acme-senior-engineer", "applied", TODAY)
     assert _run() == 0
     assert tracker.load(env / "tracker.csv")[0]["status"] == "applied"
+
+
+def test_unpublished_currency_passes_with_warning():
+    r = req(allowed=["worldwide"], salary=_salary(900000, 1200000, "ARS", "month"))
+    v = check(r, posting(), MASTER, None, RATES, TODAY, clt_factor=1.4)
+    assert v.passed
+    salary = v.results[2]
+    assert salary.ok and "no exchange rate for ARS" in salary.message
+    assert v.warnings == ["no exchange rate for ARS: salary not checked against the pay floor"]
+
+
+def test_cli_unpublished_currency_exit_0(env, capsys):
+    r = _cli_req(["worldwide"])
+    r["years"] = []
+    r["salary"]["currency"] = "ARS"
+    _app(env, r)
+    assert _run() == 0
+    assert "warning: no exchange rate for ARS" in capsys.readouterr().out

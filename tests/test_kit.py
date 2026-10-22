@@ -209,3 +209,29 @@ def test_kit_refuses_confidential_master_field(tmp_path, monkeypatch, capsys):
     assert cli.main(["kit", "example-corp", "--master", str(master)]) == 1
     assert "confidential kit.education" in capsys.readouterr().out
     assert not (app / "kit.json").exists() and not (app / "kit.html").exists()
+
+
+def test_non_web_links_are_text_not_hrefs():
+    from dataclasses import replace
+    bad = replace(POSTING, apply_url="javascript:alert(1)", url="data:text/html,hi")
+    page = render_kit(build_kit(MASTER, TAILORED, bad, None, slug="s", files=FILES))
+    assert 'href="javascript' not in page and 'href="data:' not in page
+    assert "javascript:alert(1)" in page and "data:text/html,hi" in page
+    assert 'href="Ana_Exemplo_CV_Example_Corp.pdf"' in page
+    ok = replace(POSTING, apply_url="HTTPS://jobs.example.com/a")
+    assert 'href="HTTPS://jobs.example.com/a"' in render_kit(
+        build_kit(MASTER, TAILORED, ok, None, slug="s", files={}))
+
+
+def test_corrupt_salary_json_is_a_clean_error(tmp_path, monkeypatch, capsys):
+    app = _kit_app(tmp_path, monkeypatch)
+    (app / "salary.json").write_text("{not json", encoding="utf-8")
+    assert cli.main(["kit", "example-corp", "--master", str(PERSONA / "master.yaml")]) == 1
+    err = capsys.readouterr().err
+    assert "salary.json" in err and "Traceback" not in err
+    (app / "salary.json").write_text(json.dumps({"confirmed": True, "currency": "EUR"}),
+                                     encoding="utf-8")
+    assert cli.main(["kit", "example-corp", "--master", str(PERSONA / "master.yaml")]) == 1
+    err = capsys.readouterr().err
+    assert "salary.json" in err and "amount" in err
+    assert not (app / "kit.json").exists()

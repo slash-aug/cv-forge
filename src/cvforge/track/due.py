@@ -30,6 +30,8 @@ def due_report(rows: list[dict], apps_dir: Path, today: date, *, window: int = 7
     horizon = today + timedelta(days=window)
     stages, errors = [], []
     for r in rows:
+        if r["status"] in FINAL:  # closed applications have no stages left to attend
+            continue
         try:
             found = load_stages(Path(apps_dir) / r["slug"])
         except StagesError as exc:

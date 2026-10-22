@@ -149,3 +149,19 @@ def test_build_allows_knockout_figures_in_answers(monkeypatch, tmp_path, capsys)
     (app / "tailored.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
     assert main(["build", str(app / "tailored.yaml"), "--master", P, "--out", str(tmp_path),
                  "--no-letter"]) == 0, capsys.readouterr().out
+
+
+def test_build_defaults_to_tailored_folder(monkeypatch, tmp_path):
+    from cvforge import cli
+
+    _capture_required(monkeypatch, tmp_path)
+    outs = []
+    monkeypatch.setattr(cli, "_publish", lambda pdf, out, name: outs.append(out) or out / name)
+    app = tmp_path / "applications" / "example-corp-senior-full-stack-engineer-2"
+    app.mkdir(parents=True)
+    (app / "tailored.yaml").write_text(Path(T).read_text(encoding="utf-8"), encoding="utf-8")
+    assert main(["build", str(app / "tailored.yaml"), "--master", P, "--no-letter"]) == 0
+    assert outs == [app]
+    assert main(["build", str(app / "tailored.yaml"), "--master", P, "--no-letter",
+                 "--out", str(tmp_path / "elsewhere")]) == 0
+    assert outs[-1] == tmp_path / "elsewhere"

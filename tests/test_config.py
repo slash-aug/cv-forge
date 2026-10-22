@@ -32,3 +32,25 @@ def test_defaults_are_typed(tmp_path):
 def test_daily_cap_default_and_override(tmp_path):
     assert load_config(env={}, file=tmp_path / "missing.toml").daily_cap == 10
     assert load_config(env={"CVFORGE_DAILY_CAP": "3"}, file=None).daily_cap == 3
+
+
+def test_bad_config_values_are_clean_cli_errors(tmp_path, monkeypatch, capsys):
+    from cvforge.cli import main
+
+    monkeypatch.setenv("CVFORGE_DATA_DIR", str(tmp_path))
+    for key, value in (("CVFORGE_DAILY_CAP", "ten"), ("CVFORGE_CLT_FACTOR", "abc")):
+        monkeypatch.setenv(key, value)
+        assert main(["due"]) == 1
+        err = capsys.readouterr().err
+        assert key.removeprefix("CVFORGE_").lower() in err and value in err
+        monkeypatch.delenv(key)
+
+
+def test_bad_toml_is_a_config_error(tmp_path):
+    import pytest
+
+    from cvforge.config import ConfigError
+    f = tmp_path / "cvforge.toml"
+    f.write_text("[cvforge\n")
+    with pytest.raises(ConfigError, match="cvforge.toml"):
+        load_config(env={}, file=f)

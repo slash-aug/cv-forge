@@ -102,3 +102,20 @@ def test_set_status_can_clear_skip_reason(tmp_path):
     row = tracker.set_status(path, "a", "drafted", date(2026, 10, 22), clear_skip_reason=True)
     assert (row["status"], row["skip_reason"]) == ("drafted", "")
     assert tracker.load(path)[0]["skip_reason"] == ""
+
+
+def test_save_is_atomic(tmp_path, monkeypatch):
+    path = tmp_path / "t.csv"
+    tracker.save(path, [{"slug": "a", "company": "A"}])
+    before = path.read_bytes()
+
+    def fail_on_b(value):
+        if value == "B":
+            raise OSError("disk full")
+        return value
+
+    monkeypatch.setattr(tracker, "_safe", fail_on_b)
+    with pytest.raises(OSError):
+        tracker.save(path, [{"slug": "z", "company": "Z"}, {"slug": "b", "company": "B"}])
+    assert path.read_bytes() == before
+    assert [p.name for p in tmp_path.iterdir()] == ["t.csv"]

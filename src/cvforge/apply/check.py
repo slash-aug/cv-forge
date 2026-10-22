@@ -8,7 +8,7 @@ from datetime import date
 from cvforge.apply.experience import engineering_months, years_limit
 from cvforge.apply.posting import Posting
 from cvforge.money.normalise import Money, monthly, pj_equivalent
-from cvforge.money.rates import MoneyError, Rates
+from cvforge.money.rates import MoneyError, NoRate, Rates
 from cvforge.text import fold_accents
 
 REGIONS = {
@@ -135,27 +135,33 @@ def _location(req: dict, company: dict | None) -> RuleResult:
 # Rule 3: salary
 
 
-def _salary(req: dict, master: dict, rates: Rates | None, clt_factor: float) -> RuleResult:
+def _salary(req: dict, master: dict, rates: Rates | None,
+            clt_factor: float) -> tuple[RuleResult, list[str]]:
     salary = req.get("salary") or {}
     amount = salary.get("max") if salary.get("max") is not None else salary.get("min")
     if amount is None:
-        return RuleResult("salary", True, "no salary stated", None)
+        return RuleResult("salary", True, "no salary stated", None), []
     floor = (master.get("x-preferences") or {}).get("payFloor")
     if not floor:
-        return RuleResult("salary", True, "no pay floor set", salary.get("quote"))
+        return RuleResult("salary", True, "no pay floor set", salary.get("quote")), []
     if rates is None:
         raise MoneyError("currency rates are needed for the salary rule")
     contract = (salary.get("contract") or "unknown").lower()
     which = "max" if salary.get("max") is not None else "min"
-    offered = pj_equivalent(
-        monthly(Money(amount, salary["currency"].upper(), salary["period"]), "BRL", rates),
-        contract, clt_factor)
-    floor_brl = monthly(Money(floor["amount"], floor["currency"].upper(), floor["period"]),
-                        "BRL", rates)
+    stated = f"{which} {amount:g} {salary['currency'].upper()}/{salary['period']}"
+    try:
+        offered = pj_equivalent(
+            monthly(Money(amount, salary["currency"].upper(), salary["period"]), "BRL", rates),
+            contract, clt_factor)
+        floor_brl = monthly(Money(floor["amount"], floor["currency"].upper(), floor["period"]),
+                            "BRL", rates)
+    except NoRate as exc:  # cannot compare, so never a skip; the candidate judges the figure
+        warning = f"no exchange rate for {exc.currency}: salary not checked against the pay floor"
+        return RuleResult("salary", True, f"{stated}: {exc}", salary.get("quote")), [warning]
     basis = f" ({contract.upper()} x {clt_factor:g})" if contract == "clt" else ""
-    message = (f"{which} {amount:g} {salary['currency'].upper()}/{salary['period']}{basis} is "
+    message = (f"{stated}{basis} is "
                f"{offered:,.0f} BRL/month against a floor of {floor_brl:,.0f} BRL/month")
-    return RuleResult("salary", offered >= floor_brl, message, salary.get("quote"))
+    return RuleResult("salary", offered >= floor_brl, message, salary.get("quote")), []
 
 
 # Rule 4: languages
@@ -239,11 +245,12 @@ def _languages(req: dict, master: dict) -> tuple[RuleResult, list[str]]:
 def check(req: dict, posting: Posting, master: dict, company: dict | None, rates: Rates | None,
           today: date, *, clt_factor: float) -> Verdict:
     """Apply the four rules in order. Languages only ever warn."""
+    salary, salary_warnings = _salary(req, master, rates, clt_factor)
     languages, warnings = _languages(req, master)
     results = [
         _years(req, master, today),
         _location(req, company),
-        _salary(req, master, rates, clt_factor),
+        salary,
         languages,
     ]
-    return Verdict(all(r.ok for r in results), results, warnings)
+    return Verdict(all(r.ok for r in results), results, salary_warnings + warnings)

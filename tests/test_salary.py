@@ -286,3 +286,22 @@ def test_hourly_floor_lift_uses_hour_step():
     s = suggest(posted(1, 2, "EUR", "hour"), [], FLOOR, RATES, clt_factor=1.4)
     assert s.amount == 3
     assert "lifted to payFloor" in s.sources
+
+
+def test_cli_unpublished_currency_is_reported_clearly(env, capsys):
+    _set_req(env, min=900000, max=1200000, currency="ARS", period="month", quote="ARS")
+    assert _run() == 1
+    err = capsys.readouterr().err
+    assert "no exchange rate for ARS" in err and "ECB" in err
+    assert not (env / "salary.json").exists()
+
+
+def test_corrupt_rate_cache_is_a_clean_error(env, capsys):
+    cache = env.parents[1] / "salary" / f"ecb-{TODAY.isoformat()}.json"
+    cache.write_text(json.dumps({"day": "2026-10-21"}), encoding="utf-8")
+    assert _run() == 1
+    err = capsys.readouterr().err
+    assert cache.name in err and "rate cache" in err
+    cache.write_text("{", encoding="utf-8")
+    assert _run() == 1
+    assert "rate cache" in capsys.readouterr().err

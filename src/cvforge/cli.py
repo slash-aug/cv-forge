@@ -34,7 +34,7 @@ from cvforge.apply.requirements import load_requirements, posting_text, quote_pr
 from cvforge.apply.workspace import create_app_dir
 from cvforge.build import LatexError, compile_tex
 from cvforge.checks.ats import AtsReport, ats_check
-from cvforge.config import Config, load_config
+from cvforge.config import Config, ConfigError, load_config
 from cvforge.guard import GuardError, check_message_file, check_staged, check_tree
 from cvforge.kit.data import build_kit
 from cvforge.kit.render import render_kit
@@ -46,7 +46,7 @@ from cvforge.render.letter import ASSETS_DIR, letter_context, render_letter_cont
 from cvforge.salary.market import load_market, match_market
 from cvforge.salary.suggest import Suggestion, below_floor, displays, suggest
 from cvforge.tailor.audit import Finding, audit, audit_rendered, figures, load_tailored
-from cvforge.text import file_part, slug, split_name
+from cvforge.text import file_part, split_name
 from cvforge.track import stages as stages_mod
 from cvforge.track import tracker
 from cvforge.track.due import due_report
@@ -138,20 +138,47 @@ def cmd_validate(args) -> int:
     return 0
 
 
+class DataError(Exception):
+    """A file under the data directory that cannot be used as it is."""
+
+
+SALARY_KEYS = ("amount", "currency", "period", "brl_month", "eur_year", "usd_year")
+
+
+def _load_salary(app_dir: Path) -> dict | None:
+    """salary.json as written by `cvforge salary`, or None; a damaged file is a DataError."""
+    path = app_dir / "salary.json"
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError as exc:
+        raise DataError(f"{path}: unreadable ({exc}); rerun cvforge salary") from None
+    if not isinstance(data, dict):
+        raise DataError(f"{path}: expected an object; rerun cvforge salary")
+    if data.get("confirmed"):
+        missing = [k for k in SALARY_KEYS if k not in data]
+        if missing:
+            raise DataError(f"{path}: missing {', '.join(missing)}; rerun cvforge salary")
+        try:
+            for key in ("amount", "brl_month", "eur_year", "usd_year"):
+                data[key] = float(data[key])
+        except (TypeError, ValueError):
+            raise DataError(f"{path}: {key} is not a number; rerun cvforge salary") from None
+    return data
+
+
 def _answer_figures(master: dict, lang: str, app_dir: Path) -> set[str]:
     """Numbers an honest screening answer may hold that no highlight has: the knock-out facts
     (years from dates, notice) and, once confirmed, the salary as `cvforge salary` shows it."""
     facts = knockout_facts(master, engineering_months(master, _today()), lang)
     found = figures(*facts.values())
-    salary_path = app_dir / "salary.json"
-    if salary_path.exists():
-        salary = json.loads(salary_path.read_text(encoding="utf-8"))
-        if salary.get("confirmed"):
-            amount = float(salary["amount"])
-            found |= figures(f"{amount:g}", f"{amount:.0f}", f"{amount:,.0f}", f"{amount:,.2f}")
-            for key in ("brl_month", "eur_year", "usd_year"):
-                value = float(salary[key])
-                found |= figures(f"{value:.0f}", f"{value:,.0f}")
+    salary = _load_salary(app_dir)
+    if salary and salary.get("confirmed"):
+        amount = salary["amount"]
+        found |= figures(f"{amount:g}", f"{amount:.0f}", f"{amount:,.0f}", f"{amount:,.2f}")
+        for key in ("brl_month", "eur_year", "usd_year"):
+            found |= figures(f"{salary[key]:.0f}", f"{salary[key]:,.0f}")
     return found
 
 
@@ -184,8 +211,8 @@ def cmd_build(args) -> int:
     target = tailored["target"]
     first, last = name_parts(master["basics"]["name"])
     company = file_part(target["company"])
-    out = Path(args.out) if args.out else (
-        cfg.data_dir / "applications" / f"{slug(target['company'])}-{slug(target['role'])}")
+    # Default: next to the tailored.yaml, which is the application folder intake created.
+    out = Path(args.out) if args.out else tailored_path.resolve().parent
     name = master["basics"]["name"]
 
     cv_pdf = compile_tex(render_view(view), engine=_engine(cfg, "lualatex"),
@@ -282,7 +309,14 @@ def cmd_intake(args) -> int:
         print(str(exc), file=sys.stderr)
         return 1
     app_dir = create_app_dir(cfg.data_dir / "applications", posting.company, posting.title)
-    posting.save(app_dir)
+    try:
+        posting.save(app_dir)
+    except Exception as exc:
+        shutil.rmtree(app_dir, ignore_errors=True)  # no half-written folder to trip the next run
+        if not isinstance(exc, OSError):
+            raise
+        print(f"posting not saved: {exc}", file=sys.stderr)
+        return 1
     row = {"slug": app_dir.name, "company": posting.company, "role": posting.title,
            "date": today.isoformat(), "status": "drafted", "source": posting.source, "url": posting.url}
     if args.channel:
@@ -338,6 +372,9 @@ def cmd_track(args) -> int:
         try:
             due = date.fromisoformat(args.due) if args.due else None
             stages_mod.add_stage(app_dir, args.name, args.kind, due)
+        except stages_mod.StagesError as exc:
+            print(f"bad stages file, {exc}", file=sys.stderr)
+            return 1
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
             return 1
@@ -345,6 +382,9 @@ def cmd_track(args) -> int:
     else:
         try:
             stages_mod.complete_stage(app_dir, args.name)
+        except stages_mod.StagesError as exc:
+            print(f"bad stages file, {exc}", file=sys.stderr)
+            return 1
         except KeyError as exc:
             print(str(exc.args[0]), file=sys.stderr)
             return 1
@@ -621,8 +661,7 @@ def cmd_kit(args) -> int:
     master = load_master(Path(args.master) if args.master
                          else cfg.data_dir / "profile" / "master.yaml")
     tailored = load_tailored(app_dir / "tailored.yaml")
-    salary_path = app_dir / "salary.json"
-    salary = json.loads(salary_path.read_text(encoding="utf-8")) if salary_path.exists() else None
+    salary = _load_salary(app_dir)
     first, last = name_parts(master["basics"]["name"])
     company = file_part(tailored["target"]["company"])
     names = {"cv_pdf": f"{first}_{last}_CV_{company}.pdf",
@@ -792,8 +831,11 @@ def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
         return args.func(args)
-    except (ProfileError, LatexError, GuardError) as exc:
+    except (ProfileError, LatexError, GuardError, ConfigError, DataError, MoneyError) as exc:
         print(str(exc), file=sys.stderr)
+        return 1
+    except json.JSONDecodeError as exc:  # a damaged JSON file under the data directory
+        print(f"unreadable JSON file: {exc}", file=sys.stderr)
         return 1
 
 

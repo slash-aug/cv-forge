@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from importlib import resources
+from urllib.parse import urlsplit
 
 import jinja2
 
@@ -24,10 +25,16 @@ def _variants(description: dict[str, str]) -> list[dict]:
     return merged
 
 
+def is_web(url) -> bool:
+    """Only http(s) links become hrefs; a posting's apply URL is untrusted input."""
+    return isinstance(url, str) and urlsplit(url.strip()).scheme.lower() in ("http", "https")
+
+
 def render_kit(kit: dict) -> str:
     env = jinja2.Environment(
         loader=jinja2.FileSystemLoader(str(resources.files("cvforge.kit").joinpath("templates"))),
         autoescape=True, trim_blocks=True, lstrip_blocks=True, undefined=jinja2.StrictUndefined)
+    env.tests["web"] = is_web
     groups = [(label, [f for f in kit["fields"] if f["group"] == key]) for key, label in GROUPS]
     employers: list[dict] = []
     for w in kit["work"]:

@@ -167,3 +167,18 @@ def test_unconfirmed_salary_and_invented_numbers_fail(app, capsys):
     assert _audit(app) == 1
     assert "not in the master text: 12" in capsys.readouterr().out
     assert _run("--save") == 1
+
+
+@pytest.mark.parametrize("asked,other", [
+    ("Do you need sponsorship?", "Do you have sponsorship?"),
+    ("Você precisa de visto?", "Você tem visto?"),
+])
+def test_need_and_have_questions_stay_distinct(tmp_path, asked, other):
+    assert normalise_question(asked) != normalise_question(other)
+    path = tmp_path / "bank.yaml"
+    save_answers(path, [{"question": asked, "answer": "Yes.", "refs": []}], "en", TODAY)
+    save_answers(path, [{"question": other, "answer": "No.", "refs": []}], "en", TODAY)
+    bank = load_bank(path)
+    assert len(bank) == 2
+    assert lookup(bank, asked, "en")["answer"] == "Yes."
+    assert lookup(bank, other, "en")["answer"] == "No."
