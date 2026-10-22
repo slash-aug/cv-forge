@@ -81,11 +81,8 @@ To use your own data, copy the persona files into `data/profile/` and edit them.
 
 The templates need LuaLaTeX for the CV and XeLaTeX for the letter, plus the `moderncv` class and `fontawesome5`.
 
-- **Linux and CI:** install TeX Live.
-  ```bash
-  sudo apt-get install texlive-luatex texlive-xetex texlive-latex-extra \
-    texlive-fonts-extra poppler-utils
-  ```
+- **Linux:** install a current TeX Live (the [official installer](https://tug.org/texlive/) or the `texlive/texlive` Docker image). Distribution packages can lag a year or more behind; the CV header needs a recent `moderncv`.
+- **CI:** the PDF job runs inside the official `texlive/texlive` image, pinned by digest, so it uses the same current packages as a local install.
   `poppler-utils` provides `pdftotext`, which the ATS check uses.
 - **Windows:** install MiKTeX and run cv-forge from WSL. cv-forge calls the Windows engines (`lualatex.exe`, `xelatex.exe`), which can only write to Windows drives, so the build directory must be under `/mnt` (for example `/mnt/d/cv-forge-build`). The defaults assume MiKTeX in `D:\MiKTeX`; anywhere else, set the engine paths and the build directory as described in [Configuration](#configuration).
 
