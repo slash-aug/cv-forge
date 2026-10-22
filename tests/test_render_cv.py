@@ -285,3 +285,44 @@ def test_title_is_on_its_own_line_under_the_name(cfg):
     assert title in lines, lines[:6]
     assert lines.index(title) == lines.index(name) + 1
     assert "|" not in text
+
+
+def _header_lines(pdf):
+    import re
+    import subprocess
+
+    xml = subprocess.run(["pdftotext", "-f", "1", "-l", "1", "-bbox-layout", str(pdf), "-"],
+                         capture_output=True, text=True, check=True).stdout
+    width = float(re.search(r'<page width="([\d.]+)"', xml).group(1))
+    lines = []
+    for m in re.finditer(r"<line xMin=\"([\d.]+)\" yMin=\"[\d.]+\" xMax=\"([\d.]+)\" yMax=\"[\d.]+\">(.*?)</line>",
+                         xml, re.DOTALL):
+        words = re.findall(r">([^<]+)</word>", m.group(3))
+        lines.append((float(m.group(1)), float(m.group(2)), " ".join(words)))
+    return width, lines
+
+
+@pytest.mark.latex
+def test_long_name_and_title_stay_centered_inside_margins(cfg):
+    from cvforge.build import compile_tex
+
+    if not cfg.lualatex:
+        pytest.skip("no lualatex engine")
+    master = copy.deepcopy(M)
+    master["basics"]["name"] = "Maria Fernanda de Oliveira Santos"
+    master["basics"]["label"] = {
+        lang: "Senior Full Stack Developer | Team Lead | Mentor" for lang in ("en", "pt-BR", "pt-PT")}
+    pdf = compile_tex(render_cv(T, master), engine=cfg.lualatex,
+                      build_dir=cfg.build_dir / "test", jobname="cv_long_header", assets=ASSETS_DIR)
+    width, lines = _header_lines(pdf)
+    texts = [t for _, _, t in lines]
+    assert "Maria Fernanda de Oliveira Santos" in texts  # one line, not wrapped
+    summary = next(i for i, t in enumerate(texts) if t == "Summary")
+    header = lines[:summary]
+    margin = width * 0.1
+    title_words = " ".join(t for _, _, t in header[1:]).replace("|", " ")
+    for part in ("Senior Full Stack Developer", "Team Lead", "Mentor"):
+        assert part in " ".join(title_words.split()), part
+    for x0, x1, t in header:
+        assert x0 >= margin - 2 and x1 <= width - margin + 2, (t, x0, x1)
+        assert abs(x0 - (width - x1)) <= 4, (t, x0, width - x1)
