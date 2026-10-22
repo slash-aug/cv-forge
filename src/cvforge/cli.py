@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import shutil
 import sys
 from dataclasses import asdict
@@ -30,10 +31,13 @@ from cvforge.build import LatexError, compile_tex
 from cvforge.checks.ats import AtsReport, ats_check
 from cvforge.config import Config, load_config
 from cvforge.guard import GuardError, check_message_file, check_staged, check_tree
+from cvforge.money.normalise import Money
 from cvforge.money.rates import MoneyError, load_rates
 from cvforge.profile.model import ProfileError, load_master, localized
 from cvforge.render.cv import build_cv_view, render_view
 from cvforge.render.letter import ASSETS_DIR, letter_context, render_letter_context
+from cvforge.salary.market import load_market, match_market
+from cvforge.salary.suggest import Suggestion, below_floor, displays, suggest
 from cvforge.tailor.audit import Finding, audit, audit_rendered, load_tailored
 from cvforge.text import file_part, slug
 from cvforge.track import stages as stages_mod
@@ -403,6 +407,85 @@ def cmd_check(args) -> int:
     return 2
 
 
+def _seniority(title: str) -> str:
+    words = set(title.casefold().replace("-", " ").split())
+    if words & {"senior", "sr", "sr.", "staff", "principal", "lead"}:
+        return "senior"
+    if words & {"junior", "jr", "jr.", "intern", "trainee"}:
+        return "junior"
+    return "mid"
+
+
+def cmd_salary(args) -> int:
+    """Suggest an expected salary; the kit shows it only once confirmed.
+
+    Market country: requirements location.job_countries[0] when present, else the
+    master's basics.location.countryCode (a remote job open to the candidate's country).
+    """
+    cfg = load_config()
+    app_dir = cfg.data_dir / "applications" / args.slug
+    if not (app_dir / "posting.json").exists():
+        print(f"unknown slug '{args.slug}'", file=sys.stderr)
+        return 1
+    posting = Posting.load(app_dir)
+    req_path = app_dir / "requirements.yaml"
+    req = load_requirements(req_path) if req_path.exists() else None
+    master = load_master(Path(args.master) if args.master
+                         else cfg.data_dir / "profile" / "master.yaml")
+    pay_floor = (master.get("x-preferences") or {}).get("payFloor")
+    if not pay_floor:
+        print("master has no x-preferences.payFloor", file=sys.stderr)
+        return 1
+    floor = Money(pay_floor["amount"], pay_floor["currency"], pay_floor["period"])
+    countries = ((req or {}).get("location") or {}).get("job_countries") or []
+    country = countries[0] if countries else (
+        (master.get("basics") or {}).get("location") or {}).get("countryCode", "")
+    market_path = Path(args.market) if args.market else cfg.data_dir / "salary" / "market.csv"
+    rows = match_market(load_market(market_path), role=posting.title,
+                        seniority=_seniority(posting.title), country=country)
+    confirm_amount = None
+    if args.confirm:
+        try:
+            confirm_amount = float(args.confirm)
+        except ValueError:
+            confirm_amount = float("nan")
+        if not math.isfinite(confirm_amount) or confirm_amount <= 0:
+            print(f"invalid amount '{args.confirm}': must be a positive number", file=sys.stderr)
+            return 1
+    try:
+        rates = load_rates(cfg.data_dir / "salary", _today(), apply_http.get)
+        s = suggest((req or {}).get("salary") if req and _salary_stated(req) else None,
+                    rows, floor, rates, clt_factor=cfg.clt_factor)
+        if confirm_amount is not None:
+            amount = confirm_amount
+            contract = ((req or {}).get("salary") or {}).get("contract") \
+                if s.basis == "posting" else "unknown"
+            if below_floor(amount, s.currency, s.period, contract or "unknown", floor, rates,
+                           clt_factor=cfg.clt_factor):
+                print(f"warning: {amount:,.0f} {s.currency}/{s.period} is below your pay floor "
+                      f"({pay_floor['amount']} {pay_floor['currency']}/{pay_floor['period']})"
+                      f"{' (CLT basis x' + str(cfg.clt_factor) + ')' if contract == 'clt' else ''}",
+                      file=sys.stderr)
+            brl, eur, usd = displays(amount, s.currency, s.period, rates)
+            s = Suggestion(s.basis, amount, s.currency, s.period, brl, eur, usd,
+                           [*s.sources, "amount set by candidate"])
+    except MoneyError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    data = {**asdict(s), "confirmed": args.confirm is not None, "rates_day": rates.day}
+    (app_dir / "salary.json").write_text(
+        json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(f"Suggested ({s.basis}): {s.amount:,.0f} {s.currency}/{s.period}")
+    print(f"  BRL/month: {s.brl_month:,.0f}")
+    print(f"  EUR/year:  {s.eur_year:,.0f}")
+    print(f"  USD/year:  {s.usd_year:,.0f}")
+    print(f"  Rates: ECB {rates.day}")
+    for src in s.sources:
+        print(f"  Source: {src}")
+    print("confirmed" if data["confirmed"] else "not confirmed: rerun with --confirm [AMOUNT]")
+    return 0
+
+
 def _track(path: Path, slug_: str, status: str, today: date, **kw) -> None:
     try:
         tracker.set_status(path, slug_, status, today, **kw)
@@ -523,6 +606,13 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--master", help="master profile (default: <data_dir>/profile/master.yaml)")
     p.add_argument("--override", metavar="REASON", help="continue past a skip and record why")
     p.set_defaults(func=cmd_check)
+    p = sub.add_parser("salary", help="suggest an expected salary for the application form")
+    p.add_argument("slug")
+    p.add_argument("--confirm", nargs="?", const="", metavar="AMOUNT",
+                   help="confirm the suggestion, optionally replacing the amount")
+    p.add_argument("--market", help="market CSV (default: <data_dir>/salary/market.csv)")
+    p.add_argument("--master", help="master profile (default: <data_dir>/profile/master.yaml)")
+    p.set_defaults(func=cmd_salary)
     p = sub.add_parser("due", help="stages, follow-ups and stale applications")
     p.set_defaults(func=cmd_due)
     return parser
