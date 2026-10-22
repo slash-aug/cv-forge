@@ -35,14 +35,23 @@ def _header_links(basics: dict) -> list[dict]:
             if "github.com" not in l["text"]]
 
 
-def render_letter(tailored: dict, master: dict, today: date | None = None) -> str:
+def letter_context(tailored: dict, master: dict, today: date | None = None) -> dict:
+    """Every value the letter template prints, resolved and localised."""
     letter = tailored.get("letter")
     if not letter:
         raise ProfileError("tailored has no letter")
     basics = master["basics"]
-    return jinja_env().get_template("cover.tex.j2").render(
-        name=basics["name"],
-        links=_header_links(basics),
-        date=format_letter_date(today or date.today(), tailored["lang"]),
-        letter=letter,
-    )
+    return {
+        "name": basics["name"],
+        "links": _header_links(basics),
+        "date": format_letter_date(today or date.today(), tailored["lang"]),
+        "letter": letter,
+    }
+
+
+def render_letter_context(context: dict) -> str:
+    return jinja_env().get_template("cover.tex.j2").render(**context)
+
+
+def render_letter(tailored: dict, master: dict, today: date | None = None) -> str:
+    return render_letter_context(letter_context(tailored, master, today))

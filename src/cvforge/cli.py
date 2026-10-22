@@ -14,8 +14,8 @@ from cvforge.config import Config, load_config
 from cvforge.guard import GuardError, check_message_file, check_staged, check_tree
 from cvforge.profile.model import ProfileError, load_master, localized
 from cvforge.render.cv import build_cv_view, render_view
-from cvforge.render.letter import ASSETS_DIR, render_letter
-from cvforge.tailor.audit import audit, load_tailored
+from cvforge.render.letter import ASSETS_DIR, letter_context, render_letter_context
+from cvforge.tailor.audit import Finding, audit, audit_rendered, load_tailored
 
 SECTIONS = ("summary", "experience", "skills", "education", "certificates", "languages")
 LARGE_PAGE_CAP = 1000
@@ -92,6 +92,18 @@ def _publish(pdf: Path, out: Path, filename: str) -> Path:
     return dest
 
 
+def _print_findings(findings: list[Finding]) -> None:
+    for f in findings:
+        print(f"{f.kind} {f.ref}: {f.message}")
+
+
+def _confidential_blocked(master: dict, **rendered) -> bool:
+    """The one confidential-term check on everything about to be compiled (None parts are skipped)."""
+    findings = audit_rendered(master, **rendered)
+    _print_findings(findings)
+    return bool(findings)
+
+
 def cmd_validate(args) -> int:
     load_master(Path(args.master))
     print("ok")
@@ -100,8 +112,7 @@ def cmd_validate(args) -> int:
 
 def cmd_audit(args) -> int:
     findings = audit(load_tailored(Path(args.tailored)), load_master(Path(args.master)))
-    for f in findings:
-        print(f"{f.kind} {f.ref}: {f.message}")
+    _print_findings(findings)
     return 1 if findings else 0
 
 
@@ -110,8 +121,11 @@ def cmd_build(args) -> int:
     tailored = load_tailored(Path(args.tailored))
     findings = audit(tailored, master)
     if findings:
-        for f in findings:
-            print(f"{f.kind} {f.ref}: {f.message}")
+        _print_findings(findings)
+        return 1
+    view = build_cv_view(tailored, master)
+    letter = letter_context(tailored, master) if tailored.get("letter") and not args.no_letter else None
+    if _confidential_blocked(master, cv=view, letter=letter):
         return 1
     cfg = load_config()
     target = tailored["target"]
@@ -121,7 +135,6 @@ def cmd_build(args) -> int:
         cfg.data_dir / "applications" / f"{slug(target['company'])}-{slug(target['role'])}")
     name = master["basics"]["name"]
 
-    view = build_cv_view(tailored, master)
     cv_pdf = compile_tex(render_view(view), engine=_engine(cfg, "lualatex"),
                          build_dir=cfg.build_dir, jobname="cv", assets=ASSETS_DIR)
     required = [name] + ([view["summary"][:40]] if view["summary"] else [])
@@ -131,8 +144,8 @@ def cmd_build(args) -> int:
     _report("CV", cv_report)
     ok = cv_report.ok
 
-    if tailored.get("letter") and not args.no_letter:
-        letter_pdf = compile_tex(render_letter(tailored, master), engine=_engine(cfg, "xelatex"),
+    if letter:
+        letter_pdf = compile_tex(render_letter_context(letter), engine=_engine(cfg, "xelatex"),
                                  build_dir=cfg.build_dir, jobname="letter", assets=ASSETS_DIR)
         letter_report = ats_check(letter_pdf, max_pages=1, exact_pages=True, required=[name])
         dest = _publish(letter_pdf, out, f"{first}_{last}_Cover_Letter_{company}.pdf")
@@ -145,8 +158,10 @@ def cmd_build(args) -> int:
 def cmd_master_cv(args) -> int:
     master = load_master(Path(args.master))
     tailored = untailored(master, args.lang, args.angle)
-    cfg = load_config()
     view = build_cv_view(tailored, master)
+    if _confidential_blocked(master, cv=view):
+        return 1
+    cfg = load_config()
     first, last = name_parts(master["basics"]["name"])
     out = Path(args.out) if args.out else cfg.data_dir / "review"
     pdf = compile_tex(render_view(view), engine=_engine(cfg, "lualatex"),

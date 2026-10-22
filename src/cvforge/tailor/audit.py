@@ -168,6 +168,34 @@ def _audit_confidential(tailored: dict, master: dict, findings: list[Finding]):
                 findings.append(Finding("confidential", location, f"contains confidential term '{term}'"))
 
 
+def _leaves(value, path: str):
+    """Yield (dotted path, string) for every string inside nested dicts and lists."""
+    if isinstance(value, str):
+        yield path, value
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            yield from _leaves(item, f"{path}.{key}")
+    elif isinstance(value, list):
+        for i, item in enumerate(value):
+            yield from _leaves(item, f"{path}.{i}")
+
+
+def audit_rendered(master: dict, **rendered: dict | None) -> list[Finding]:
+    """Confidential terms in any value about to be rendered, master-derived fields included.
+
+    Each keyword names a document (cv=view, letter=context); a finding's ref is the
+    field path, such as cv.experience.0.employer.
+    """
+    terms = [t for t in master.get("x-confidential", []) if t]
+    return [
+        Finding("confidential", location, f"contains confidential term '{term}'")
+        for name, value in rendered.items()
+        for location, text in _leaves(value, name)
+        for term in terms
+        if contains_term(text, term)
+    ]
+
+
 def audit(tailored: dict, master: dict) -> list[Finding]:
     """Grounding findings in document order (confidential scan last); empty means grounded."""
     ids = index(master)

@@ -64,3 +64,35 @@ def test_master_cv(cfg, tmp_path, capsys):
 def test_master_cv_missing_translation(tmp_path, capsys):
     assert main(["master-cv", P, "--lang", "pt-PT", "--out", str(tmp_path)]) == 1
     assert "pt-PT" in capsys.readouterr().err
+
+
+def _leaky_master(tmp_path):
+    data = yaml.safe_load(Path(P).read_text(encoding="utf-8"))
+    data["work"][0]["name"] = "ProjectZebra Payments"
+    path = tmp_path / "m.yaml"
+    path.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    return str(path)
+
+
+def test_build_blocks_confidential_master_field(tmp_path, capsys):
+    out = tmp_path / "o"
+    assert main(["build", T, "--master", _leaky_master(tmp_path), "--out", str(out)]) == 1
+    printed = capsys.readouterr().out
+    assert "confidential cv.experience." in printed and ".employer" in printed
+    assert not out.exists()
+
+
+def test_master_cv_blocks_confidential_master_field(tmp_path, capsys):
+    out = tmp_path / "o"
+    assert main(["master-cv", _leaky_master(tmp_path), "--lang", "en", "--out", str(out)]) == 1
+    assert "confidential cv.experience." in capsys.readouterr().out
+    assert not out.exists()
+
+
+def test_build_scans_letter_context(tmp_path, capsys):
+    data = yaml.safe_load(Path(P).read_text(encoding="utf-8"))
+    data["basics"]["name"] = "Ana Projectzebra"
+    master = tmp_path / "m.yaml"
+    master.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    assert main(["build", T, "--master", str(master), "--out", str(tmp_path / "o")]) == 1
+    assert "confidential letter.name" in capsys.readouterr().out
