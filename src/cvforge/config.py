@@ -17,6 +17,10 @@ MIKTEX_BIN = Path("/mnt/d/MiKTeX/miktex/bin/x64")
 WIN_BUILD_DIR = Path("/mnt/d/cv-forge-build")
 
 
+class ConfigError(ValueError):
+    """A configuration value or cvforge.toml that cannot be used."""
+
+
 @dataclass(frozen=True)
 class Config:
     data_dir: Path
@@ -39,8 +43,11 @@ def _read_file(file: Path | None) -> dict:
         file = REPO_ROOT / "cvforge.toml"
     if not file.exists():
         return {}
-    with file.open("rb") as fh:
-        return tomllib.load(fh).get("cvforge", {})
+    try:
+        with file.open("rb") as fh:
+            return tomllib.load(fh).get("cvforge", {})
+    except tomllib.TOMLDecodeError as exc:
+        raise ConfigError(f"{file}: {exc}") from None
 
 
 def load_config(env: Mapping[str, str] | None = None, file: Path | None = None) -> Config:
@@ -54,7 +61,12 @@ def load_config(env: Mapping[str, str] | None = None, file: Path | None = None) 
     try:
         clt_factor = float(raw_factor) if raw_factor is not None else 1.4
     except (TypeError, ValueError):
-        raise ValueError(f"clt_factor must be a number, got {raw_factor!r}") from None
+        raise ConfigError(f"clt_factor must be a number, got {raw_factor!r}") from None
+    raw_cap = pick("daily_cap")
+    try:
+        daily_cap = int(raw_cap) if raw_cap is not None else 10
+    except (TypeError, ValueError):
+        raise ConfigError(f"daily_cap must be a whole number, got {raw_cap!r}") from None
 
     default_build = WIN_BUILD_DIR if Path("/mnt/d").exists() else REPO_ROOT / "build"
     return Config(
@@ -62,6 +74,6 @@ def load_config(env: Mapping[str, str] | None = None, file: Path | None = None) 
         build_dir=Path(pick("build_dir") or default_build),
         lualatex=pick("lualatex") or _engine("lualatex"),
         xelatex=pick("xelatex") or _engine("xelatex"),
-        daily_cap=int(pick("daily_cap") or 10),
+        daily_cap=daily_cap,
         clt_factor=clt_factor,
     )

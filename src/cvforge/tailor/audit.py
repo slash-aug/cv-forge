@@ -38,6 +38,11 @@ def _numbers(text: str) -> set[str]:
     return {n.replace(",", ".") for n in NUMBER.findall(text)}
 
 
+def figures(*texts: str) -> set[str]:
+    """The numbers in texts, in the form the audit compares (for audit's extra_allowed)."""
+    return set().union(*(_numbers(t) for t in texts))
+
+
 def _texts(value) -> list[str]:
     """Every locale variant of a localized value (plain string or locale dict)."""
     if value is None:
@@ -164,13 +169,14 @@ def _ref_numbers(refs: list, ids: dict, findings: list[Finding]) -> set[str]:
     return allowed
 
 
-def _check_prose(location: str, text: str, refs: list | None, ids: dict, findings: list[Finding]):
+def _check_prose(location: str, text: str, refs: list | None, ids: dict, findings: list[Finding],
+                 extra: set[str] | frozenset[str] = frozenset()):
     """Text with refs may only use numbers from them; text without keeps the broad rule."""
     if refs:
         allowed = _ref_numbers(refs, ids, findings)
     else:
         allowed = _broad_numbers(ids)
-    _check_numbers(location, text, allowed, findings)
+    _check_numbers(location, text, allowed | set(extra), findings)
 
 
 def _audit_letter(tailored: dict, ids: dict, findings: list[Finding]):
@@ -182,7 +188,8 @@ def _audit_letter(tailored: dict, ids: dict, findings: list[Finding]):
     _check_prose("letter.closing", letter.get("closing", ""), None, ids, findings)
 
 
-def _audit_note_and_answers(tailored: dict, ids: dict, findings: list[Finding]):
+def _audit_note_and_answers(tailored: dict, ids: dict, findings: list[Finding],
+                            extra_allowed: set[str] | frozenset[str]):
     note = tailored.get("recruiter_note")
     if note:
         refs = note.get("refs")
@@ -199,7 +206,7 @@ def _audit_note_and_answers(tailored: dict, ids: dict, findings: list[Finding]):
     for i, answer in enumerate(tailored.get("answers", [])):
         location = f"answers.{i}.answer"
         text = answer.get("answer", "")
-        _check_prose(location, text, answer.get("refs"), ids, findings)
+        _check_prose(location, text, answer.get("refs"), ids, findings, extra_allowed)
         limit = answer.get("limit")
         if limit is not None and len(text) > limit:
             findings.append(Finding("length", location, f"{len(text)} characters, limit {limit}"))
@@ -265,8 +272,13 @@ def audit_rendered(master: dict, **rendered: dict | None) -> list[Finding]:
     ]
 
 
-def audit(tailored: dict, master: dict) -> list[Finding]:
-    """Grounding findings in document order (confidential scan last); empty means grounded."""
+def audit(tailored: dict, master: dict, *,
+          extra_allowed: set[str] | frozenset[str] = frozenset()) -> list[Finding]:
+    """Grounding findings in document order (confidential scan last); empty means grounded.
+
+    extra_allowed: numbers (as figures() returns them) also allowed in screening answers only,
+    such as knock-out facts computed from master dates and a confirmed salary.
+    """
     ids = index(master)
     findings: list[Finding] = []
     _audit_summary(tailored, ids, findings)
@@ -274,7 +286,7 @@ def audit(tailored: dict, master: dict) -> list[Finding]:
     _audit_skills(tailored, ids, findings)
     _audit_id_lists(tailored, ids, findings)
     _audit_letter(tailored, ids, findings)
-    _audit_note_and_answers(tailored, ids, findings)
+    _audit_note_and_answers(tailored, ids, findings, extra_allowed)
     _audit_em_dash(tailored, findings)
     _audit_confidential(tailored, master, findings)
     return findings

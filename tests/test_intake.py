@@ -289,3 +289,40 @@ def test_schemeless_or_other_scheme_needs_https(tmp_path, monkeypatch, capsys, t
     assert main(["intake", target]) == 1
     assert "include https://" in capsys.readouterr().err
     assert not (tmp_path / "applications").exists()
+
+
+ODD_JSONLD = """<html><script type="application/ld+json">{
+ "@type": "JobPosting", "title": "Frontend Engineer", "hiringOrganization": {"name": "Odd Co"},
+ "description": "We are looking for a frontend engineer to join our team.",
+ "applicantLocationRequirements": [{"@type": "Country", "name": null}, {"@type": "Country"},
+                                   {"@type": "Country", "name": ""}, "", {"name": "Brazil"}],
+ "jobLocation": {"@type": "Place", "address": [{"addressLocality": "Porto",
+                                               "addressCountry": "PT"}, "ignored"]}
+}</script></html>"""
+
+
+def test_jsonld_drops_empty_names_and_reads_list_address():
+    p = fetch_posting("https://odd.example/jobs/1", get=lambda u, **k: ODD_JSONLD, today=TODAY)
+    assert p.location_requirements == ["Brazil"]
+    assert p.location == "Porto, PT"
+
+
+def test_intake_odd_jsonld_via_cli(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("CVFORGE_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(http, "get", lambda u, **k: ODD_JSONLD)
+    assert main(["intake", "https://odd.example/jobs/1"]) == 0
+    assert (tmp_path / "applications" / "odd-co-frontend-engineer" / "posting.md").exists()
+
+
+def test_intake_leaves_no_folder_when_save_fails(env, monkeypatch, capsys):
+    def boom(self, app_dir):
+        app_dir.mkdir(parents=True, exist_ok=True)
+        (app_dir / "posting.json").write_text("{}", encoding="utf-8")
+        raise OSError("disk full")
+
+    monkeypatch.setattr(Posting, "save", boom)
+    assert main(["intake", "https://boards.greenhouse.io/fernwoodlabs/jobs/4040404"]) == 1
+    assert "disk full" in capsys.readouterr().err
+    apps = env / "applications"
+    assert not apps.exists() or list(apps.iterdir()) == []
+    assert not (env / "tracker.csv").exists()

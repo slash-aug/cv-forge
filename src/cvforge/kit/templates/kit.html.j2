@@ -65,10 +65,10 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
 <p class="sub">{{ kit.company }}</p>
 <ul class="links">
 {% if kit.links.apply %}
-  <li><a href="{{ kit.links.apply }}">Apply page</a></li>
+  <li>{% if kit.links.apply is web %}<a href="{{ kit.links.apply }}">Apply page</a>{% else %}Apply page: {{ kit.links.apply }}{% endif %}</li>
 {% endif %}
 {% if kit.links.posting and kit.links.posting != kit.links.apply %}
-  <li><a href="{{ kit.links.posting }}">Job posting</a></li>
+  <li>{% if kit.links.posting is web %}<a href="{{ kit.links.posting }}">Job posting</a>{% else %}Job posting: {{ kit.links.posting }}{% endif %}</li>
 {% endif %}
 {% if kit.links.cv_pdf %}
   <li><a href="{{ kit.links.cv_pdf }}">CV (PDF)</a></li>

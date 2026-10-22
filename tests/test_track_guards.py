@@ -100,3 +100,17 @@ def test_track_show_without_stages(data, capsys):
     out = capsys.readouterr().out
     assert "status: drafted" in out
     assert "stages: -" in out
+
+
+@pytest.mark.parametrize("args", [["stage", "a", "call", "--kind", "interview"],
+                                  ["done", "a", "call"]])
+def test_stage_and_done_report_bad_stages_file(data, capsys, args):
+    main(["track", "add", "a", "--company", "A", "--role", "R"])
+    app = data / "applications" / "a"
+    app.mkdir(parents=True)
+    (app / "stages.yaml").write_text("stages: {", encoding="utf-8")
+    capsys.readouterr()
+    assert main(["track", *args]) == 1
+    err = capsys.readouterr().err
+    assert "bad stages file" in err and "stages.yaml" in err
+    assert (app / "stages.yaml").read_text(encoding="utf-8") == "stages: {"

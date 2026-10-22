@@ -267,3 +267,41 @@ def test_cli_market_error_exit_1(env, tmp_path, capsys):
     assert cli.main(["salary", "acme-frontend", "--master", str(PERSONA),
                      "--market", str(p)]) == 1
     assert "m.csv" in capsys.readouterr().err
+
+
+def test_hourly_rounds_to_whole_units():
+    # 30 + 0.75 * 20 = 45 USD/hour; rounding to 100 would give 0 or 100
+    s = suggest(posted(30, 50, "USD", "hour"), [], FLOOR, RATES, clt_factor=1.4)
+    assert (s.amount, s.period) == (45, "hour")
+
+
+def test_yearly_rounds_to_thousands():
+    # 50000 + 0.75 * 21000 = 65750 -> 66000
+    s = suggest(posted(50000, 71000, "EUR", "year"), [], FLOOR, RATES, clt_factor=1.4)
+    assert s.amount == 66000
+
+
+def test_hourly_floor_lift_uses_hour_step():
+    # floor 3000 BRL/month = 500 EUR/month = 2.976 EUR/hour -> lifted to 3, not 100
+    s = suggest(posted(1, 2, "EUR", "hour"), [], FLOOR, RATES, clt_factor=1.4)
+    assert s.amount == 3
+    assert "lifted to payFloor" in s.sources
+
+
+def test_cli_unpublished_currency_is_reported_clearly(env, capsys):
+    _set_req(env, min=900000, max=1200000, currency="ARS", period="month", quote="ARS")
+    assert _run() == 1
+    err = capsys.readouterr().err
+    assert "no exchange rate for ARS" in err and "ECB" in err
+    assert not (env / "salary.json").exists()
+
+
+def test_corrupt_rate_cache_is_a_clean_error(env, capsys):
+    cache = env.parents[1] / "salary" / f"ecb-{TODAY.isoformat()}.json"
+    cache.write_text(json.dumps({"day": "2026-10-21"}), encoding="utf-8")
+    assert _run() == 1
+    err = capsys.readouterr().err
+    assert cache.name in err and "rate cache" in err
+    cache.write_text("{", encoding="utf-8")
+    assert _run() == 1
+    assert "rate cache" in capsys.readouterr().err

@@ -96,7 +96,7 @@ cvforge build examples/persona/tailored.yaml \
   --master examples/persona/master.yaml --out out/
 ```
 
-`examples/persona` is a fictional candidate, "Ana Exemplo", with an English selection (`tailored.yaml`) and a Brazilian Portuguese one (`tailored.pt-BR.yaml`). The build writes a CV PDF and a cover letter PDF to `out/` and prints the result of the ATS check for each. Without `--out`, `build` writes to `data/applications/<company>-<role>/` and `master-cv` to `data/review/`.
+`examples/persona` is a fictional candidate, "Ana Exemplo", with an English selection (`tailored.yaml`) and a Brazilian Portuguese one (`tailored.pt-BR.yaml`). The build writes a CV PDF and a cover letter PDF to `out/` and prints the result of the ATS check for each. Without `--out`, `build` writes next to the `tailored.yaml` (the application folder `intake` created) and `master-cv` to `data/review/`.
 
 To use your own data, copy the persona files into `data/profile/` and edit them. That directory is ignored by git.
 

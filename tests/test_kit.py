@@ -176,3 +176,62 @@ def test_lang_attribute_follows_kit_lang():
     k = kit()
     k["lang"] = "pt-BR"
     assert 'lang="pt-BR"' in render_kit(k)
+
+
+def _kit_app(tmp_path, monkeypatch, mutate=None):
+    import yaml
+    monkeypatch.setenv("CVFORGE_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(cli, "_windows_path", lambda p: None)
+    app = tmp_path / "applications" / "example-corp"
+    POSTING.save(app)
+    t = yaml.safe_load((PERSONA / "tailored.yaml").read_text(encoding="utf-8"))
+    if mutate:
+        mutate(t)
+    (app / "tailored.yaml").write_text(yaml.safe_dump(t, allow_unicode=True), encoding="utf-8")
+    return app
+
+
+def test_kit_refuses_unaudited_tailored(tmp_path, monkeypatch, capsys):
+    app = _kit_app(tmp_path, monkeypatch, lambda t: t["recruiter_note"].update(
+        message="I cut load time by 75% at ExamplePay."))
+    assert cli.main(["kit", "example-corp", "--master", str(PERSONA / "master.yaml")]) == 1
+    assert "number recruiter_note.message" in capsys.readouterr().out
+    assert not (app / "kit.json").exists() and not (app / "kit.html").exists()
+
+
+def test_kit_refuses_confidential_master_field(tmp_path, monkeypatch, capsys):
+    import yaml
+    app = _kit_app(tmp_path, monkeypatch)
+    data = yaml.safe_load((PERSONA / "master.yaml").read_text(encoding="utf-8"))
+    data["education"][0]["institution"] = "Projectzebra Academy"
+    master = tmp_path / "m.yaml"
+    master.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    assert cli.main(["kit", "example-corp", "--master", str(master)]) == 1
+    assert "confidential kit.education" in capsys.readouterr().out
+    assert not (app / "kit.json").exists() and not (app / "kit.html").exists()
+
+
+def test_non_web_links_are_text_not_hrefs():
+    from dataclasses import replace
+    bad = replace(POSTING, apply_url="javascript:alert(1)", url="data:text/html,hi")
+    page = render_kit(build_kit(MASTER, TAILORED, bad, None, slug="s", files=FILES))
+    assert 'href="javascript' not in page and 'href="data:' not in page
+    assert "javascript:alert(1)" in page and "data:text/html,hi" in page
+    assert 'href="Ana_Exemplo_CV_Example_Corp.pdf"' in page
+    ok = replace(POSTING, apply_url="HTTPS://jobs.example.com/a")
+    assert 'href="HTTPS://jobs.example.com/a"' in render_kit(
+        build_kit(MASTER, TAILORED, ok, None, slug="s", files={}))
+
+
+def test_corrupt_salary_json_is_a_clean_error(tmp_path, monkeypatch, capsys):
+    app = _kit_app(tmp_path, monkeypatch)
+    (app / "salary.json").write_text("{not json", encoding="utf-8")
+    assert cli.main(["kit", "example-corp", "--master", str(PERSONA / "master.yaml")]) == 1
+    err = capsys.readouterr().err
+    assert "salary.json" in err and "Traceback" not in err
+    (app / "salary.json").write_text(json.dumps({"confirmed": True, "currency": "EUR"}),
+                                     encoding="utf-8")
+    assert cli.main(["kit", "example-corp", "--master", str(PERSONA / "master.yaml")]) == 1
+    err = capsys.readouterr().err
+    assert "salary.json" in err and "amount" in err
+    assert not (app / "kit.json").exists()

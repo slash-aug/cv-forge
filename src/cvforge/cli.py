@@ -34,7 +34,7 @@ from cvforge.apply.requirements import load_requirements, posting_text, quote_pr
 from cvforge.apply.workspace import create_app_dir
 from cvforge.build import LatexError, compile_tex
 from cvforge.checks.ats import AtsReport, ats_check
-from cvforge.config import Config, load_config
+from cvforge.config import Config, ConfigError, load_config
 from cvforge.guard import GuardError, check_message_file, check_staged, check_tree
 from cvforge.kit.data import build_kit
 from cvforge.kit.render import render_kit
@@ -45,8 +45,8 @@ from cvforge.render.cv import build_cv_view, render_view
 from cvforge.render.letter import ASSETS_DIR, letter_context, render_letter_context
 from cvforge.salary.market import load_market, match_market
 from cvforge.salary.suggest import Suggestion, below_floor, displays, suggest
-from cvforge.tailor.audit import Finding, audit, audit_rendered, load_tailored
-from cvforge.text import file_part, slug, split_name
+from cvforge.tailor.audit import Finding, audit, audit_rendered, figures, load_tailored
+from cvforge.text import file_part, split_name
 from cvforge.track import stages as stages_mod
 from cvforge.track import tracker
 from cvforge.track.due import due_report
@@ -138,16 +138,68 @@ def cmd_validate(args) -> int:
     return 0
 
 
+class DataError(Exception):
+    """A file under the data directory that cannot be used as it is."""
+
+
+SALARY_KEYS = ("amount", "currency", "period", "brl_month", "eur_year", "usd_year")
+
+
+def _load_salary(app_dir: Path) -> dict | None:
+    """salary.json as written by `cvforge salary`, or None; a damaged file is a DataError."""
+    path = app_dir / "salary.json"
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError as exc:
+        raise DataError(f"{path}: unreadable ({exc}); rerun cvforge salary") from None
+    if not isinstance(data, dict):
+        raise DataError(f"{path}: expected an object; rerun cvforge salary")
+    if data.get("confirmed"):
+        missing = [k for k in SALARY_KEYS if k not in data]
+        if missing:
+            raise DataError(f"{path}: missing {', '.join(missing)}; rerun cvforge salary")
+        try:
+            for key in ("amount", "brl_month", "eur_year", "usd_year"):
+                data[key] = float(data[key])
+        except (TypeError, ValueError):
+            raise DataError(f"{path}: {key} is not a number; rerun cvforge salary") from None
+    return data
+
+
+def _answer_figures(master: dict, lang: str, app_dir: Path) -> set[str]:
+    """Numbers an honest screening answer may hold that no highlight has: the knock-out facts
+    (years from dates, notice) and, once confirmed, the salary as `cvforge salary` shows it."""
+    facts = knockout_facts(master, engineering_months(master, _today()), lang)
+    found = figures(*facts.values())
+    salary = _load_salary(app_dir)
+    if salary and salary.get("confirmed"):
+        amount = salary["amount"]
+        found |= figures(f"{amount:g}", f"{amount:.0f}", f"{amount:,.0f}", f"{amount:,.2f}")
+        for key in ("brl_month", "eur_year", "usd_year"):
+            found |= figures(f"{salary[key]:.0f}", f"{salary[key]:,.0f}")
+    return found
+
+
+def _audit_tailored(tailored: dict, master: dict, app_dir: Path) -> list[Finding]:
+    return audit(tailored, master,
+                 extra_allowed=_answer_figures(master, tailored["lang"], app_dir))
+
+
 def cmd_audit(args) -> int:
-    findings = audit(load_tailored(Path(args.tailored)), load_master(Path(args.master)))
+    path = Path(args.tailored)
+    master = load_master(Path(args.master))
+    findings = _audit_tailored(load_tailored(path), master, path.resolve().parent)
     _print_findings(findings)
     return 1 if findings else 0
 
 
 def cmd_build(args) -> int:
     master = load_master(Path(args.master))
-    tailored = load_tailored(Path(args.tailored))
-    findings = audit(tailored, master)
+    tailored_path = Path(args.tailored)
+    tailored = load_tailored(tailored_path)
+    findings = _audit_tailored(tailored, master, tailored_path.resolve().parent)
     if findings:
         _print_findings(findings)
         return 1
@@ -159,8 +211,8 @@ def cmd_build(args) -> int:
     target = tailored["target"]
     first, last = name_parts(master["basics"]["name"])
     company = file_part(target["company"])
-    out = Path(args.out) if args.out else (
-        cfg.data_dir / "applications" / f"{slug(target['company'])}-{slug(target['role'])}")
+    # Default: next to the tailored.yaml, which is the application folder intake created.
+    out = Path(args.out) if args.out else tailored_path.resolve().parent
     name = master["basics"]["name"]
 
     cv_pdf = compile_tex(render_view(view), engine=_engine(cfg, "lualatex"),
@@ -257,7 +309,14 @@ def cmd_intake(args) -> int:
         print(str(exc), file=sys.stderr)
         return 1
     app_dir = create_app_dir(cfg.data_dir / "applications", posting.company, posting.title)
-    posting.save(app_dir)
+    try:
+        posting.save(app_dir)
+    except Exception as exc:
+        shutil.rmtree(app_dir, ignore_errors=True)  # no half-written folder to trip the next run
+        if not isinstance(exc, OSError):
+            raise
+        print(f"posting not saved: {exc}", file=sys.stderr)
+        return 1
     row = {"slug": app_dir.name, "company": posting.company, "role": posting.title,
            "date": today.isoformat(), "status": "drafted", "source": posting.source, "url": posting.url}
     if args.channel:
@@ -313,6 +372,9 @@ def cmd_track(args) -> int:
         try:
             due = date.fromisoformat(args.due) if args.due else None
             stages_mod.add_stage(app_dir, args.name, args.kind, due)
+        except stages_mod.StagesError as exc:
+            print(f"bad stages file, {exc}", file=sys.stderr)
+            return 1
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
             return 1
@@ -320,6 +382,9 @@ def cmd_track(args) -> int:
     else:
         try:
             stages_mod.complete_stage(app_dir, args.name)
+        except stages_mod.StagesError as exc:
+            print(f"bad stages file, {exc}", file=sys.stderr)
+            return 1
         except KeyError as exc:
             print(str(exc.args[0]), file=sys.stderr)
             return 1
@@ -427,15 +492,18 @@ def cmd_check(args) -> int:
     for warning in verdict.warnings:
         print(f"warning: {warning}")
     path = cfg.data_dir / "tracker.csv"
+    current = next((r["status"] for r in tracker.load(path) if r["slug"] == args.slug), "")
     if verdict.passed:
         _write_verdict(app_dir, today, "pass", results=verdict)
+        if current == "skipped":  # an earlier skip no longer holds
+            _track(path, args.slug, "drafted", today, clear_skip_reason=True)
         print("verdict: pass")
         return 0
     if args.override:
         _write_verdict(app_dir, today, "pass", results=verdict, override=args.override)
-        current = next((r["status"] for r in tracker.load(path) if r["slug"] == args.slug), "")
         status = "drafted" if current in ("", "skipped") else current
-        _track(path, args.slug, status, today, note=f"override: {args.override}")
+        _track(path, args.slug, status, today, note=f"override: {args.override}",
+               clear_skip_reason=current == "skipped")
         print(f"verdict: pass (override: {args.override})")
         return 0
     _write_verdict(app_dir, today, "skip", results=verdict)
@@ -470,7 +538,7 @@ def cmd_answers(args) -> int:
             print(f"no tailored.yaml for '{args.slug}'", file=sys.stderr)
             return 1
         tailored = load_tailored(tailored_path)
-        findings = audit(tailored, master)
+        findings = _audit_tailored(tailored, master, app_dir)
         if findings:
             for f in findings:
                 print(f"{f.kind} {f.ref}: {f.message}", file=sys.stderr)
@@ -593,14 +661,19 @@ def cmd_kit(args) -> int:
     master = load_master(Path(args.master) if args.master
                          else cfg.data_dir / "profile" / "master.yaml")
     tailored = load_tailored(app_dir / "tailored.yaml")
-    salary_path = app_dir / "salary.json"
-    salary = json.loads(salary_path.read_text(encoding="utf-8")) if salary_path.exists() else None
+    salary = _load_salary(app_dir)
     first, last = name_parts(master["basics"]["name"])
     company = file_part(tailored["target"]["company"])
     names = {"cv_pdf": f"{first}_{last}_CV_{company}.pdf",
              "letter_pdf": f"{first}_{last}_Cover_Letter_{company}.pdf"}
     files = {k: v for k, v in names.items() if (app_dir / v).exists()}
+    findings = _audit_tailored(tailored, master, app_dir)
     kit = build_kit(master, tailored, posting, salary, slug=args.slug, files=files)
+    findings += audit_rendered(master, kit=kit)
+    if findings:
+        _print_findings(findings)
+        print("kit not written: audit failed", file=sys.stderr)
+        return 1
     (app_dir / "kit.json").write_text(
         json.dumps(kit, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     html = app_dir / "kit.html"
@@ -758,8 +831,11 @@ def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
         return args.func(args)
-    except (ProfileError, LatexError, GuardError) as exc:
+    except (ProfileError, LatexError, GuardError, ConfigError, DataError, MoneyError) as exc:
         print(str(exc), file=sys.stderr)
+        return 1
+    except json.JSONDecodeError as exc:  # a damaged JSON file under the data directory
+        print(f"unreadable JSON file: {exc}", file=sys.stderr)
         return 1
 
 

@@ -17,6 +17,14 @@ class MoneyError(Exception):
     """Rates could not be obtained."""
 
 
+class NoRate(MoneyError):
+    """The ECB publishes no reference rate for this currency (ARS, CLP, COP, ...)."""
+
+    def __init__(self, currency: str):
+        super().__init__(f"no exchange rate for {currency} (the ECB does not publish it)")
+        self.currency = currency
+
+
 @dataclass(frozen=True)
 class Rates:
     day: str
@@ -38,8 +46,12 @@ def parse_ecb(xml: str) -> Rates:
 
 
 def _read(path: Path) -> Rates:
-    data = json.loads(path.read_text(encoding="utf-8"))
-    return Rates(day=data["day"], per_eur={k: float(v) for k, v in data["per_eur"].items()})
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return Rates(day=str(data["day"]),
+                     per_eur={k: float(v) for k, v in data["per_eur"].items()})
+    except (ValueError, KeyError, TypeError, AttributeError) as exc:
+        raise MoneyError(f"{path}: unreadable rate cache ({exc!r}); delete it to fetch again") from exc
 
 
 def load_rates(cache_dir: Path, today: date, get: Callable[..., str]) -> Rates:
@@ -66,4 +78,4 @@ def convert(amount: float, src: str, dst: str, rates: Rates) -> float:
     try:
         return amount / rates.per_eur[src.upper()] * rates.per_eur[dst.upper()]
     except KeyError as exc:
-        raise MoneyError(f"no rate for currency {exc.args[0]}") from exc
+        raise NoRate(exc.args[0]) from exc

@@ -1,3 +1,4 @@
+import json
 from datetime import date
 from pathlib import Path
 
@@ -7,6 +8,7 @@ import yaml
 from cvforge import cli
 from cvforge.answers.bank import load_bank, lookup, normalise_question, save_answers
 from cvforge.answers.facts import knockout_facts
+from cvforge.apply.experience import engineering_months
 from cvforge.profile.model import load_master
 
 PERSONA = Path(__file__).resolve().parent.parent / "examples" / "persona"
@@ -121,3 +123,62 @@ def test_unknown_slug(app):
     assert cli.main(["answers", "nope"]) == 1
 
 
+
+
+# Knock-out and salary figures in answers (computed, so not in any highlight)
+
+
+def _answers(d, *texts):
+    _tailored(d, lambda t: t.update(answers=[
+        {"question": f"Q{i}", "answer": a, "refs": [], "limit": None}
+        for i, a in enumerate(texts)]))
+
+
+def _audit(d):
+    return cli.main(["audit", str(d / "tailored.yaml"), "--master", str(PERSONA / "master.yaml")])
+
+
+def _salary_json(d, confirmed):
+    data = {"basis": "posting", "amount": 3500.0, "currency": "EUR", "period": "month",
+            "brl_month": 21012.34, "eur_year": 42000.0, "usd_year": 46199.6, "sources": [],
+            "confirmed": confirmed, "rates_day": "2026-10-21"}
+    (d / "salary.json").write_text(json.dumps(data), encoding="utf-8")
+
+
+def test_knockout_answers_audit_clean(app, capsys):
+    years = knockout_facts(MASTER, engineering_months(MASTER, TODAY), "en")["years"]
+    _answers(app, f"I have {years} of engineering experience.", "My notice period is 30 days.")
+    assert _audit(app) == 0, capsys.readouterr().out
+    assert _run("--save") == 0
+
+
+def test_confirmed_salary_answer_audits_clean(app, capsys):
+    _answers(app, "My expectation is 3,500 EUR per month (about R$ 21.012 or 42,000 EUR a year).")
+    _salary_json(app, confirmed=True)
+    assert _audit(app) == 0, capsys.readouterr().out
+
+
+def test_unconfirmed_salary_and_invented_numbers_fail(app, capsys):
+    _answers(app, "My expectation is 3,500 EUR per month.")
+    _salary_json(app, confirmed=False)
+    assert _audit(app) == 1
+    _answers(app, "I have 12 years of engineering experience.")
+    _salary_json(app, confirmed=True)
+    assert _audit(app) == 1
+    assert "not in the master text: 12" in capsys.readouterr().out
+    assert _run("--save") == 1
+
+
+@pytest.mark.parametrize("asked,other", [
+    ("Do you need sponsorship?", "Do you have sponsorship?"),
+    ("Você precisa de visto?", "Você tem visto?"),
+])
+def test_need_and_have_questions_stay_distinct(tmp_path, asked, other):
+    assert normalise_question(asked) != normalise_question(other)
+    path = tmp_path / "bank.yaml"
+    save_answers(path, [{"question": asked, "answer": "Yes.", "refs": []}], "en", TODAY)
+    save_answers(path, [{"question": other, "answer": "No.", "refs": []}], "en", TODAY)
+    bank = load_bank(path)
+    assert len(bank) == 2
+    assert lookup(bank, asked, "en")["answer"] == "Yes."
+    assert lookup(bank, other, "en")["answer"] == "No."

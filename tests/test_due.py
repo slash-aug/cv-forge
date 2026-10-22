@@ -45,3 +45,15 @@ def test_stale_after_60_days(tmp_path):
     rep = due_report(rows, tmp_path, TODAY)
     assert {r["slug"] for r in rep.stale} == {"ancient", "ancient-int", "edge"}
     assert not rep.followups
+
+
+def test_stages_of_final_rows_are_not_listed(tmp_path):
+    for slug in ("live", "gone"):
+        add_stage(tmp_path / slug, "call", "interview", date(2026, 7, 1))
+    (tmp_path / "broken-final").mkdir()
+    (tmp_path / "broken-final" / "stages.yaml").write_text("stages: {", encoding="utf-8")
+    rows = [row("live", "interview", "2026-06-29"), row("gone", "rejected", "2026-06-29"),
+            row("broken-final", "withdrawn", "2026-06-29")]
+    rep = due_report(rows, tmp_path, TODAY)
+    assert [s for s, _ in rep.stages] == ["live"]
+    assert rep.errors == []

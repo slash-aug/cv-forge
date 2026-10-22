@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import csv
+import os
 from datetime import date
 from pathlib import Path
 
@@ -48,12 +49,19 @@ def load(path: Path) -> list[dict]:
 
 
 def save(path: Path, rows: list[dict]) -> None:
+    """Write to a temp file and swap it in, so a failed write never truncates the tracker."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(fh, fieldnames=COLUMNS, extrasaction="ignore", lineterminator="\r\n")
-        writer.writeheader()
-        for row in rows:
-            writer.writerow({c: _safe(str(row.get(c) or "")) for c in COLUMNS})
+    tmp = path.with_name(path.name + ".tmp")
+    try:
+        with tmp.open("w", newline="", encoding="utf-8") as fh:
+            writer = csv.DictWriter(fh, fieldnames=COLUMNS, extrasaction="ignore",
+                                    lineterminator="\r\n")
+            writer.writeheader()
+            for row in rows:
+                writer.writerow({c: _safe(str(row.get(c) or "")) for c in COLUMNS})
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def find(rows: list[dict], *, url: str | None = None, company: str | None = None,
@@ -85,7 +93,7 @@ def upsert(path: Path, row: dict) -> dict:
 
 
 def set_status(path: Path, slug: str, status: str, today: date, *, note: str = "",
-               skip_reason: str = "") -> dict:
+               skip_reason: str = "", clear_skip_reason: bool = False) -> dict:
     status = LEGACY_STATUS.get(status, status)
     if status not in STATUSES:
         raise ValueError(f"unknown status '{status}'")
@@ -98,6 +106,8 @@ def set_status(path: Path, slug: str, status: str, today: date, *, note: str = "
     row["status"] = status
     if note:
         row["notes"] = f"{row['notes']}; {note}" if row["notes"] else note
+    if clear_skip_reason:
+        row["skip_reason"] = ""
     if skip_reason:
         row["skip_reason"] = skip_reason
     row["last_update"] = today.isoformat()
