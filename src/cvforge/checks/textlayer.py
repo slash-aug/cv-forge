@@ -184,8 +184,7 @@ def _extract_pypdf(pdf_path):
 
 def _extract_pdftotext(pdf_path):
     text = run_tool(["pdftotext", "-layout", "-enc", "UTF-8", str(pdf_path), "-"])
-    # Always call pdfinfo here so the fallback path returns a page count
-    # so the fallback path returns a page count (same Poppler package).
+    # pdftotext has no page count; pdfinfo ships in the same Poppler package.
     pages = parse_page_count(run_tool(["pdfinfo", str(pdf_path)]))
     return text, pages
 

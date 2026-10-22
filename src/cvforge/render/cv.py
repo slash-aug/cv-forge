@@ -1,7 +1,7 @@
 """Render a tailored CV to moderncv LaTeX: view-model builder, then template."""
 from cvforge.profile.model import ProfileError, index, localized
 from cvforge.render.contact import contact_links
-from cvforge.render.latex import escape_tex, format_date, format_range, jinja_env
+from cvforge.render.latex import format_date, format_range, jinja_env
 
 HEADINGS = {
     "en": {"summary": "Summary", "experience": "Experience", "skills": "Skills",
@@ -117,4 +117,4 @@ def render_cv(tailored: dict, master: dict) -> str:
     return render_view(build_cv_view(tailored, master))
 
 
-__all__ = ["build_cv_view", "escape_tex", "render_cv", "render_view"]
+__all__ = ["build_cv_view", "render_cv", "render_view"]
