@@ -10,6 +10,8 @@ from dataclasses import asdict
 from datetime import date
 from pathlib import Path
 
+from cvforge.answers.bank import load_bank, lookup, save_answers
+from cvforge.answers.facts import knockout_facts
 from cvforge.apply import http as apply_http
 from cvforge.apply.check import Verdict, check
 from cvforge.apply.companies import (
@@ -18,6 +20,7 @@ from cvforge.apply.companies import (
     find_company,
     load_registry,
 )
+from cvforge.apply.experience import engineering_months
 from cvforge.apply.intake import (
     IntakeError,
     fetch_posting,
@@ -416,6 +419,52 @@ def _seniority(title: str) -> str:
     return "mid"
 
 
+def cmd_answers(args) -> int:
+    """Look up pasted questions in the answer bank, or save audited answers to it."""
+    cfg = load_config()
+    app_dir = cfg.data_dir / "applications" / args.slug
+    if not app_dir.is_dir():
+        print(f"unknown slug '{args.slug}'", file=sys.stderr)
+        return 1
+    master = load_master(Path(args.master) if args.master
+                         else cfg.data_dir / "profile" / "master.yaml")
+    bank_path = cfg.data_dir / "answers" / "bank.yaml"
+    if args.save:
+        tailored_path = app_dir / "tailored.yaml"
+        if not tailored_path.exists():
+            print(f"no tailored.yaml for '{args.slug}'", file=sys.stderr)
+            return 1
+        tailored = load_tailored(tailored_path)
+        findings = audit(tailored, master)
+        if findings:
+            for f in findings:
+                print(f"{f.kind} {f.ref}: {f.message}", file=sys.stderr)
+            print("answers not saved: audit failed", file=sys.stderr)
+            return 1
+        n = save_answers(bank_path, tailored.get("answers") or [], tailored["lang"], _today())
+        print(f"saved {n} answer(s) to {bank_path}")
+        return 0
+    lang = args.lang
+    if not lang and (app_dir / "tailored.yaml").exists():
+        lang = load_tailored(app_dir / "tailored.yaml")["lang"]
+    lang = lang or "en"
+    q_path = app_dir / "questions.txt"
+    if q_path.exists():
+        bank = load_bank(bank_path)
+        for line in q_path.read_text(encoding="utf-8").splitlines():
+            question = line.strip()
+            if not question:
+                continue
+            hit = lookup(bank, question, lang)
+            print(f"Q: {question}")
+            print(f"A: {hit['answer']}" if hit else "NEW")
+    facts = knockout_facts(master, engineering_months(master, _today()), lang)
+    print("Knock-out facts:")
+    for k, v in facts.items():
+        print(f"  {k}: {v}")
+    return 0
+
+
 def cmd_salary(args) -> int:
     """Suggest an expected salary; the kit shows it only once confirmed.
 
@@ -613,6 +662,13 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--market", help="market CSV (default: <data_dir>/salary/market.csv)")
     p.add_argument("--master", help="master profile (default: <data_dir>/profile/master.yaml)")
     p.set_defaults(func=cmd_salary)
+    p = sub.add_parser("answers", help="answer bank lookup and knock-out facts")
+    p.add_argument("slug")
+    p.add_argument("--save", action="store_true",
+                   help="audit tailored.yaml and save its answers to the bank")
+    p.add_argument("--lang", help="answer language (default: tailored.yaml lang, else en)")
+    p.add_argument("--master", help="master profile (default: <data_dir>/profile/master.yaml)")
+    p.set_defaults(func=cmd_answers)
     p = sub.add_parser("due", help="stages, follow-ups and stale applications")
     p.set_defaults(func=cmd_due)
     return parser
