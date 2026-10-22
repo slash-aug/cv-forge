@@ -12,9 +12,9 @@ HEADINGS = {
               "education": "Formação", "certificates": "Certificações", "languages": "Línguas"},
 }
 INTERNATIONAL = {
-    "en": "(International remote freelance)",
-    "pt-BR": "(Freelance internacional remoto)",
-    "pt-PT": "(Freelance internacional remoto)",
+    "en": "International remote freelance",
+    "pt-BR": "Freelance internacional remoto",
+    "pt-PT": "Freelance internacional remoto",
 }
 REMOTE = {"en": "Remote", "pt-BR": "Remoto", "pt-PT": "Remoto"}
 
@@ -39,8 +39,10 @@ def _contact(basics: dict, lang: str) -> dict:
 
 
 def _positions(employer: dict, entry: dict, lang: str, ids: dict) -> list[dict]:
-    international = INTERNATIONAL[lang] if employer.get("x-international") else ""
-    location = " ".join(p for p in (employer.get("location") or REMOTE[lang], international) if p)
+    if employer.get("x-international"):
+        location = INTERNATIONAL[lang]
+    else:
+        location = employer.get("location") or REMOTE[lang]
     rows = []
     for ref in entry["positions"]:
         position = _lookup(ids, ref["ref"], "position")
@@ -89,7 +91,8 @@ def build_cv_view(tailored: dict, master: dict) -> dict:
     languages = []
     for ref in tailored.get("languages", []):
         item = _lookup(ids, ref, "language")
-        detail = ", ".join(p for p in (item.get("fluency"), item.get("cefr")) if p)
+        fluency = localized(item["fluency"], lang, item_id=ref)
+        detail = ", ".join(p for p in (fluency, item.get("cefr")) if p)
         languages.append({"name": localized(item["language"], lang, item_id=ref), "detail": detail})
     summary = (tailored.get("summary") or {}).get("text", "")
     return {

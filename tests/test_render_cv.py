@@ -69,12 +69,30 @@ def test_positions_newest_first_and_employer_order():
     assert idx == sorted(idx)
 
 
-def test_international_and_remote_location():
+def test_international_location_is_not_prefixed_with_remote():
     tex = render_cv(T, M)
-    assert r"{Remote (International remote freelance)}" in tex
+    assert r"{International remote freelance}" in tex
+    assert "Remote (International" not in tex
+
+
+def test_international_location_localized():
     pt = render_cv({**T, "lang": "pt-BR"}, M)
-    assert "(Freelance internacional remoto)" in pt
+    assert "{Freelance internacional remoto}" in pt
     assert "Experiência Profissional" in pt
+
+
+def test_language_fluency_localized():
+    master = copy.deepcopy(M)
+    master["languages"][0]["fluency"] = {"en": "Native", "pt-BR": "Nativo", "pt-PT": "Nativo"}
+    langs = build_cv_view({**T, "lang": "pt-BR"}, master)["languages"]
+    assert {"name": "Português", "detail": "Nativo"} in langs
+
+
+def test_language_fluency_missing_locale_names_item():
+    master = copy.deepcopy(M)
+    master["languages"][0]["fluency"] = {"en": "Native"}
+    with pytest.raises(ProfileError, match="lang-pt.*pt-BR"):
+        build_cv_view({**T, "lang": "pt-BR"}, master)
 
 
 def test_pt_pt_headings_and_ongoing():
