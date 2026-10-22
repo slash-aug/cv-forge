@@ -12,6 +12,7 @@ from cvforge.render.latex import (
     format_range,
     jinja_env,
 )
+from cvforge.render.letter import ASSETS_DIR
 from cvforge.tailor.audit import load_tailored
 
 PERSONA = Path(__file__).resolve().parent.parent / "examples" / "persona"
@@ -165,6 +166,26 @@ def test_certificate_included_when_locale_listed():
     assert "Example Agile Foundations" in tex
 
 
+def test_certificate_omits_issuer_already_in_name():
+    master = copy.deepcopy(M)
+    certs = master["certificates"]
+    base = next(c for c in certs if c["id"] == "cert-agile")
+    certs.append({**base, "id": "cert-dup", "name": "Acme Test Certificate (90/100)", "issuer": "ACME test"})
+    certs.append({**base, "id": "cert-other", "name": "Plain Certificate", "issuer": "Other Body"})
+    tex = render_cv({**T, "certificates": ["cert-dup", "cert-other"]}, master)
+    assert r"Acme Test Certificate (90/100)}" in tex
+    assert "ACME test" not in tex
+    assert "Plain Certificate, Other Body" in tex
+
+
+def test_certificate_keeps_short_issuer_inside_another_word():
+    master = copy.deepcopy(M)
+    base = next(c for c in master["certificates"] if c["id"] == "cert-agile")
+    master["certificates"].append({**base, "id": "cert-w", "name": "Laws Practitioner", "issuer": "AWS"})
+    tex = render_cv({**T, "certificates": ["cert-w"]}, master)
+    assert "Laws Practitioner, AWS" in tex
+
+
 def test_preamble_no_icons_and_plain_bullets():
     tex = render_cv(T, M)
     assert r"\moderncvicons{letters}" in tex
@@ -211,7 +232,7 @@ def _compiled_text(cfg, tailored, jobname):
     if not cfg.lualatex:
         pytest.skip("no lualatex engine")
     pdf = compile_tex(render_cv(tailored, M), engine=cfg.lualatex,
-                      build_dir=cfg.build_dir / "test", jobname=jobname)
+                      build_dir=cfg.build_dir / "test", jobname=jobname, assets=ASSETS_DIR)
     return "\n".join(p.extract_text() for p in PdfReader(pdf).pages)
 
 
@@ -233,3 +254,102 @@ def test_compiled_pt_br_text_layer_keeps_accents(cfg):
     text = _compiled_text(cfg, T_PT, "cv_ats_pt")
     assert "Integração de pagamentos & reconciliação" in text
     assert "jun 2024 - Atual" in text
+
+
+@pytest.mark.latex
+def test_compiled_cv_is_set_in_lato(cfg):
+    from pypdf import PdfReader
+
+    from cvforge.build import compile_tex
+
+    if not cfg.lualatex:
+        pytest.skip("no lualatex engine")
+    pdf = compile_tex(render_cv(T, M), engine=cfg.lualatex,
+                      build_dir=cfg.build_dir / "test", jobname="cv_fonts", assets=ASSETS_DIR)
+    names = set()
+    for page in PdfReader(pdf).pages:
+        for font in (page["/Resources"].get("/Font") or {}).values():
+            names.add(str(font.get_object()["/BaseFont"]))
+    assert any("Lato" in n for n in names), names
+    assert not any("LMSans" in n or "LMRoman" in n for n in names), names
+
+
+@pytest.mark.latex
+def test_title_is_on_its_own_line_under_the_name(cfg):
+    from pypdf import PdfReader
+
+    from cvforge.build import compile_tex
+
+    if not cfg.lualatex:
+        pytest.skip("no lualatex engine")
+    pdf = compile_tex(render_cv(T, M), engine=cfg.lualatex,
+                      build_dir=cfg.build_dir / "test", jobname="cv_title", assets=ASSETS_DIR)
+    text = PdfReader(pdf).pages[0].extract_text()
+    lines = [ln.strip() for ln in text.splitlines()]
+    basics = M["basics"]
+    name = f"{basics['name'].split()[0]} {basics['name'].split()[-1]}"
+    title = basics["label"]["en"]
+    assert name in lines, lines[:6]
+    assert title in lines, lines[:6]
+    assert lines.index(title) == lines.index(name) + 1
+    assert not any(ln.startswith("|") for ln in lines)  # no separator before the title
+
+
+def _header_lines(pdf):
+    import re
+    import subprocess
+
+    xml = subprocess.run(["pdftotext", "-f", "1", "-l", "1", "-bbox-layout", str(pdf), "-"],
+                         capture_output=True, text=True, check=True).stdout
+    width = float(re.search(r'<page width="([\d.]+)"', xml).group(1))
+    lines = []
+    for m in re.finditer(r"<line xMin=\"([\d.]+)\" yMin=\"[\d.]+\" xMax=\"([\d.]+)\" yMax=\"[\d.]+\">(.*?)</line>",
+                         xml, re.DOTALL):
+        words = re.findall(r">([^<]+)</word>", m.group(3))
+        lines.append((float(m.group(1)), float(m.group(2)), " ".join(words)))
+    return width, lines
+
+
+@pytest.mark.latex
+def test_long_name_and_title_stay_centered_inside_margins(cfg):
+    from cvforge.build import compile_tex
+
+    if not cfg.lualatex:
+        pytest.skip("no lualatex engine")
+    master = copy.deepcopy(M)
+    master["basics"]["name"] = "Maria Fernanda de Oliveira Santos"
+    master["basics"]["label"] = {
+        lang: "Senior Full Stack Developer | Team Lead | Mentor" for lang in ("en", "pt-BR", "pt-PT")}
+    pdf = compile_tex(render_cv(T, master), engine=cfg.lualatex,
+                      build_dir=cfg.build_dir / "test", jobname="cv_long_header", assets=ASSETS_DIR)
+    width, lines = _header_lines(pdf)
+    texts = [t for _, _, t in lines]
+    assert "Maria Fernanda de Oliveira Santos" in texts  # one line, not wrapped
+    summary = next(i for i, t in enumerate(texts) if t == "Summary")
+    header = lines[:summary]
+    margin = width * 0.1
+    title_words = " ".join(t for _, _, t in header[1:]).replace("|", " ")
+    for part in ("Senior Full Stack Developer", "Team Lead", "Mentor"):
+        assert part in " ".join(title_words.split()), part
+    for x0, x1, t in header:
+        assert x0 >= margin - 2 and x1 <= width - margin + 2, (t, x0, x1)
+        assert abs(x0 - (width - x1)) <= 4, (t, x0, width - x1)
+
+
+@pytest.mark.latex
+def test_title_is_clearly_smaller_than_the_name(cfg):
+    import re
+    import subprocess
+
+    from cvforge.build import compile_tex
+
+    if not cfg.lualatex:
+        pytest.skip("no lualatex engine")
+    pdf = compile_tex(render_cv(T, M), engine=cfg.lualatex,
+                      build_dir=cfg.build_dir / "test", jobname="cv_title_size", assets=ASSETS_DIR)
+    xml = subprocess.run(["pdftotext", "-f", "1", "-l", "1", "-bbox", str(pdf), "-"],
+                         capture_output=True, text=True, check=True).stdout
+    heights = {}
+    for y0, y1, w in re.findall(r'yMin="([\d.]+)" xMax="[\d.]+" yMax="([\d.]+)">([^<]+)<', xml):
+        heights.setdefault(w, float(y1) - float(y0))  # first occurrence is the header
+    assert heights["Full-stack"] < 0.7 * heights["Exemplo"]

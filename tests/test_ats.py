@@ -7,6 +7,7 @@ from cvforge.checks import ats, layout
 from cvforge.checks.ats import LAYOUT_SKIPPED, AtsReport, ats_check
 from cvforge.profile.model import load_master
 from cvforge.render.cv import render_cv
+from cvforge.render.letter import ASSETS_DIR
 from cvforge.tailor.audit import load_tailored
 
 PERSONA = Path(__file__).resolve().parent.parent / "examples" / "persona"
@@ -22,7 +23,7 @@ def cv_pdf(cfg):
     m = load_master(PERSONA / "master.yaml")
     t = load_tailored(PERSONA / "tailored.yaml")
     return compile_tex(render_cv(t, m), engine=cfg.lualatex,
-                       build_dir=cfg.build_dir / "test_ats", jobname="cv_ats")
+                       build_dir=cfg.build_dir / "test_ats", jobname="cv_ats", assets=ASSETS_DIR)
 
 
 @pytest.fixture
@@ -50,7 +51,7 @@ def test_persona_pt_br_cv_is_ok(cfg):
     m = load_master(PERSONA / "master.yaml")
     t = load_tailored(PERSONA / "tailored.pt-BR.yaml")
     pdf = compile_tex(render_cv(t, m), engine=cfg.lualatex,
-                      build_dir=cfg.build_dir / "test_ats", jobname="cv_ats_pt")
+                      build_dir=cfg.build_dir / "test_ats", jobname="cv_ats_pt", assets=ASSETS_DIR)
     report = ats_check(pdf, max_pages=2, required=PT_REQUIRED, headings=PT_HEADINGS)
     assert report.ok, report.problems
 

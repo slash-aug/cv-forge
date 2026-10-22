@@ -74,6 +74,8 @@ To use your own data, copy the persona files into `data/profile/` and edit them.
 
 The templates need LuaLaTeX for the CV and XeLaTeX for the letter, plus the `moderncv` class and `fontawesome5`.
 
+Fonts ship with the package, so there is no extra font install. The CV is set in Lato and the cover letter uses Lato with some Raleway, so the two look alike and render evenly on screen. Both families are SIL OFL, and their licence files are included next to the font files. Both templates load them with `fontspec` from a relative path inside the build directory.
+
 - **Linux:** install a current TeX Live (the [official installer](https://tug.org/texlive/) or the `texlive/texlive` Docker image). Distribution packages can lag a year or more behind; the CV header needs a recent `moderncv`.
 - **CI:** the PDF job runs inside the official `texlive/texlive` image, pinned by digest, so it uses the same current packages as a local install.
   `poppler-utils` provides `pdftotext`, which the ATS check uses.

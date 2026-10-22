@@ -16,6 +16,12 @@
 \renewcommand*{\sectionstyle}[1]{{\sectionfont\color{color1}#1}}
 
 \ifpdftex\usepackage[T1]{fontenc}\fi
+% Lato from the bundled OFL fonts (copied into the job dir); moderncv banking uses the sans family.
+\usepackage{fontspec}
+\setmainfont{Lato-Reg.ttf}[Path=OpenFonts/fonts/lato/, UprightFont=Lato-Reg.ttf, BoldFont=Lato-Bol.ttf,
+    ItalicFont=Lato-RegIta.ttf, BoldItalicFont=Lato-BolIta.ttf]
+\setsansfont{Lato-Reg.ttf}[Path=OpenFonts/fonts/lato/, UprightFont=Lato-Reg.ttf, BoldFont=Lato-Bol.ttf,
+    ItalicFont=Lato-RegIta.ttf, BoldItalicFont=Lato-BolIta.ttf]
 % hyperref is loaded by moderncv in \AtEndPreamble, so configure it there too.
 \AtEndPreamble{\hypersetup{
     colorlinks=true,
@@ -29,7 +35,7 @@
 
 \name{\VAR{contact.first | tex}}{\VAR{contact.last | tex}}
 %% if contact.title
-\title{\VAR{contact.title | tex}}
+\title{\mbox{\VAR{contact.title.split(" | ") | map("tex") | join("} |\\allowbreak{} \\mbox{")}}}
 %% endif
 %% if contact.address
 \address{\VAR{contact.address | tex}}{}{}
@@ -41,6 +47,19 @@
 \makeatletter
 \patchcmd{\makehead}{\addtomakeheaddetails{\@extrainfo}}{\@extrainfo}{}%
   {\PackageError{cvforge}{cannot patch moderncv \string\makehead\space for the contact line}{}}
+% The name stays on one centred line: 34pt when it fits, otherwise scaled down to the
+% header width. The title goes on its own centred line under it (no "|" separator before
+% it), smaller than the name; it breaks only after a " | " between its parts, and each
+% part is an unbreakable box.
+\renewcommand*{\titlefont}{\fontsize{15}{18}\selectfont\mdseries\upshape}% \titlestyle applies \titlefont last
+\newsavebox{\cvnamebox}
+\newcommand*{\cvfitname}[1]{\sbox{\cvnamebox}{#1}%
+  \ifdim\wd\cvnamebox>\linewidth\resizebox{\linewidth}{!}{\usebox{\cvnamebox}}\else\usebox{\cvnamebox}\fi}
+\patchcmd{\makehead}{\firstnamestyle{\@firstname\ }\lastnamestyle{\@lastname}}%
+  {\cvfitname{\firstnamestyle{\@firstname\ }\lastnamestyle{\@lastname}}}{}%
+  {\PackageError{cvforge}{cannot patch moderncv \string\makehead\space for the name}{}}
+\patchcmd{\makehead}{\titlestyle{~|~\@title}}{\\[0.15em]\titlestyle{\@title}}{}%
+  {\PackageError{cvforge}{cannot patch moderncv \string\makehead\space for the title line}{}}
 % Keep-with-next, like needspace's \Needspace: start a new page before a heading or an
 % entry unless #1 of space is left, so neither ends a page apart from what follows it.
 % It measures the space left instead of adding a preferred break, which under
@@ -113,7 +132,7 @@
 \keepnext{8\baselineskip}
 \section{\VAR{headings.certificates | tex}}
 %% for cert in certificates
-\cvitem{\VAR{cert.date | tex}}{\VAR{cert.name | tex}, \VAR{cert.issuer | tex}}
+\cvitem{\VAR{cert.date | tex}}{\VAR{cert.name | tex}\BLOCK{if cert.issuer}, \VAR{cert.issuer | tex}\BLOCK{endif}}
 %% endfor
 %% endif
 

@@ -68,7 +68,7 @@ def test_user_folder_named_like_the_job_is_kept(tmp_path):
 @pytest.mark.latex
 def test_persona_cv_compiles(cfg):
     pdf = compile_tex(render_cv(T, M), engine=_need(cfg, "lualatex"),
-                      build_dir=cfg.build_dir / "test", jobname="cv")
+                      build_dir=cfg.build_dir / "test", jobname="cv", assets=ASSETS_DIR)
     assert pdf.exists()
     assert len(PdfReader(pdf).pages) <= 2
 
@@ -103,7 +103,7 @@ def test_special_chars_round_trip(cfg):
     tailored = copy.deepcopy(T)
     tailored["experience"][1]["positions"][0]["bullets"][0]["text"] = text
     pdf = compile_tex(render_cv(tailored, M), engine=_need(cfg, "lualatex"),
-                      build_dir=cfg.build_dir / "test", jobname="special")
+                      build_dir=cfg.build_dir / "test", jobname="special", assets=ASSETS_DIR)
     assert text in _text(pdf)
 
 
@@ -113,7 +113,7 @@ def test_dashes_and_quotes_survive_without_ligatures(cfg):
     tailored = copy.deepcopy(T)
     tailored["experience"][1]["positions"][0]["bullets"][0]["text"] = text
     pdf = compile_tex(render_cv(tailored, M), engine=_need(cfg, "lualatex"),
-                      build_dir=cfg.build_dir / "test", jobname="ligatures")
+                      build_dir=cfg.build_dir / "test", jobname="ligatures", assets=ASSETS_DIR)
     layer = _text(pdf)
     assert text in layer
     assert "\u2014" not in layer and "\u2013" not in layer

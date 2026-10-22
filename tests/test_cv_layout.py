@@ -10,6 +10,7 @@ from cvforge.checks.textlayer import extract_text_layer, normalize_text
 from cvforge.cli import main
 from cvforge.profile.model import load_master
 from cvforge.render.cv import build_cv_view, render_view
+from cvforge.render.letter import ASSETS_DIR
 from cvforge.tailor.audit import load_tailored
 
 PERSONA = Path(__file__).resolve().parent.parent / "examples" / "persona"
@@ -32,7 +33,7 @@ def test_long_contact_line_keeps_every_item(cfg):
     master["basics"]["profiles"] = LONG_PROFILES
     view = build_cv_view(T, master)
     pdf = compile_tex(render_view(view), engine=cfg.lualatex,
-                      build_dir=cfg.build_dir / "test_layout", jobname="contact")
+                      build_dir=cfg.build_dir / "test_layout", jobname="contact", assets=ASSETS_DIR)
     text = normalize_text(extract_text_layer(pdf)[0])
     for link in view["contact"]["links"]:
         assert normalize_text(link["text"]) in text, link["text"]
