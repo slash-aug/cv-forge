@@ -59,9 +59,9 @@ def test_href_target_keeps_tilde():
 
 def test_range_ongoing():
     assert format_range("2026-06", None, "en") == "Jun 2026 - Present"
-    assert format_range("2026-06", None, "pt-BR") == "jun 2026 - Atual"
-    assert format_range("2026-06", None, "pt-PT") == "jun 2026 - Presente"
-    assert format_range("2025-08", "2026-02", "pt-PT") == "ago 2025 - fev 2026"
+    assert format_range("2026-06", None, "pt-BR") == "Jun 2026 - Atual"
+    assert format_range("2026-06", None, "pt-PT") == "Jun 2026 - Presente"
+    assert format_range("2025-08", "2026-02", "pt-PT") == "Ago 2025 - Fev 2026"
 
 
 def test_jinja_env_delimiters_and_filter():
@@ -137,7 +137,7 @@ def test_language_fluency_missing_locale_names_item():
 def test_pt_pt_headings_and_ongoing():
     tex = render_cv({**T, "lang": "pt-PT"}, M)
     assert r"\section{Línguas}" in tex
-    assert "Jun 2024".lower() in tex and "Presente" in tex
+    assert "Jun 2024 - Presente" in tex
 
 
 def test_view_is_separable():
@@ -253,7 +253,7 @@ def test_compiled_text_layer_is_ats_clean(cfg):
 def test_compiled_pt_br_text_layer_keeps_accents(cfg):
     text = _compiled_text(cfg, T_PT, "cv_ats_pt")
     assert "Integração de pagamentos & reconciliação" in text
-    assert "jun 2024 - Atual" in text
+    assert "Jun 2024 - Atual" in text
 
 
 @pytest.mark.latex

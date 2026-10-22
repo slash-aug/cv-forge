@@ -27,8 +27,8 @@ _URL_SPECIAL = re.compile(r"[%#]")
 
 _MONTHS = {
     "en": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
-    "pt-BR": ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"],
-    "pt-PT": ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"],
+    "pt-BR": ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"],
+    "pt-PT": ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"],
 }
 _DATE = re.compile(r"(\d{4})(?:-(0[1-9]|1[0-2]))?")
 _ONGOING = {"en": "Present", "pt-BR": "Atual", "pt-PT": "Presente"}
