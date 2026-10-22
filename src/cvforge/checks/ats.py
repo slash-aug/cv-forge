@@ -1,8 +1,8 @@
 """ATS check of a compiled PDF: page count, text-layer sanity, dates, layout."""
 from __future__ import annotations
 
-from collections.abc import Sequence
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -82,7 +82,7 @@ def ats_check(
         problems.append(f"{pages} page(s) exceeds the maximum of {max_pages}")
     if "(cid:" in text:
         problems.append("text layer contains '(cid:' (unmapped glyphs)")
-    if "�" in text:
+    if "\ufffd" in text:
         problems.append("text layer contains U+FFFD (replacement character)")
     hits = find_non_ascii_date_ranges(text)
     if hits:

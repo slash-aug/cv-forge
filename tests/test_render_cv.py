@@ -3,7 +3,6 @@ from pathlib import Path
 
 import pytest
 
-from cvforge.config import load_config
 from cvforge.profile.model import ProfileError, load_master
 from cvforge.render.cv import build_cv_view, render_cv
 from cvforge.render.latex import escape_tex, format_date, format_range, jinja_env

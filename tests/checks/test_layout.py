@@ -289,11 +289,12 @@ class TestExtractorFailure(unittest.TestCase):
 
     def test_pdftotext_without_bbox_raises_a_skippable_error(self):
         failure = subprocess.CalledProcessError(99, "pdftotext", stderr="Error: unknown flag")
-        with patch("cvforge.checks.layout.shutil.which", return_value="/usr/bin/pdftotext"), patch(
-            "cvforge.checks.layout.subprocess.run", side_effect=failure
+        with (
+            patch("cvforge.checks.layout.shutil.which", return_value="/usr/bin/pdftotext"),
+            patch("cvforge.checks.layout.subprocess.run", side_effect=failure),
+            self.assertRaisesRegex(RuntimeError, "bounding boxes"),
         ):
-            with self.assertRaisesRegex(RuntimeError, "bounding boxes"):
-                parse_pdf(Path("cv/main_example.pdf"))
+            parse_pdf(Path("cv/main_example.pdf"))
 
     def test_first_candidate_lacks_bbox_and_second_has_it(self):
         """When the first pdftotext candidate lacks -bbox (e.g. Git for Windows's xpdf)
@@ -428,17 +429,20 @@ class TestExtractorFailure(unittest.TestCase):
             stderr="libc++abi: terminating due to uncaught exception of type "
             "std::out_of_range: basic_string",
         )
-        with patch("cvforge.checks.layout.shutil.which", return_value="/usr/bin/pdftotext"), patch(
-            "cvforge.checks.layout.subprocess.run", side_effect=failure
+        with (
+            patch("cvforge.checks.layout.shutil.which", return_value="/usr/bin/pdftotext"),
+            patch("cvforge.checks.layout.subprocess.run", side_effect=failure),
+            self.assertRaisesRegex(RuntimeError, "bounding boxes") as ctx,
         ):
-            with self.assertRaisesRegex(RuntimeError, "bounding boxes") as ctx:
-                parse_pdf(Path("cv/main_example.pdf"))
+            parse_pdf(Path("cv/main_example.pdf"))
         message = str(ctx.exception)
         self.assertIn("xpdf", message)
         self.assertIn("Poppler aborted", message)
         self.assertIn("hyperref", message)
 
     def test_missing_poppler_raises_a_skippable_error(self):
-        with patch("cvforge.checks.layout.shutil.which", return_value=None):
-            with self.assertRaisesRegex(RuntimeError, "not found"):
-                parse_pdf(Path("cv/main_example.pdf"))
+        with (
+            patch("cvforge.checks.layout.shutil.which", return_value=None),
+            self.assertRaisesRegex(RuntimeError, "not found"),
+        ):
+            parse_pdf(Path("cv/main_example.pdf"))

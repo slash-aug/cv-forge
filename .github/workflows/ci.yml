@@ -1,0 +1,125 @@
+# CI for cv-forge: unit tests and lint, LaTeX build of the example persona,
+# and the privacy guards. Actions are pinned to commit SHAs, the token is
+# read-only, and checkouts do not persist credentials.
+
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Lint and unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - name: Install poppler-utils
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils
+      - run: pip install -e '.[dev]'
+      - run: ruff check .
+      - run: pytest -q -m "not latex"
+
+  latex:
+    name: Build example CV and letter
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - name: Install TeX Live
+        # moderncv and fontawesome5 live in latex-extra and fonts-extra.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y texlive-luatex texlive-xetex texlive-latex-extra \
+            texlive-fonts-extra poppler-utils
+      - run: pip install -e '.[dev]'
+      - run: pytest -q -m latex
+      - name: Build the example persona
+        run: >
+          cvforge build examples/persona/tailored.yaml
+          --master examples/persona/master.yaml --out out/
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: example-pdfs
+          path: out/*.pdf
+          if-no-files-found: error
+
+  guard:
+    name: Privacy guards
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - run: pip install -e .
+      - name: No tracked files under data/
+        run: |
+          if [ -n "$(git ls-files data/)" ]; then
+            echo "::error::files under data/ are tracked"
+            git ls-files data/
+            exit 1
+          fi
+      - name: Commit messages pass the guard
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          zero=0000000000000000000000000000000000000000
+          if [ "$EVENT" = "pull_request" ]; then
+            range="$BASE_SHA..$HEAD_SHA"
+            commits=$(git rev-list --no-merges "$range")
+          elif [ -n "$BEFORE_SHA" ] && [ "$BEFORE_SHA" != "$zero" ] \
+              && git cat-file -e "$BEFORE_SHA^{commit}" 2>/dev/null; then
+            range="$BEFORE_SHA..$AFTER_SHA"
+            commits=$(git rev-list --no-merges "$range")
+          else
+            # New branch, force-push or unreachable before: check everything
+            # since the default branch, or the tip commit if that is empty.
+            range="origin/$DEFAULT_BRANCH..$AFTER_SHA"
+            commits=$(git rev-list --no-merges "$range")
+            if [ -z "$commits" ]; then
+              range="$AFTER_SHA^!"
+              commits=$(git rev-list --no-merges "$range")
+            fi
+          fi
+          echo "Checking $(echo "$commits" | grep -c .) commit(s) in $range"
+          fail=0
+          for sha in $commits; do
+            git log -1 --format=%B "$sha" > "$RUNNER_TEMP/msg.txt"
+            if ! cvforge guard msg "$RUNNER_TEMP/msg.txt"; then
+              echo "::error::commit $sha failed the message guard"
+              fail=1
+            fi
+          done
+          exit $fail
+      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

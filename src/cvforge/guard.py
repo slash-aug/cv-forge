@@ -6,8 +6,8 @@ import re
 import subprocess
 import sys
 import unicodedata
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 from cvforge.config import Config
 from cvforge.profile.model import ProfileError, load_master
@@ -86,7 +86,7 @@ def _top() -> str:
 
 
 def _git(*args: str, cwd: str | None = None) -> bytes:
-    done = subprocess.run(["git", *args], capture_output=True, cwd=cwd)
+    done = subprocess.run(["git", *args], capture_output=True, cwd=cwd, check=False)
     if done.returncode != 0:
         raise GuardError(f"git {' '.join(args)} failed: {done.stderr.decode(errors='replace').strip()}")
     return done.stdout

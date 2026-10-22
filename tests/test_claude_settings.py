@@ -92,12 +92,12 @@ def test_ask_covers_settings_github_and_push():
 
 def test_no_job_portal_entries():
     blob = "\n".join(_all_strings(_load()))
-    assert not re.search(r"jobindex|jobnet|jobbank|jobdanmark", blob, re.I)
+    assert not re.search(r"jobindex|jobnet|jobbank|jobdanmark", blob, re.IGNORECASE)
 
 
 def _ignored(path: str) -> bool:
     r = subprocess.run(
-        ["git", "-C", str(ROOT), "check-ignore", "-q", path], capture_output=True
+        ["git", "-C", str(ROOT), "check-ignore", "-q", path], capture_output=True, check=False
     )
     return r.returncode == 0
 
