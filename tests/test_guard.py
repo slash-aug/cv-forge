@@ -5,8 +5,13 @@ import pytest
 
 from cvforge.cli import main
 from cvforge.config import Config
-from cvforge.guard import (GuardError, check_commit_message, check_content,
-                           check_paths, load_denylist)
+from cvforge.guard import (
+    GuardError,
+    check_commit_message,
+    check_content,
+    check_paths,
+    load_denylist,
+)
 
 DASH = chr(0x2014)
 CPF = "123.456" + ".789-09"

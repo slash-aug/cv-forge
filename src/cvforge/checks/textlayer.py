@@ -132,9 +132,10 @@ def _quantity_range(line, dash_index):
     left, right = _bare_number(before.group(1)), _bare_number(after.group(1))
     if left is None or right is None:
         return False
-    if _BARE_YEAR.fullmatch(left) and (_BARE_YEAR.fullmatch(right) or _TWO_DIGIT_YEAR.fullmatch(right)):
-        return False
-    return True
+    both_years = _BARE_YEAR.fullmatch(left) and (
+        _BARE_YEAR.fullmatch(right) or _TWO_DIGIT_YEAR.fullmatch(right)
+    )
+    return not both_years
 
 
 def find_non_ascii_date_ranges(text):
