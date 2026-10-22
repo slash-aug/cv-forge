@@ -178,6 +178,14 @@ def test_certificate_omits_issuer_already_in_name():
     assert "Plain Certificate, Other Body" in tex
 
 
+def test_certificate_keeps_short_issuer_inside_another_word():
+    master = copy.deepcopy(M)
+    base = next(c for c in master["certificates"] if c["id"] == "cert-agile")
+    master["certificates"].append({**base, "id": "cert-w", "name": "Laws Practitioner", "issuer": "AWS"})
+    tex = render_cv({**T, "certificates": ["cert-w"]}, master)
+    assert "Laws Practitioner, AWS" in tex
+
+
 def test_preamble_no_icons_and_plain_bullets():
     tex = render_cv(T, M)
     assert r"\moderncvicons{letters}" in tex
@@ -284,7 +292,7 @@ def test_title_is_on_its_own_line_under_the_name(cfg):
     assert name in lines, lines[:6]
     assert title in lines, lines[:6]
     assert lines.index(title) == lines.index(name) + 1
-    assert "|" not in text
+    assert not any(ln.startswith("|") for ln in lines)  # no separator before the title
 
 
 def _header_lines(pdf):
@@ -326,3 +334,22 @@ def test_long_name_and_title_stay_centered_inside_margins(cfg):
     for x0, x1, t in header:
         assert x0 >= margin - 2 and x1 <= width - margin + 2, (t, x0, x1)
         assert abs(x0 - (width - x1)) <= 4, (t, x0, width - x1)
+
+
+@pytest.mark.latex
+def test_title_is_clearly_smaller_than_the_name(cfg):
+    import re
+    import subprocess
+
+    from cvforge.build import compile_tex
+
+    if not cfg.lualatex:
+        pytest.skip("no lualatex engine")
+    pdf = compile_tex(render_cv(T, M), engine=cfg.lualatex,
+                      build_dir=cfg.build_dir / "test", jobname="cv_title_size", assets=ASSETS_DIR)
+    xml = subprocess.run(["pdftotext", "-f", "1", "-l", "1", "-bbox", str(pdf), "-"],
+                         capture_output=True, text=True, check=True).stdout
+    heights = {}
+    for y0, y1, w in re.findall(r'yMin="([\d.]+)" xMax="[\d.]+" yMax="([\d.]+)">([^<]+)<', xml):
+        heights.setdefault(w, float(y1) - float(y0))  # first occurrence is the header
+    assert heights["Full-stack"] < 0.7 * heights["Exemplo"]

@@ -1,6 +1,7 @@
 # OpenFonts
 
-Fonts bundled for `cover.cls` (cover letter, compiled with xelatex).
+Fonts bundled for `cover.cls` (cover letter, compiled with xelatex) and, for Lato,
+the moderncv CV template (compiled with lualatex).
 Copied unchanged from the upstream project ai-job-search (MIT),
 `cover_letters/OpenFonts/`.
 
