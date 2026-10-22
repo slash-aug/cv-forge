@@ -28,16 +28,18 @@ class IntakeError(Exception):
     """The posting could not be read."""
 
 
-def _on(host: str, domain: str) -> bool:
-    return host == domain or host.endswith("." + domain)
-
-
-def is_linkedin(url: str) -> bool:
-    """True for linkedin.com and its subdomains (not lnkd.in, which is only a short link)."""
-    return _on((urlsplit(url.strip()).hostname or "").lower(), "linkedin.com")
+_on = http.on_domain
+is_linkedin = http.is_linkedin
 
 
 def refuse_linkedin(url: str) -> None:
+    """Refuse LinkedIn links (with or without a scheme) and anything that is not http(s)."""
+    url = url.strip()
+    scheme = urlsplit(url).scheme.lower()
+    if scheme not in ("http", "https"):
+        if "://" not in url and is_linkedin("https://" + url):
+            raise IntakeError(LINKEDIN_REFUSED)
+        raise IntakeError(f"not a web link: {url!r}; include https:// (or paste the text with `intake -`)")
     if is_linkedin(url):
         raise IntakeError(LINKEDIN_REFUSED)
 
@@ -51,7 +53,7 @@ def resolve_shortlink(url: str, get: Get) -> str:
     for href in HREF.findall(get(url)):
         href = html.unescape(href)
         parts = urlsplit(href)
-        host = (parts.hostname or "").lower()
+        host = http.host_of(href)
         if not any(_on(host, d) for d in ("linkedin.com", "licdn.com")):
             return href
         to_linkedin_job = to_linkedin_job or (_on(host, "linkedin.com") and "/jobs/" in parts.path)
