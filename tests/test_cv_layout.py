@@ -53,17 +53,22 @@ def _long_master() -> dict:
                                for k in range(1 + i % 5)],
             }],
         })
+    master["work"][3]["positions"][0]["highlights"] = [
+        {"id": f"h-long-{k}", "impact": f"{bullet} ({k}).", "angles": ["team-lead"]} for k in range(24)]
     return master
 
 
 @pytest.mark.latex
-def test_long_master_cv_has_no_orphaned_entry_headers(cfg, tmp_path, capsys):
+def test_long_master_cv_breaks_pages_cleanly(cfg, tmp_path, capsys):
+    """Entries keep their header with the first bullets, and a long entry breaks between
+    bullets instead of leaving a hole, so only advisory notes may be reported."""
     if not cfg.lualatex:
         pytest.skip("no lualatex engine")
     master = tmp_path / "long.yaml"
     master.write_text(yaml.safe_dump(_long_master(), allow_unicode=True), encoding="utf-8")
     assert main(["master-cv", str(master), "--lang", "en", "--out", str(tmp_path / "out")]) == 0
     out = capsys.readouterr().out
-    pages = int(out.split("ok (")[-1].split(" page")[0]) if "ok (" in out else 0
+    assert "Master CV (informational): ok (" in out, out
+    pages = int(out.split("ok (")[-1].split(" page")[0])
     assert pages >= 3, out
-    assert "orphaned" not in out and "ends on" not in out, out
+    assert [line for line in out.splitlines() if line.startswith("  - layout:")] == [], out

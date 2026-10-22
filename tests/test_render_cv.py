@@ -176,7 +176,7 @@ def test_empty_bullets_have_no_itemize():
     tailored = copy.deepcopy(T)
     tailored["experience"][0]["positions"][0]["bullets"] = []
     tex = render_cv(tailored, M)
-    assert tex.count(r"\begin{itemize}") == 2 and tex.count(r"\end{itemize}") == 2
+    assert tex.count(r"\begin{cvbullets}") == 2 and tex.count(r"\end{cvbullets}") == 2
 
 
 def test_format_date_malformed_names_item():
