@@ -2,13 +2,20 @@
 from __future__ import annotations
 
 import argparse
-import re
 import shutil
 import sys
-import unicodedata
 from datetime import date
 from pathlib import Path
 
+from cvforge.apply import http as apply_http
+from cvforge.apply.intake import (
+    IntakeError,
+    fetch_posting,
+    posting_from_text,
+    resolve_shortlink,
+)
+from cvforge.apply.posting import canonical_url
+from cvforge.apply.workspace import create_app_dir
 from cvforge.build import LatexError, compile_tex
 from cvforge.checks.ats import AtsReport, ats_check
 from cvforge.config import Config, load_config
@@ -17,24 +24,13 @@ from cvforge.profile.model import ProfileError, load_master, localized
 from cvforge.render.cv import build_cv_view, render_view
 from cvforge.render.letter import ASSETS_DIR, letter_context, render_letter_context
 from cvforge.tailor.audit import Finding, audit, audit_rendered, load_tailored
+from cvforge.text import file_part, slug
 from cvforge.track import stages as stages_mod
 from cvforge.track import tracker
 from cvforge.track.due import due_report
 
 SECTIONS = ("summary", "experience", "skills", "education", "certificates", "languages")
 LARGE_PAGE_CAP = 1000
-
-
-def _ascii(text: str) -> str:
-    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
-
-
-def slug(text: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", _ascii(text).lower()).strip("-")
-
-
-def file_part(text: str) -> str:
-    return re.sub(r"[^A-Za-z0-9]+", "_", _ascii(text)).strip("_")
 
 
 def name_parts(name: str) -> tuple[str, str]:
@@ -200,6 +196,56 @@ def _today() -> date:
     return date.today()
 
 
+def cmd_intake(args) -> int:
+    cfg = load_config()
+    path = cfg.data_dir / "tracker.csv"
+    today = _today()
+    if args.channel and args.channel not in tracker.CHANNELS:
+        print(f"unknown channel '{args.channel}'", file=sys.stderr)
+        return 1
+    paste = args.target == "-"
+    if paste and not (args.company and args.role):
+        print("pasted text needs --company and --role", file=sys.stderr)
+        return 1
+
+    def tracked(**kw) -> bool:
+        existing = tracker.find(tracker.load(path), **kw)
+        if existing and not args.force:
+            print(f"already tracked: {existing['slug']} ({existing['status']})")
+            return True
+        return False
+
+    try:
+        if paste:
+            if tracked(company=args.company, role=args.role):
+                return 3
+            posting = posting_from_text(sys.stdin.read(), company=args.company, role=args.role,
+                                        url="", today=today)
+        else:
+            url = canonical_url(resolve_shortlink(args.target, apply_http.get))
+            if tracked(url=url):
+                return 3
+            posting = fetch_posting(url, get=apply_http.get, today=today)
+            posting.company = args.company or posting.company
+            posting.title = args.role or posting.title
+            if tracked(company=posting.company, role=posting.title):
+                return 3
+    except (IntakeError, apply_http.FetchError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    app_dir = create_app_dir(cfg.data_dir / "applications", posting.company, posting.title)
+    posting.save(app_dir)
+    row = {"slug": app_dir.name, "company": posting.company, "role": posting.title,
+           "date": today.isoformat(), "status": "drafted", "source": posting.source, "url": posting.url}
+    if args.channel:
+        row["channel"] = args.channel
+    tracker.upsert(path, row)
+    print(app_dir.name)
+    print(posting.guard["verdict"])
+    print(f"language: {posting.language or 'unknown'}")
+    return 0
+
+
 def cmd_track(args) -> int:
     cfg = load_config()
     path = cfg.data_dir / "tracker.csv"
@@ -324,6 +370,13 @@ def _parser() -> argparse.ArgumentParser:
     t.add_argument("slug")
     t.add_argument("name")
     p.set_defaults(func=cmd_track)
+    p = sub.add_parser("intake", help="save a posting from a link or pasted text and track it")
+    p.add_argument("target", help="job link, or - to read pasted text from stdin")
+    p.add_argument("--company")
+    p.add_argument("--role")
+    p.add_argument("--channel")
+    p.add_argument("--force", action="store_true", help="intake even if already tracked")
+    p.set_defaults(func=cmd_intake)
     p = sub.add_parser("due", help="stages, follow-ups and stale applications")
     p.set_defaults(func=cmd_due)
     return parser
