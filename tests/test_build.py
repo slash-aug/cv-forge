@@ -98,6 +98,18 @@ def test_special_chars_round_trip(cfg):
     assert text in _text(pdf)
 
 
+@pytest.mark.latex
+def test_dashes_and_quotes_survive_without_ligatures(cfg):
+    text = 'Shipped v2 -- then v3 --- "fast"'
+    tailored = copy.deepcopy(T)
+    tailored["experience"][1]["positions"][0]["bullets"][0]["text"] = text
+    pdf = compile_tex(render_cv(tailored, M), engine=_need(cfg, "lualatex"),
+                      build_dir=cfg.build_dir / "test", jobname="ligatures")
+    layer = _text(pdf)
+    assert text in layer
+    assert "\u2014" not in layer and "\u2013" not in layer
+
+
 @pytest.mark.parametrize("jobname", ["", ".", "..", "../x", "a/b", "ABS", ".hidden", "a..b"])
 def test_unsafe_jobname_rejected_before_touching_fs(tmp_path, jobname):
     build = tmp_path / "build"

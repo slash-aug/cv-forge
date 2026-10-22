@@ -16,8 +16,14 @@ _ESCAPES = {
     "}": r"\}",
     "~": r"\textasciitilde{}",
     "^": r"\textasciicircum{}",
+    '"': r"\textquotedbl{}",
+    "-": r"-\kern0pt",
 }
-_SPECIAL = re.compile(r"[\\&%$#_{}~^]")
+# A hyphen is special only before another hyphen: TeX ligatures would turn "--" and
+# "---" into en and em dashes, and a straight double quote into a curly one. LuaTeX
+# ligatures ignore an empty group, so a zero kern separates the hyphens.
+_SPECIAL = re.compile(r'[\\&%$#_{}~^"]|-(?=-)')
+_URL_SPECIAL = re.compile(r"[%#]")
 
 _MONTHS = {
     "en": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
@@ -33,6 +39,11 @@ def escape_tex(s: str) -> str:
     return _SPECIAL.sub(
         lambda m: r"\textbackslash{}" if m.group() == "\\" else _ESCAPES[m.group()], s
     )
+
+
+def escape_url(s: str) -> str:
+    """Escape an \\href target: only % and # need it; ~ and _ must stay literal in the link."""
+    return _URL_SPECIAL.sub(lambda m: "\\" + m.group(), s)
 
 
 def format_date(value: str, lang: str, *, item_id: str = "date") -> str:
@@ -67,4 +78,5 @@ def jinja_env(package: str = "cvforge.render") -> jinja2.Environment:
         undefined=jinja2.StrictUndefined,
     )
     env.filters["tex"] = escape_tex
+    env.filters["url"] = escape_url
     return env

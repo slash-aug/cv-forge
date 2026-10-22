@@ -5,7 +5,13 @@ import pytest
 
 from cvforge.profile.model import ProfileError, load_master
 from cvforge.render.cv import build_cv_view, render_cv
-from cvforge.render.latex import escape_tex, format_date, format_range, jinja_env
+from cvforge.render.latex import (
+    escape_tex,
+    escape_url,
+    format_date,
+    format_range,
+    jinja_env,
+)
 from cvforge.tailor.audit import load_tailored
 
 PERSONA = Path(__file__).resolve().parent.parent / "examples" / "persona"
@@ -28,6 +34,25 @@ def test_escape_backslash_first():
 
 def test_escape_keeps_accents():
     assert escape_tex("Integração") == "Integração"
+
+
+def test_escape_breaks_dash_ligatures():
+    assert escape_tex("a -- b --- c") == r"a -\kern0pt- b -\kern0pt-\kern0pt- c"
+
+
+def test_escape_keeps_straight_double_quote():
+    assert escape_tex('say "hi"') == r"say \textquotedbl{}hi\textquotedbl{}"
+
+
+def test_escape_url_only_percent_and_hash():
+    assert escape_url("https://x.example/~ana/a_b?q=1%20#top") == r"https://x.example/~ana/a_b?q=1\%20\#top"
+
+
+def test_href_target_keeps_tilde():
+    master = copy.deepcopy(M)
+    master["basics"]["profiles"] = [{"network": "Site", "url": "https://example.com/~ana"}]
+    tex = render_cv(T, master)
+    assert r"\href{https://example.com/~ana}{example.com/\textasciitilde{}ana}" in tex
 
 
 def test_range_ongoing():

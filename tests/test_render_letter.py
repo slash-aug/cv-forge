@@ -53,6 +53,12 @@ def test_letter_special_chars_escaped():
     assert r"Integração \& testes \#1 a\_b" in render_letter(t, M, today=TODAY)
 
 
+def test_letter_href_target_keeps_tilde():
+    master = {**M, "basics": {**M["basics"], "profiles": [
+        {"network": "LinkedIn", "url": "https://linkedin.com/in/~ana"}]}}
+    assert r"\href{https://linkedin.com/in/~ana}" in render_letter(T, master, today=TODAY)
+
+
 def test_letter_missing_raises():
     t = {k: v for k, v in T.items() if k != "letter"}
     with pytest.raises(ProfileError, match="tailored has no letter"):
