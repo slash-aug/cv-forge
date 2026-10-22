@@ -161,7 +161,31 @@
         "paragraphs": {
           "type": "array",
           "items": {
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "refs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[a-z0-9][a-z0-9-]*$(?!\n)"
+                    }
+                  }
+                },
+                "required": [
+                  "text",
+                  "refs"
+                ],
+                "additionalProperties": false
+              }
+            ]
           }
         },
         "closing": {
@@ -175,6 +199,64 @@
         "closing"
       ],
       "additionalProperties": false
+    },
+    "recruiter_note": {
+      "type": "object",
+      "properties": {
+        "connect": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$(?!\n)"
+          }
+        }
+      },
+      "required": [
+        "connect",
+        "message",
+        "refs"
+      ],
+      "additionalProperties": false
+    },
+    "answers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "question": {
+            "type": "string"
+          },
+          "answer": {
+            "type": "string"
+          },
+          "refs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]*$(?!\n)"
+            }
+          },
+          "limit": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1
+          }
+        },
+        "required": [
+          "question",
+          "answer",
+          "refs"
+        ],
+        "additionalProperties": false
+      }
     }
   },
   "required": [

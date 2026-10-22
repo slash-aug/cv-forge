@@ -186,3 +186,70 @@ def test_rendered_values_clean():
 
 def test_pt_br_persona_is_grounded():
     assert audit(load_tailored(PERSONA / "tailored.pt-BR.yaml"), M) == []
+
+
+EM = chr(0x2014)
+
+
+def _para(d, i, text, refs):
+    d["letter"]["paragraphs"][i] = {"text": text, "refs": refs}
+
+
+def test_letter_paragraph_refs_limit_numbers():
+    ok = _variant(lambda d: _para(d, 1, "I cut load time by 40%.", ["h-load-time"]))
+    bad = _variant(lambda d: _para(d, 1, "I led 5 engineers.", ["h-load-time"]))
+    assert audit(ok, M) == []
+    assert [(f.kind, f.ref) for f in audit(bad, M)] == [("number", "letter.paragraphs.1")]
+
+
+def test_letter_unknown_ref():
+    t = _variant(lambda d: _para(d, 1, "Plain text.", ["h-nope"]))
+    assert [(f.kind, f.ref) for f in audit(t, M)] == [("unknown-ref", "h-nope")]
+
+
+def test_string_paragraph_still_broad():
+    t = _variant(lambda d: d["letter"]["paragraphs"].append("I led 5 engineers and cut 40%."))
+    assert audit(t, M) == []
+
+
+def test_recruiter_connect_over_160():
+    t = _variant(lambda d: d.update(recruiter_note={"connect": "x" * 161, "message": "Hi.", "refs": []}))
+    found = audit(t, M)
+    assert [(f.kind, f.ref) for f in found] == [("length", "recruiter_note.connect")]
+    assert "160" in found[0].message and "200" in found[0].message
+    t = _variant(lambda d: d.update(recruiter_note={"connect": "x" * 160, "message": "m" * 1201, "refs": []}))
+    assert [(f.kind, f.ref) for f in audit(t, M)] == [("length", "recruiter_note.message")]
+
+
+def test_recruiter_note_numbers_follow_refs():
+    note = {"connect": "Hi.", "message": "I cut load time by 40%.", "refs": ["h-load-time"]}
+    assert audit(_variant(lambda d: d.update(recruiter_note=note)), M) == []
+    bad = {**note, "message": "I led 5 engineers.", "refs": ["h-load-time"]}
+    assert [f.kind for f in audit(_variant(lambda d: d.update(recruiter_note=bad)), M)] == ["number"]
+
+
+def test_answer_over_limit():
+    ans = [{"question": "Why?", "answer": "a" * 11, "refs": [], "limit": 10}]
+    t = _variant(lambda d: d.update(answers=ans))
+    assert [(f.kind, f.ref) for f in audit(t, M)] == [("length", "answers.0.answer")]
+    ans[0]["limit"] = None
+    assert audit(_variant(lambda d: d.update(answers=ans)), M) == []
+
+
+def test_em_dash_anywhere():
+    t = _variant(lambda d: d["summary"].update(text=f"Engineer {EM} builder."))
+    assert [(f.kind, f.ref) for f in audit(t, M)] == [("em-dash", "summary")]
+    t = _variant(lambda d: d.update(answers=[{"question": "q", "answer": f"a{EM}b", "refs": [], "limit": None}]))
+    assert [(f.kind, f.ref) for f in audit(t, M)] == [("em-dash", "answers.0.answer")]
+
+
+def test_confidential_in_answer():
+    ans = [{"question": "q", "answer": "I did ProjectZebra.", "refs": [], "limit": None}]
+    t = _variant(lambda d: d.update(answers=ans))
+    assert [(f.kind, f.ref) for f in audit(t, M)] == [("confidential", "answers.0.answer")]
+
+
+def test_persona_tailored_still_clean():
+    assert "recruiter_note" in T
+    assert any(isinstance(p, dict) for p in T["letter"]["paragraphs"])
+    assert audit(T, M) == []

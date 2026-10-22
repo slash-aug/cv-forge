@@ -45,7 +45,10 @@ def letter_context(tailored: dict, master: dict, today: date | None = None) -> d
         "name": basics["name"],
         "links": _header_links(basics),
         "date": format_letter_date(today or date.today(), tailored["lang"]),
-        "letter": letter,
+        "letter": {
+            **letter,
+            "paragraphs": [p if isinstance(p, str) else p["text"] for p in letter["paragraphs"]],
+        },
     }
 
 
