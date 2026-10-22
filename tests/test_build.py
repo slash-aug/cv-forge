@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from pypdf import PdfReader
 
-from cvforge.build import LatexError, compile_tex
+from cvforge.build import JOBS_DIR, LatexError, compile_tex
 from cvforge.profile.model import load_master
 from cvforge.render.cv import render_cv
 from cvforge.render.letter import ASSETS_DIR, render_letter
@@ -48,12 +48,21 @@ def test_missing_engine_binary_raises(tmp_path):
 
 
 def test_fresh_job_dir_is_wiped(tmp_path):
-    job = tmp_path / "t"
-    job.mkdir()
+    job = tmp_path / JOBS_DIR / "t"
+    job.mkdir(parents=True)
     (job / "stale.txt").write_text("old")
     with pytest.raises(LatexError):
         compile_tex("x", engine="/nonexistent/lualatex", build_dir=tmp_path, jobname="t")
     assert not (job / "stale.txt").exists()
+
+
+def test_user_folder_named_like_the_job_is_kept(tmp_path):
+    mine = tmp_path / "cv"
+    mine.mkdir()
+    (mine / "keep.txt").write_text("mine")
+    with pytest.raises(LatexError):
+        compile_tex("x", engine="/nonexistent/lualatex", build_dir=tmp_path, jobname="cv")
+    assert (mine / "keep.txt").read_text() == "mine"
 
 
 @pytest.mark.latex

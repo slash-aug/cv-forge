@@ -9,6 +9,9 @@ import subprocess
 from pathlib import Path
 
 LOG_TAIL_LINES = 30
+# Jobs live in this tool-owned subfolder, so wiping a job never touches a user folder
+# that happens to share its name (for example build_dir=/mnt/d with a "cv" folder).
+JOBS_DIR = ".cvforge-jobs"
 
 
 class LatexError(RuntimeError):
@@ -34,7 +37,7 @@ def compile_tex(
     assets: Path | None = None,
     timeout: int = 300,
 ) -> Path:
-    """Compile tex_source in a fresh build_dir/jobname and return the PDF path."""
+    """Compile tex_source in a fresh build_dir/.cvforge-jobs/jobname and return the PDF path."""
     if not engine:
         raise LatexError("no LaTeX engine configured")
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", jobname) or ".." in jobname:
@@ -48,8 +51,9 @@ def compile_tex(
                 f"Windows engine needs a build dir under /mnt/ (got {build_dir.resolve()})"
             ) from None
 
-    job_dir = build_dir / jobname
-    if job_dir.resolve().parent != build_dir.resolve():
+    jobs_dir = build_dir / JOBS_DIR
+    job_dir = jobs_dir / jobname
+    if job_dir.resolve().parent != jobs_dir.resolve():
         raise LatexError(f"jobname escapes build dir: {jobname!r}")
     shutil.rmtree(job_dir, ignore_errors=True)
     job_dir.mkdir(parents=True)
