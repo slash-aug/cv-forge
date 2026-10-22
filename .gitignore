@@ -14,3 +14,4 @@ docs/superpowers/
 .claude/settings.local.json
 cvforge.toml
 .superpowers/
+.env*

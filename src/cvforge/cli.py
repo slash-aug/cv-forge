@@ -11,7 +11,7 @@ from pathlib import Path
 from cvforge.build import LatexError, compile_tex
 from cvforge.checks.ats import AtsReport, ats_check
 from cvforge.config import Config, load_config
-from cvforge.guard import GuardError, check_message_file, check_staged
+from cvforge.guard import GuardError, check_message_file, check_staged, check_tree
 from cvforge.profile.model import ProfileError, load_master, localized
 from cvforge.render.cv import build_cv_view, render_view
 from cvforge.render.letter import ASSETS_DIR, render_letter
@@ -162,6 +162,8 @@ def cmd_master_cv(args) -> int:
 def cmd_guard(args) -> int:
     if args.what == "staged":
         problems = check_staged(load_config())
+    elif args.what == "tree":
+        problems = check_tree(load_config())
     else:
         problems = check_message_file(Path(args.file), load_config())
     for problem in problems:
@@ -194,6 +196,7 @@ def _parser() -> argparse.ArgumentParser:
     p = sub.add_parser("guard", help="privacy and attribution checks for git hooks")
     guard = p.add_subparsers(dest="what", required=True)
     guard.add_parser("staged", help="check staged files")
+    guard.add_parser("tree", help="check every tracked file")
     msg = guard.add_parser("msg", help="check a commit message file")
     msg.add_argument("file")
     p.set_defaults(func=cmd_guard)

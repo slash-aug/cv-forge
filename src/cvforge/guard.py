@@ -13,7 +13,7 @@ from cvforge.profile.model import ProfileError, load_master
 from cvforge.text import contains_term, fold
 
 BLOCKED_PREFIXES = ("data/", ".claude/agents/", ".claude/local/", "docs/superpowers/", ".superpowers/")
-BLOCKED_NAMES = ("*.env", "cvforge.toml")
+BLOCKED_NAMES = ("*.env", ".env*", "cvforge.toml")
 CPF = re.compile(r"\b\d{3}\.\d{3}\.\d{3}-\d{2}\b")
 PHONE_BR = re.compile(r"\+55\s?\(?\d{2}\)?\s?9?\d{4}-?\d{4}")
 EM_DASH = "\u2014"
@@ -33,8 +33,8 @@ def check_paths(paths: Iterable[str]) -> list[str]:
     problems = []
     for path in paths:
         norm = path.replace("\\", "/").removeprefix("./")
-        name = norm.rsplit("/", 1)[-1]
-        if norm.startswith(BLOCKED_PREFIXES) or any(fnmatch.fnmatch(name, p) for p in BLOCKED_NAMES):
+        name = norm.rsplit("/", 1)[-1].lower()
+        if norm.startswith(BLOCKED_PREFIXES) or any(fnmatch.fnmatchcase(name, p) for p in BLOCKED_NAMES):
             problems.append(f"{path}: private path must not be committed")
     return problems
 
@@ -92,11 +92,8 @@ def _denylist_warn(cfg: Config) -> list[str]:
     return load_denylist(cfg)
 
 
-def check_staged(cfg: Config) -> list[str]:
-    denylist = _denylist_warn(cfg)
-    top = _top()
-    raw = _git("diff", "--cached", "--name-only", "--diff-filter=d", "-z", cwd=top)
-    paths = [p for p in raw.decode("utf-8", errors="surrogateescape").split("\0") if p]
+def _check_index(paths: list[str], denylist: list[str], top: str) -> list[str]:
+    """Path rules plus content rules on each path's name and its index blob (binaries skipped)."""
     problems = check_paths(paths)
     for path in paths:
         problems += [f"{path}: {p}" for p in check_content(path, denylist=denylist)]
@@ -106,6 +103,24 @@ def check_staged(cfg: Config) -> list[str]:
         text = blob.decode("utf-8", errors="replace")
         problems += [f"{path}: {p}" for p in check_content(text, denylist=denylist)]
     return problems
+
+
+def _split_z(raw: bytes) -> list[str]:
+    return [p for p in raw.decode("utf-8", errors="surrogateescape").split("\0") if p]
+
+
+def check_staged(cfg: Config) -> list[str]:
+    denylist = _denylist_warn(cfg)
+    top = _top()
+    paths = _split_z(_git("diff", "--cached", "--name-only", "--diff-filter=d", "-z", cwd=top))
+    return _check_index(paths, denylist, top)
+
+
+def check_tree(cfg: Config) -> list[str]:
+    """Every tracked file, as the CI guard job runs it."""
+    denylist = _denylist_warn(cfg)
+    top = _top()
+    return _check_index(_split_z(_git("ls-files", "-z", cwd=top)), denylist, top)
 
 
 def strip_message(text: str) -> str:

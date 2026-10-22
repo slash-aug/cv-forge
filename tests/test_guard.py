@@ -276,3 +276,53 @@ def test_msg_comments_and_scissors_stripped(tmp_path, monkeypatch):
                                   "ｐｒｏｊｅｃｔｚｅｂｒａ"])
 def test_denylist_matches_like_the_audit(text):
     assert check_content(f"notes on {text}", denylist=["projectzebra"])
+
+
+@pytest.mark.parametrize("path", [".env", ".env.local", "sub/.ENV.production", "Prod.ENV", "CVFORGE.TOML"])
+def test_env_variants_blocked_case_insensitive(path):
+    assert check_paths([path])
+
+
+def _commit_all():
+    subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "x"], check=True)
+
+
+def test_guard_tree_flags_tracked_content(tmp_path, monkeypatch, capsys):
+    _repo(tmp_path, monkeypatch)
+    (tmp_path / "ok.txt").write_text("fine")
+    (tmp_path / "bad.txt").write_text("cpf " + CPF)
+    _stage("ok.txt", "bad.txt")
+    _commit_all()
+    assert main(["guard", "tree"]) == 1
+    out = capsys.readouterr().out
+    assert "bad.txt:" in out and "ok.txt" not in out
+
+
+def test_guard_tree_flags_tracked_private_path(tmp_path, monkeypatch, capsys):
+    _repo(tmp_path, monkeypatch)
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "x.txt").write_text("hi")
+    _stage("data/x.txt")
+    assert main(["guard", "tree"]) == 1
+    assert "data/x.txt:" in capsys.readouterr().out
+
+
+def test_guard_tree_clean_skips_binary_and_ignores_untracked(tmp_path, monkeypatch, capsys):
+    _repo(tmp_path, monkeypatch)
+    (tmp_path / "ok.txt").write_text("fine")
+    (tmp_path / "b.bin").write_bytes(b"\x00" + (CPF + DASH).encode())
+    _stage("ok.txt", "b.bin")
+    (tmp_path / "untracked.txt").write_text("cpf " + CPF)
+    assert main(["guard", "tree"]) == 0
+    assert "denylist is empty" in capsys.readouterr().err
+
+
+def test_guard_tree_uses_denylist(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _data_dir(tmp_path, monkeypatch)
+    monkeypatch.chdir(repo)
+    subprocess.run(["git", "init", "-q"], check=True)
+    (repo / "n.txt").write_text("about Project-Zebra")
+    _stage("n.txt")
+    assert main(["guard", "tree"]) == 1

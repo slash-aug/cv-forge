@@ -82,6 +82,10 @@ jobs:
             git ls-files data/
             exit 1
           fi
+      - name: Tracked files pass the content guard
+        # No master profile in CI, so the denylist is empty; the path, ID,
+        # phone and em dash rules still apply to every tracked file.
+        run: cvforge guard tree
       - name: Commit messages pass the guard
         env:
           EVENT: ${{ github.event_name }}
