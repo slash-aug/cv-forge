@@ -1,6 +1,5 @@
 """Tailored selection loader and grounding audit against the master profile."""
 import re
-import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -11,6 +10,7 @@ from cvforge.profile.model import (
     read_yaml,
     schema_problems,
 )
+from cvforge.text import contains_term
 
 SCHEMA_FILE = "tailored.schema.json"
 NUMBER = re.compile(r"\d+(?:[.,]\d+)?")
@@ -160,20 +160,11 @@ def _audit_id_lists(tailored: dict, ids: dict, findings: list[Finding]):
             _resolve(ids, ref, kind, findings)
 
 
-def _fold(text: str) -> str:
-    return unicodedata.normalize("NFKC", text).casefold()
-
-
-def _squash(text: str) -> str:
-    return re.sub(r"[\s_-]+", "", _fold(text))
-
-
 def _audit_confidential(tailored: dict, master: dict, findings: list[Finding]):
     terms = [t for t in master.get("x-confidential", []) if t]
     for location, text in _strings(tailored):
-        folded, squashed = _fold(text), _squash(text)
         for term in terms:
-            if _fold(term) in folded or _squash(term) in squashed:
+            if contains_term(text, term):
                 findings.append(Finding("confidential", location, f"contains confidential term '{term}'"))
 
 

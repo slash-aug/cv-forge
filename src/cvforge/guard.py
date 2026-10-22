@@ -5,12 +5,12 @@ import fnmatch
 import re
 import subprocess
 import sys
-import unicodedata
 from collections.abc import Iterable
 from pathlib import Path
 
 from cvforge.config import Config
 from cvforge.profile.model import ProfileError, load_master
+from cvforge.text import contains_term, fold
 
 BLOCKED_PREFIXES = ("data/", ".claude/agents/", ".claude/local/", "docs/superpowers/", ".superpowers/")
 BLOCKED_NAMES = ("*.env", "cvforge.toml")
@@ -29,10 +29,6 @@ class GuardError(Exception):
     """The guard could not do its job; callers must fail closed."""
 
 
-def _fold(text: str) -> str:
-    return unicodedata.normalize("NFC", text).casefold()
-
-
 def check_paths(paths: Iterable[str]) -> list[str]:
     problems = []
     for path in paths:
@@ -45,16 +41,13 @@ def check_paths(paths: Iterable[str]) -> list[str]:
 
 def check_content(text: str, *, denylist: Iterable[str]) -> list[str]:
     problems = []
-    lowered = _fold(text)
-    for term in denylist:
-        term = _fold(term.strip())
-        if term and term in lowered:
-            problems.append("contains a denylisted term")
+    if any(contains_term(text, term) for term in denylist):
+        problems.append("contains a denylisted term")
     if CPF.search(text):
         problems.append("contains a CPF number")
     if PHONE_BR.search(text):
         problems.append("contains a Brazilian phone number")
-    if any(form in lowered for form in map(_fold, EM_DASH_FORMS)):
+    if any(form in fold(text) for form in map(fold, EM_DASH_FORMS)):
         problems.append("contains an em dash")
     return problems
 
@@ -63,7 +56,7 @@ def check_commit_message(msg: str) -> list[str]:
     problems = []
     if TRAILER.search(msg) or GENERATED.search(msg) or ANTHROPIC_NOREPLY.search(msg):
         problems.append("AI attribution is not allowed in commit messages")
-    if any(form in _fold(msg) for form in map(_fold, EM_DASH_FORMS)):
+    if any(form in fold(msg) for form in map(fold, EM_DASH_FORMS)):
         problems.append("em dash is not allowed in commit messages")
     return problems
 

@@ -270,3 +270,9 @@ def test_msg_comments_and_scissors_stripped(tmp_path, monkeypatch):
     body = ("feat: ok\n# projectzebra in a comment\n" + SCISSORS +
             "\ndiff --git a/x b/x\n+projectzebra " + DASH + " " + CPF + "\n")
     assert main(["guard", "msg", _msg_file(tmp_path, monkeypatch, body)]) == 0
+
+
+@pytest.mark.parametrize("text", ["Project Zebra", "project-zebra",
+                                  "ｐｒｏｊｅｃｔｚｅｂｒａ"])
+def test_denylist_matches_like_the_audit(text):
+    assert check_content(f"notes on {text}", denylist=["projectzebra"])
