@@ -15,6 +15,12 @@ from cvforge.apply.posting_guard import guard
 Get = Callable[..., str]
 LD_JSON = re.compile(
     r"<script\b[^>]*type\s*=\s*[\"']application/ld\+json[\"'][^>]*>(.*?)</script\s*>", re.IGNORECASE | re.DOTALL)
+NEXT_DATA = re.compile(
+    r"<script\b[^>]*id\s*=\s*[\"']__NEXT_DATA__[\"'][^>]*>(.*?)</script\s*>", re.IGNORECASE | re.DOTALL)
+GUPY_CONTRACT = {"vacancy_type_effective": "CLT", "vacancy_legal_entity": "PJ",
+                 "vacancy_type_internship": "internship", "vacancy_type_trainee": "trainee",
+                 "vacancy_type_temporary": "temporary", "vacancy_type_freelancer": "freelancer",
+                 "vacancy_type_autonomous": "freelancer"}
 HREF = re.compile(r"href\s*=\s*[\"'](https?://[^\"']+)[\"']", re.IGNORECASE)
 NO_POSTING = "no readable posting; paste the text instead"
 WORKPLACE = {"remote": "remote", "hybrid": "hybrid", "onsite": "onsite", "on-site": "onsite"}
@@ -205,12 +211,20 @@ def _jsonld_salary(base) -> dict | None:
             "period": str(value.get("unitText") or "").lower()}
 
 
-def _jsonld(url: str, get: Get, today: date) -> Posting:
-    page = get(url)
+def _ld_block(block: str):
+    """One JSON-LD block; some sites (Gupy) ship it entity-escaped."""
+    block = block.strip()
+    try:
+        return json.loads(block, strict=False)
+    except ValueError:
+        return json.loads(html.unescape(block), strict=False)
+
+
+def _jsonld(url: str, page: str, today: date) -> Posting:
     job = None
     for block in LD_JSON.findall(page):
         try:
-            job = _find_jobposting(json.loads(block.strip(), strict=False))
+            job = _find_jobposting(_ld_block(block))
         except ValueError:
             continue
         if job:
@@ -233,6 +247,29 @@ def _jsonld(url: str, get: Get, today: date) -> Posting:
                   markup=job.get("description") or "")
 
 
+def _gupy(url: str, get: Get, today: date) -> Posting:
+    """Gupy pages carry the job in Next.js page data; without it, fall back to JSON-LD."""
+    page = get(url)
+    match = NEXT_DATA.search(page)
+    try:
+        job = json.loads(match.group(1), strict=False)["props"]["pageProps"]["job"] if match else None
+    except (ValueError, KeyError, TypeError):
+        job = None
+    if not isinstance(job, dict) or not job.get("name"):
+        return _jsonld(url, page, today)
+    country = str(job.get("addressCountry") or "").strip()
+    location = ", ".join(x for x in (job.get("addressCity"), job.get("addressState"), country) if x)
+    workplace = WORKPLACE.get(str(job.get("workplaceType") or "").lower())
+    sections = [job.get(k) or "" for k in ("description", "responsibilities", "prerequisites", "relevantExperiences")]
+    contract = GUPY_CONTRACT.get(str(job.get("jobType") or ""))
+    if contract:
+        sections.append(f"<p>Contract: {contract} (Gupy job type)</p>")
+    company = (job.get("careerPage") or {}).get("name") or ""
+    return _build(company=company, title=job["name"], location=location,
+                  requirements=[country] if workplace == "remote" and country else [], workplace=workplace,
+                  url=url, apply_url=url, source="gupy", today=today, markup="".join(sections))
+
+
 def fetch_posting(url: str, *, get: Get = http.get, today: date) -> Posting:
     url = canonical_url(resolve_shortlink(url, get))
     refuse_linkedin(url)
@@ -245,4 +282,6 @@ def fetch_posting(url: str, *, get: Get = http.get, today: date) -> Posting:
         return _greenhouse(seg[0], seg[2], url, get, today)
     if host == "jobs.lever.co" and len(seg) >= 2:
         return _lever(seg[0], seg[1], url, get, today)
-    return _jsonld(url, get, today)
+    if http.on_domain(host, "gupy.io"):
+        return _gupy(url, get, today)
+    return _jsonld(url, get(url), today)

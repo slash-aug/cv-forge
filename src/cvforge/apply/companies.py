@@ -12,7 +12,7 @@ from cvforge.profile.model import ProfileError, load_schema, read_yaml, schema_p
 from cvforge.text import fold_accents
 
 SCHEMA_FILE = "companies.schema.json"
-ATS = ("ashby", "greenhouse", "lever", "teamtailor", "other")
+ATS = ("ashby", "greenhouse", "lever", "teamtailor", "gupy", "other")
 SPONSOR_TYPES = ("pt-tech-visa", "nl-ind", "uk-sponsor", "other")
 LEGAL_SUFFIXES = frozenset(
     {"ltd", "lda", "inc", "llc", "gmbh", "sa", "s a", "bv", "plc", "ltda", "eireli", "me"}

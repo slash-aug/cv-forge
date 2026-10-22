@@ -8,7 +8,7 @@
       "name": {"type": "string", "minLength": 1},
       "aliases": {"type": "array", "items": {"type": "string", "minLength": 1}},
       "careers_url": {"type": ["string", "null"]},
-      "ats": {"enum": ["ashby", "greenhouse", "lever", "teamtailor", "other", null]},
+      "ats": {"enum": ["ashby", "greenhouse", "lever", "teamtailor", "gupy", "other", null]},
       "sponsor": {
         "type": "array",
         "items": {

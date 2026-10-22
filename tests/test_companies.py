@@ -126,3 +126,9 @@ def test_empty_name_key_rejected(tmp_path, capsys):
     with pytest.raises(CompanyError):
         add_sponsor(path, "  ", type="nl-ind", source="s", day=date(2026, 10, 22))
     assert not path.exists()
+
+
+def test_gupy_is_a_known_ats(tmp_path):
+    path = tmp_path / "companies.yaml"
+    add_company(path, "Ventania Digital", careers_url="https://ventania.gupy.io", ats="gupy")
+    assert load_registry(path)[0]["ats"] == "gupy"
