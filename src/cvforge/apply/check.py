@@ -7,7 +7,8 @@ from datetime import date
 
 from cvforge.apply.experience import engineering_months, years_limit
 from cvforge.apply.posting import Posting
-from cvforge.apply.requirements import _quotes, normalise_quote, posting_text
+from cvforge.apply.requirements import normalise_quote, posting_text
+from cvforge.apply.requirements import quotes as requirement_quotes
 from cvforge.money.normalise import Money, monthly, pj_equivalent
 from cvforge.money.rates import MoneyError, NoRate, Rates
 from cvforge.text import fold_accents
@@ -55,7 +56,7 @@ CEFR_TOKEN = re.compile(r"\b([abc][12])\b")
 CAVEAT_TERMS = (
     "reside", "residen", "eligib", "overlap", "travel", "time zone", "timezone",
     "work authori", "right to work", "citizen", "contractor", "employer of record", "eor",
-    "resid", "elegib", "fuso", "sobrepos", "viage", "cidadan", "autoriza", "pj", "clt")
+    "resid", "elegib", "elegiv", "fuso", "sobrepos", "viage", "cidadan", "autoriza", "pj", "clt")
 
 
 def _term_pattern(term: str) -> str:
@@ -276,7 +277,7 @@ def caveat_sentences(posting_text: str) -> list[str]:
 
 def uncaptured_caveats(req: dict, posting_text: str) -> list[str]:
     """Caveat sentences that no quote in requirements.yaml overlaps."""
-    quotes = [normalise_quote(q) for _, q in _quotes(req) if q]
+    quotes = [normalise_quote(q) for _, q in requirement_quotes(req) if q]
     quotes = [q for q in quotes if q]
     missed = []
     for sentence in caveat_sentences(posting_text):

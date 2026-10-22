@@ -432,3 +432,9 @@ def test_timezone_and_travel_never_skip(env, capsys):
     assert v["caveats"]["timezone"]["requirement"] == "4 hours overlap with ET"
     assert v["caveats"]["travel"]["requirement"] == "up to 10% travel"
     assert v["caveats"]["uncaptured"] == ["You must be eligible to work here"]
+
+
+def test_caveat_scan_catches_elegivel_and_residencia():
+    text = "Você é elegível para a vaga. Residência em Portugal é obrigatória."
+    assert caveat_sentences(text) == [
+        "Você é elegível para a vaga", "Residência em Portugal é obrigatória"]

@@ -59,7 +59,7 @@ def load_requirements(path: Path) -> dict:
     return data
 
 
-def _quotes(req: dict):
+def quotes(req: dict):
     """Yield (field path, quote) for every non-empty quote, in document order."""
     for i, item in enumerate(req.get("years") or []):
         yield f"years.{i}.quote", item.get("quote")
@@ -75,7 +75,7 @@ def _quotes(req: dict):
 def quote_problems(req: dict, posting_text: str) -> list[str]:
     haystack = normalise_quote(posting_text)
     problems = []
-    for where, quote in _quotes(req):
+    for where, quote in quotes(req):
         if quote is None:
             continue
         needle = normalise_quote(quote)
