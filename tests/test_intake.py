@@ -326,3 +326,32 @@ def test_intake_leaves_no_folder_when_save_fails(env, monkeypatch, capsys):
     apps = env / "applications"
     assert not apps.exists() or list(apps.iterdir()) == []
     assert not (env / "tracker.csv").exists()
+
+
+GUPY_URL = "https://ventania.gupy.io/job/eyJqb2JJZCI6NTU1MDAwMX0=?jobBoardSource=gupy_portal"
+GUPY_PAGE = (FIX / "gupy_job.html").read_text(encoding="utf-8")
+
+
+def test_gupy_reads_page_data():
+    p = fetch_posting(GUPY_URL, get=lambda u, **k: GUPY_PAGE, today=TODAY)
+    assert (p.company, p.title, p.source) == ("Ventania Digital", "Desenvolvedor Backend | Python", "gupy")
+    assert p.workplace == "remote"
+    assert p.location == "Brasil"
+    assert p.location_requirements == ["Brasil"]
+    assert p.apply_url == p.url
+    assert "APIs em Python" in p.description and "PostgreSQL" in p.description
+    assert "Contract: PJ" in p.description
+    assert p.language == "pt"
+
+
+def test_gupy_without_page_data_falls_back_to_escaped_jsonld():
+    page = GUPY_PAGE.split('<script id="__NEXT_DATA__"')[0]
+    p = fetch_posting(GUPY_URL, get=lambda u, **k: page, today=TODAY)
+    assert (p.company, p.source) == ("Ventania Digital", "jsonld")
+    assert "logística" in p.description
+
+
+def test_jsonld_accepts_entity_escaped_block():
+    page = GUPY_PAGE.split('<script id="__NEXT_DATA__"')[0]
+    p = fetch_posting("https://other.example/jobs/9", get=lambda u, **k: page, today=TODAY)
+    assert p.title == "Desenvolvedor Backend | Python"
