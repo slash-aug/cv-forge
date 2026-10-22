@@ -15,14 +15,14 @@ Builds tailored, audited, ATS-checked LaTeX CVs and cover letters from one maste
 
 Venv: `.venv/bin/cvforge`
 
-- `cvforge validate`: check the profile and selection files
-- `cvforge audit`: verify every claim traces to master
+- `cvforge validate`: check the master profile against the schema
+- `cvforge audit`: check a tailored selection against master (ids, numbers, skill keywords, confidential terms)
 - `cvforge build`: render the PDF and run ATS checks
 - `cvforge master-cv`: build the full master CV
-- `cvforge guard staged` / `cvforge guard msg`: privacy checks used by the git hooks
+- `cvforge guard staged` / `tree` / `msg`: privacy checks used by the git hooks and CI
 
 ## Tests
 
-- `pytest -q` runs the fast suite.
-- `pytest -m latex` runs the PDF tests; they need MiKTeX or TeX Live.
+- `pytest -q -m "not latex"` runs the fast suite.
+- `pytest -q -m latex` runs the PDF tests; they need MiKTeX or TeX Live. `pytest -q` runs both.
 - Keep test workers at 4 or fewer.

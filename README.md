@@ -1,6 +1,8 @@
 # cv-forge
 
-cv-forge is a job-search copilot. It keeps one master profile of everything you have done, tailors an honest, ATS-safe LaTeX CV and cover letter for each real job posting, and prepares the application kit. You always click submit yourself.
+cv-forge is a job-search copilot. It keeps one master profile of everything you have done and turns it into an honest, ATS-checked LaTeX CV and cover letter for each real job posting. You always click submit yourself.
+
+![First page of the example CV](examples/persona/preview.png)
 
 ## The problem
 
@@ -18,10 +20,11 @@ cv-forge removes the mechanical part of this work and keeps the judgment with yo
 Phase 1 is the foundation: from a master profile to a checked PDF.
 
 - One master YAML profile holds every job, project, achievement and skill, with stable ids.
-- A tailored selection picks which items to show for a given role. Text can be reworded for the target, but nothing outside the master profile can be invented.
-- An audit step compares the tailored CV with the master and flags claims that drifted from the facts (numbers, titles, dates, skills).
+- A tailored selection picks which items to show for a given role and may reword their text. Job titles, employers and dates always come from the master; the tailored file only refers to them by id.
+- An audit step checks the tailored file against the master: every id must exist, every number in a reworded bullet must appear in its source highlight (numbers in the summary and letter must appear in the master), every skill keyword must be a keyword of that skill in the master, and confidential terms listed in the master are blocked.
+- Before anything is compiled, every rendered field, including those taken from the master (employer names, titles, institutions, contact links), is scanned for confidential terms; `build` and `master-cv` stop on a match.
 - A LaTeX renderer produces a CV and a matching cover letter, in English, Brazilian Portuguese or European Portuguese.
-- A compile step builds the PDFs, and an ATS check verifies the result: text layer extracts cleanly, dates and characters survive, layout checks catch orphaned headers, stranded section headings, large gaps and thin last pages.
+- A compile step builds the PDFs, and an ATS check verifies the result: the page limit (CV at most 2 pages, letter exactly 1), a clean text layer (no unmapped glyphs or replacement characters), required text present (name, summary opening, every contact item), section headings in order, and date ranges joined by an ASCII hyphen. Layout checks fail the build on orphaned entry headers, stranded section headings, holes in a page, pages that end early and text colliding with the footer; a thin last page is reported as a note only, since a CV of one and a half pages is fine.
 - Privacy guards run as git hooks and in CI, so personal data stays out of the repository.
 
 Commands:
@@ -31,7 +34,7 @@ cvforge validate <master>                      check a master profile against th
 cvforge audit <tailored> --master <master>     compare a tailored CV with the master
 cvforge build <tailored> --master <master>     audit, render, compile and ATS-check
 cvforge master-cv <master> --lang en           render a full CV straight from the master
-cvforge guard staged | msg <file>              privacy checks used by the hooks and CI
+cvforge guard staged | tree | msg <file>       privacy checks used by the hooks and CI
 ```
 
 ## Flow
@@ -43,8 +46,7 @@ flowchart LR
     A --> R[Render LaTeX]
     R --> C[Compile PDF]
     C --> K[ATS check]
-    K --> P[Application kit]
-    P --> H((You review and submit))
+    K --> H((You review and submit))
 ```
 
 ## Roadmap
@@ -71,7 +73,7 @@ cvforge build examples/persona/tailored.yaml \
   --master examples/persona/master.yaml --out out/
 ```
 
-`examples/persona` is a fictional candidate, "Ana Exemplo". The build writes a CV PDF and a cover letter PDF to `out/` and prints the result of the ATS check for each.
+`examples/persona` is a fictional candidate, "Ana Exemplo", with an English selection (`tailored.yaml`) and a Brazilian Portuguese one (`tailored.pt-BR.yaml`). The build writes a CV PDF and a cover letter PDF to `out/` and prints the result of the ATS check for each. Without `--out`, `build` writes to `data/applications/<company>-<role>/` and `master-cv` to `data/review/`.
 
 To use your own data, copy the persona files into `data/profile/` and edit them. That directory is ignored by git.
 
@@ -85,20 +87,41 @@ The templates need LuaLaTeX for the CV and XeLaTeX for the letter, plus the `mod
     texlive-fonts-extra poppler-utils
   ```
   `poppler-utils` provides `pdftotext`, which the ATS check uses.
-- **Windows:** install MiKTeX and run cv-forge from WSL. cv-forge calls the Windows engines, which can only write to Windows drives, so the build directory must be under `/mnt` (for example `/mnt/d/cv-forge-build`). Pass it with `--out` or set it in `cvforge.toml`, which is ignored by git.
+- **Windows:** install MiKTeX and run cv-forge from WSL. cv-forge calls the Windows engines (`lualatex.exe`, `xelatex.exe`), which can only write to Windows drives, so the build directory must be under `/mnt` (for example `/mnt/d/cv-forge-build`). The defaults assume MiKTeX in `D:\MiKTeX`; anywhere else, set the engine paths and the build directory as described in [Configuration](#configuration).
+
+## Configuration
+
+Settings come from environment variables first, then the `[cvforge]` table of `cvforge.toml` at the repository root (ignored by git), then the defaults.
+
+| Key in `cvforge.toml` | Environment variable | Default |
+| --- | --- | --- |
+| `data_dir` | `CVFORGE_DATA_DIR` | `data/` in the repository |
+| `build_dir` | `CVFORGE_BUILD_DIR` | `/mnt/d/cv-forge-build` if `/mnt/d` exists, else `build/` in the repository |
+| `lualatex` | `CVFORGE_LUALATEX` | `/mnt/d/MiKTeX/miktex/bin/x64/lualatex.exe` if present, else `lualatex` on `PATH` |
+| `xelatex` | `CVFORGE_XELATEX` | `/mnt/d/MiKTeX/miktex/bin/x64/xelatex.exe` if present, else `xelatex` on `PATH` |
+
+```toml
+[cvforge]
+build_dir = "/mnt/c/cv-forge-build"
+lualatex = "/mnt/c/Program Files/MiKTeX/miktex/bin/x64/lualatex.exe"
+xelatex = "/mnt/c/Program Files/MiKTeX/miktex/bin/x64/xelatex.exe"
+```
+
+LaTeX runs in `<build_dir>/.cvforge-jobs/<job>/`, which is wiped before each run; nothing else in the build directory is touched. The finished PDFs are copied to the output directory. The privacy denylist is read from `<data_dir>/profile/master.yaml`.
 
 ## Privacy model
 
 A CV repository is easy to leak from by accident, so privacy is enforced by tooling and not by habit.
 
 - `data/` holds your real profile, tailored files and outputs. It is gitignored, and CI fails if any file under it is tracked.
-- Git hooks in `.githooks` block commits that contain private paths, terms from a personal denylist derived from your profile, ID and phone number patterns, em dashes, or AI attribution in messages. `cvforge guard` runs the same checks in CI on every commit message.
+- Git hooks in `.githooks` block commits that contain private paths, terms from a personal denylist derived from your profile (matched ignoring case, width and separators), ID and phone number patterns, em dashes, or AI attribution in messages.
+- In CI, `cvforge guard tree` runs the path and content rules on every tracked file, and `cvforge guard msg` checks every new commit message. CI has no master profile, so its denylist is empty; the other rules still apply.
 - Secret scanning runs in CI with gitleaks.
 - Everything public in this repository uses a fake persona and fake companies.
 
 ## You always click submit
 
-cv-forge prepares material. It does not log in to job sites, fill in forms or send applications on your behalf. Every claim in a tailored CV is checked against your master profile, and every submission is a decision you make. A tool that applies in bulk produces noise for recruiters and risk for you; this one is built to help you apply to fewer, better-matched jobs.
+cv-forge prepares material. It does not log in to job sites, fill in forms or send applications on your behalf. Facts come from your master profile and the audit blocks the drift it can detect (changed numbers, unknown skills, confidential terms), but reworded text is still yours to read, and every submission is a decision you make. A tool that applies in bulk produces noise for recruiters and risk for you; this one is built to help you apply to fewer, better-matched jobs.
 
 ## Credit and licence
 
