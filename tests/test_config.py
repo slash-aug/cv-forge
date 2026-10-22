@@ -27,3 +27,8 @@ def test_defaults_are_typed(tmp_path):
     assert c.data_dir.name == "data"
     assert isinstance(c.lualatex, str) and isinstance(c.xelatex, str)
     assert c.build_dir.name in {"cv-forge-build", "build"}
+
+
+def test_daily_cap_default_and_override(tmp_path):
+    assert load_config(env={}, file=tmp_path / "missing.toml").daily_cap == 10
+    assert load_config(env={"CVFORGE_DAILY_CAP": "3"}, file=None).daily_cap == 3

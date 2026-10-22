@@ -6,6 +6,7 @@ import re
 import shutil
 import sys
 import unicodedata
+from datetime import date
 from pathlib import Path
 
 from cvforge.build import LatexError, compile_tex
@@ -16,6 +17,9 @@ from cvforge.profile.model import ProfileError, load_master, localized
 from cvforge.render.cv import build_cv_view, render_view
 from cvforge.render.letter import ASSETS_DIR, letter_context, render_letter_context
 from cvforge.tailor.audit import Finding, audit, audit_rendered, load_tailored
+from cvforge.track import stages as stages_mod
+from cvforge.track import tracker
+from cvforge.track.due import due_report
 
 SECTIONS = ("summary", "experience", "skills", "education", "certificates", "languages")
 LARGE_PAGE_CAP = 1000
@@ -192,6 +196,84 @@ def cmd_guard(args) -> int:
     return 1 if problems else 0
 
 
+def _today() -> date:
+    return date.today()
+
+
+def cmd_track(args) -> int:
+    cfg = load_config()
+    path = cfg.data_dir / "tracker.csv"
+    app_dir = cfg.data_dir / "applications" / args.slug
+    today = _today()
+    if args.action in ("stage", "done") and not any(
+            r["slug"] == args.slug for r in tracker.load(path)
+        ):
+        print(f"unknown slug '{args.slug}'", file=sys.stderr)
+        return 1
+    if args.action == "add":
+        rows = tracker.load(path)
+        existing = next((r for r in rows if r["slug"] == args.slug), None) or tracker.find(
+            rows, url=args.url, company=args.company, role=args.role)
+        if existing:
+            print(f"already tracked: {existing['slug']} ({existing['status']})")
+            return 3
+        row = {"slug": args.slug, "company": args.company, "role": args.role,
+               "date": today.isoformat(), "status": "drafted"}
+        for key in ("url", "channel", "source", "deadline"):
+            if getattr(args, key):
+                row[key] = getattr(args, key)
+        if row.get("channel") and row["channel"] not in tracker.CHANNELS:
+            print(f"unknown channel '{row['channel']}'", file=sys.stderr)
+            return 1
+        tracker.upsert(path, row)
+        print(f"added {args.slug}")
+    elif args.action == "status":
+        if args.status == "applied":
+            count = tracker.applied_on(tracker.load(path), today)
+            if count >= cfg.daily_cap:
+                print(f"warning: daily cap reached ({count} applied today, cap {cfg.daily_cap})")
+        try:
+            tracker.set_status(path, args.slug, args.status, today, note=args.note or "")
+        except (KeyError, ValueError) as exc:
+            print(str(exc.args[0]), file=sys.stderr)
+            return 1
+        print(f"{args.slug}: {args.status}")
+    elif args.action == "stage":
+        try:
+            due = date.fromisoformat(args.due) if args.due else None
+            stages_mod.add_stage(app_dir, args.name, args.kind, due)
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        print(f"stage added: {args.name}")
+    else:
+        try:
+            stages_mod.complete_stage(app_dir, args.name)
+        except KeyError as exc:
+            print(str(exc.args[0]), file=sys.stderr)
+            return 1
+        print(f"stage done: {args.name}")
+    return 0
+
+
+def cmd_due(args) -> int:
+    cfg = load_config()
+    report = due_report(tracker.load(cfg.data_dir / "tracker.csv"),
+                        cfg.data_dir / "applications", _today())
+    print("Stages")
+    for slug_, st in report.stages:
+        print(f"  {slug_}: {st.name} ({st.kind}) due {st.due}")
+    print("Follow up")
+    for row in report.followups:
+        print(f"  {row['slug']}: {row['company']} / {row['role']} ({row['status']}, last update {row['last_update'] or row['date']})")
+    print("Stale")
+    for row in report.stale:
+        print(f"  {row['slug']}: {row['company']} / {row['role']} ({row['status']}, last update {row['last_update'] or row['date']})")
+    for error in report.errors:
+        print(f"bad stages file, {error}", file=sys.stderr)
+    return 1 if report.errors else 0
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="cvforge")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -221,6 +303,29 @@ def _parser() -> argparse.ArgumentParser:
     msg = guard.add_parser("msg", help="check a commit message file")
     msg.add_argument("file")
     p.set_defaults(func=cmd_guard)
+    p = sub.add_parser("track", help="record and update applications")
+    track = p.add_subparsers(dest="action", required=True)
+    t = track.add_parser("add", help="add an application as drafted")
+    t.add_argument("slug")
+    t.add_argument("--company", required=True)
+    t.add_argument("--role", required=True)
+    for opt in ("url", "channel", "source", "deadline"):
+        t.add_argument(f"--{opt}")
+    t = track.add_parser("status", help="set an application status")
+    t.add_argument("slug")
+    t.add_argument("status", choices=tracker.STATUSES)
+    t.add_argument("--note")
+    t = track.add_parser("stage", help="add a stage to an application")
+    t.add_argument("slug")
+    t.add_argument("name")
+    t.add_argument("--kind", required=True, choices=stages_mod.KINDS)
+    t.add_argument("--due")
+    t = track.add_parser("done", help="mark a stage done")
+    t.add_argument("slug")
+    t.add_argument("name")
+    p.set_defaults(func=cmd_track)
+    p = sub.add_parser("due", help="stages, follow-ups and stale applications")
+    p.set_defaults(func=cmd_due)
     return parser
 
 
