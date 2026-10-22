@@ -353,3 +353,28 @@ def test_title_is_clearly_smaller_than_the_name(cfg):
     for y0, y1, w in re.findall(r'yMin="([\d.]+)" xMax="[\d.]+" yMax="([\d.]+)">([^<]+)<', xml):
         heights.setdefault(w, float(y1) - float(y0))  # first occurrence is the header
     assert heights["Full-stack"] < 0.7 * heights["Exemplo"]
+
+
+def test_cv_turns_hyphenation_off():
+    tex = render_cv(T, M)
+    preamble = tex[:tex.index(r"\begin{document}")]
+    assert r"\hyphenpenalty=10000" in preamble and r"\exhyphenpenalty=10000" in preamble
+
+
+@pytest.mark.latex
+def test_compiled_cv_keeps_words_whole(cfg):
+    from pypdf import PdfReader
+
+    from cvforge.build import compile_tex
+
+    if not cfg.lualatex:
+        pytest.skip("no lualatex engine")
+    t = copy.deepcopy(T)
+    t["experience"][0]["positions"][0]["bullets"][0]["text"] = (
+        "Structured the Steam Web API integration with TypeORM transactions, PostgreSQL databases, "
+        "concurrency-safe wallets and comprehensive automated testing infrastructure. ") * 4
+    pdf = compile_tex(render_cv(t, M), engine=cfg.lualatex,
+                      build_dir=cfg.build_dir / "test", jobname="cv_hyphen", assets=ASSETS_DIR)
+    text = "\n".join(page.extract_text() for page in PdfReader(pdf).pages)
+    broken = [ln for ln in map(str.rstrip, text.splitlines()) if ln.endswith("-") and ln[-2:-1].isalpha()]
+    assert not broken, broken
