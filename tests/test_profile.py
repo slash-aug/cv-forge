@@ -93,7 +93,7 @@ def test_index_kinds():
 
 def test_accented_text_survives_loading():
     idx = index(load_master(PERSONA))
-    assert idx["h-payments-integration"][1]["impact"] == "Integração de pagamentos & reconciliação"
+    assert idx["h-payments-integration"][1]["impact"]["pt-BR"] == "Integração de pagamentos & reconciliação"
 
 
 def test_persona_has_no_em_dash():

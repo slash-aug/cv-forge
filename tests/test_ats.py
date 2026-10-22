@@ -11,7 +11,8 @@ from cvforge.tailor.audit import load_tailored
 
 PERSONA = Path(__file__).resolve().parent.parent / "examples" / "persona"
 HEADINGS = ["Summary", "Experience", "Skills", "Education", "Certifications", "Languages"]
-REQUIRED = ["Ana Exemplo", "Integração de pagamentos & reconciliação"]
+REQUIRED = ["Ana Exemplo", "Payment integration & reconciliation"]
+PT_REQUIRED = ["Ana Exemplo", "Integração de pagamentos & reconciliação"]
 
 
 @pytest.fixture(scope="module")
@@ -40,6 +41,18 @@ def test_persona_cv_is_ok(cv_pdf):
     assert report.ok, report.problems
     assert report.pages <= 2
     assert report.extractor in ("pdftotext", "pypdf")
+
+
+@pytest.mark.latex
+def test_persona_pt_br_cv_is_ok(cfg):
+    if not cfg.lualatex:
+        pytest.skip("no lualatex engine")
+    m = load_master(PERSONA / "master.yaml")
+    t = load_tailored(PERSONA / "tailored.pt-BR.yaml")
+    pdf = compile_tex(render_cv(t, m), engine=cfg.lualatex,
+                      build_dir=cfg.build_dir / "test_ats", jobname="cv_ats_pt")
+    report = ats_check(pdf, max_pages=2, required=PT_REQUIRED, headings=PT_HEADINGS)
+    assert report.ok, report.problems
 
 
 @pytest.mark.latex

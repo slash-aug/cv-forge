@@ -41,7 +41,10 @@ work:
         endDate: "2024-05"
         highlights:
           - id: h-payments-integration
-            impact: "Integração de pagamentos & reconciliação"
+            impact:
+              en: "Payment integration & reconciliation"
+              pt-BR: "Integração de pagamentos & reconciliação"
+              pt-PT: "Integração de pagamentos & reconciliação"
             technical: Built payment provider adapters with idempotent webhooks.
             explain: Payment integration and reconciliation work.
             angles: [payments-fintech]
@@ -126,11 +129,17 @@ languages:
       en: Portuguese
       pt-BR: Português
       pt-PT: Português
-    fluency: Native
+    fluency:
+      en: Native
+      pt-BR: Nativo
+      pt-PT: Nativo
   - id: lang-en
     language: English
     cefr: C1
-    fluency: Fluent
+    fluency:
+      en: Fluent
+      pt-BR: Fluente
+      pt-PT: Fluente
     x-subscores:
       reading: C2
       speaking: C1

@@ -17,6 +17,7 @@ from cvforge.tailor.audit import load_tailored
 PERSONA = Path(__file__).resolve().parent.parent / "examples" / "persona"
 M = load_master(PERSONA / "master.yaml")
 T = load_tailored(PERSONA / "tailored.yaml")
+T_PT = load_tailored(PERSONA / "tailored.pt-BR.yaml")
 EM_DASH = chr(0x2014)
 
 
@@ -70,7 +71,7 @@ def test_jinja_env_delimiters_and_filter():
 def test_render_contains_bullets_and_name():
     tex = render_cv(T, M)
     assert r"\name{Ana}{Exemplo}" in tex
-    assert r"Integração de pagamentos \& reconciliação" in tex
+    assert r"Payment integration \& reconciliation" in tex
     assert r"Cut load time by 40\% by reworking" in tex
     assert r"\href{mailto:ana.exemplo@example.com}{ana.exemplo@example.com}" in tex
     assert r"\href{https://github.com/ana-exemplo}{github.com/ana-exemplo}" in tex
@@ -78,6 +79,18 @@ def test_render_contains_bullets_and_name():
     assert "\\social" not in tex and "\\phone" not in tex and "\\email" not in tex
     assert "Ported from ai-job-search (MIT): cv/main_example.tex" in tex
     assert EM_DASH not in tex
+
+
+def test_pt_br_persona_keeps_accents_and_escapes():
+    tex = render_cv(T_PT, M)
+    assert r"Integração de pagamentos \& reconciliação" in tex
+    assert r"\section{Experiência Profissional}" in tex
+    assert "Nativo" in tex
+
+
+def test_en_persona_bullets_are_english():
+    bullets = [b["text"] for w in T["experience"] for p in w["positions"] for b in p["bullets"]]
+    assert all(b.isascii() for b in bullets), bullets
 
 
 def test_render_section_order_and_headings():
@@ -190,22 +203,33 @@ def test_profiles_are_visible_urls_without_scheme_or_www():
     assert r"{ana.example.com/me\_x}" in tex
 
 
-@pytest.mark.latex
-def test_compiled_text_layer_is_ats_clean(cfg):
+def _compiled_text(cfg, tailored, jobname):
     from pypdf import PdfReader
 
     from cvforge.build import compile_tex
 
     if not cfg.lualatex:
         pytest.skip("no lualatex engine")
-    pdf = compile_tex(render_cv(T, M), engine=cfg.lualatex,
-                      build_dir=cfg.build_dir / "test", jobname="cv_ats")
-    text = "\n".join(p.extract_text() for p in PdfReader(pdf).pages)
+    pdf = compile_tex(render_cv(tailored, M), engine=cfg.lualatex,
+                      build_dir=cfg.build_dir / "test", jobname=jobname)
+    return "\n".join(p.extract_text() for p in PdfReader(pdf).pages)
+
+
+@pytest.mark.latex
+def test_compiled_text_layer_is_ats_clean(cfg):
+    text = _compiled_text(cfg, T, "cv_ats")
     for token in ("GITHUB", "LINKEDIN", "MOBILE", chr(0x1F7E4)):
         assert token not in text
-    assert "Integração de pagamentos & reconciliação" in text
+    assert "Payment integration & reconciliation" in text
     assert "Jun 2024 - Present" in text
     assert "github.com/ana-exemplo" in text
     assert "linkedin.com/in/ana-exemplo" in text
     assert "ana.exemplo@example.com" in text and "+351 900 000 000" in text
     assert chr(0x2022) in text
+
+
+@pytest.mark.latex
+def test_compiled_pt_br_text_layer_keeps_accents(cfg):
+    text = _compiled_text(cfg, T_PT, "cv_ats_pt")
+    assert "Integração de pagamentos & reconciliação" in text
+    assert "jun 2024 - Atual" in text

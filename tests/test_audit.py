@@ -182,3 +182,7 @@ def test_rendered_values_clean():
     from cvforge.tailor.audit import audit_rendered
 
     assert audit_rendered(M, cv={"a": ["plain", {"b": "text"}]}, letter={"name": "Ana"}) == []
+
+
+def test_pt_br_persona_is_grounded():
+    assert audit(load_tailored(PERSONA / "tailored.pt-BR.yaml"), M) == []

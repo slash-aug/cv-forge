@@ -89,6 +89,15 @@ def test_persona_letter_compiles_to_one_page(cfg):
 
 
 @pytest.mark.latex
+def test_pt_br_letter_keeps_accents_on_one_page(cfg):
+    t = load_tailored(PERSONA / "tailored.pt-BR.yaml")
+    pdf = compile_tex(render_letter(t, M), engine=_need(cfg, "xelatex"),
+                      build_dir=cfg.build_dir / "test", jobname="letter_pt", assets=ASSETS_DIR)
+    assert len(PdfReader(pdf).pages) == 1
+    assert "integração e reconciliação" in " ".join(_text(pdf).split())
+
+
+@pytest.mark.latex
 def test_special_chars_round_trip(cfg):
     text = "Integração & testes 100% #1 a_b"
     tailored = copy.deepcopy(T)
