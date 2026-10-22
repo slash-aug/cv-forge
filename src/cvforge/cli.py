@@ -205,7 +205,18 @@ def cmd_track(args) -> int:
     path = cfg.data_dir / "tracker.csv"
     app_dir = cfg.data_dir / "applications" / args.slug
     today = _today()
+    if args.action in ("stage", "done") and not any(
+            r["slug"] == args.slug for r in tracker.load(path)
+        ):
+        print(f"unknown slug '{args.slug}'", file=sys.stderr)
+        return 1
     if args.action == "add":
+        rows = tracker.load(path)
+        existing = next((r for r in rows if r["slug"] == args.slug), None) or tracker.find(
+            rows, url=args.url, company=args.company, role=args.role)
+        if existing:
+            print(f"already tracked: {existing['slug']} ({existing['status']})")
+            return 3
         row = {"slug": args.slug, "company": args.company, "role": args.role,
                "date": today.isoformat(), "status": "drafted"}
         for key in ("url", "channel", "source", "deadline"):
@@ -254,11 +265,13 @@ def cmd_due(args) -> int:
         print(f"  {slug_}: {st.name} ({st.kind}) due {st.due}")
     print("Follow up")
     for row in report.followups:
-        print(f"  {row['slug']}: {row['company']} / {row['role']} ({row['status']}, last update {row['last_update']})")
+        print(f"  {row['slug']}: {row['company']} / {row['role']} ({row['status']}, last update {row['last_update'] or row['date']})")
     print("Stale")
     for row in report.stale:
-        print(f"  {row['slug']}: {row['company']} / {row['role']} ({row['status']}, last update {row['last_update']})")
-    return 0
+        print(f"  {row['slug']}: {row['company']} / {row['role']} ({row['status']}, last update {row['last_update'] or row['date']})")
+    for error in report.errors:
+        print(f"bad stages file, {error}", file=sys.stderr)
+    return 1 if report.errors else 0
 
 
 def _parser() -> argparse.ArgumentParser:

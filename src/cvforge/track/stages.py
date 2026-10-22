@@ -31,14 +31,24 @@ def _due(value) -> date | None:
     return value if isinstance(value, date) else date.fromisoformat(str(value))
 
 
+class StagesError(ValueError):
+    """A stages.yaml that cannot be read."""
+
+
 def load_stages(app_dir: Path) -> list[Stage]:
     path = _file(app_dir)
     if not path.exists():
         return []
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    return [Stage(name=str(s["name"]), kind=s.get("kind", "other"), due=_due(s.get("due")),
-                  done=bool(s.get("done", False)), notes=s.get("notes") or "")
-            for s in data.get("stages", [])]
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        entries = data.get("stages") or []
+        if not isinstance(entries, list):
+            raise TypeError("'stages' must be a list")
+        return [Stage(name=str(s["name"]), kind=s.get("kind", "other"), due=_due(s.get("due")),
+                      done=bool(s.get("done", False)), notes=s.get("notes") or "")
+                for s in entries]
+    except (yaml.YAMLError, ValueError, TypeError, KeyError, AttributeError) as exc:
+        raise StagesError(f"{path}: {exc}") from exc
 
 
 def _save(app_dir: Path, stages: list[Stage]) -> None:
