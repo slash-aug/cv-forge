@@ -98,3 +98,61 @@ def test_accented_text_survives_loading():
 
 def test_persona_has_no_em_dash():
     assert "\u2014" not in PERSONA.read_text(encoding="utf-8")
+
+
+def test_missing_file_raises_profile_error(tmp_path):
+    with pytest.raises(ProfileError, match="nope.yaml"):
+        load_master(tmp_path / "nope.yaml")
+
+
+def test_malformed_yaml_raises_profile_error(tmp_path):
+    bad = tmp_path / "bad.yaml"
+    bad.write_text("basics: [unclosed\n", encoding="utf-8")
+    with pytest.raises(ProfileError, match="bad.yaml"):
+        load_master(bad)
+
+
+@pytest.mark.parametrize("content", ["", "- a\n- b\n", "just text\n"])
+def test_empty_or_non_mapping_root_raises_profile_error(tmp_path, content):
+    path = tmp_path / "m.yaml"
+    path.write_text(content, encoding="utf-8")
+    with pytest.raises(ProfileError, match="m.yaml"):
+        load_master(path)
+
+
+def test_typo_locale_key_message(tmp_path):
+    def typo(data):
+        data["basics"]["label"] = {"en": "x", "pt_BR": "y"}
+
+    with pytest.raises(ProfileError) as err:
+        load_master(_write_variant(tmp_path, typo))
+    assert "unexpected key 'pt_BR'; allowed: en, pt-BR, pt-PT" in str(err.value)
+    assert "not valid under any" not in str(err.value)
+
+
+def test_unquoted_end_date_message(tmp_path):
+    def unquoted(data):
+        data["work"][0]["positions"][0]["endDate"] = 2024
+
+    with pytest.raises(ProfileError) as err:
+        load_master(_write_variant(tmp_path, unquoted))
+    text = str(err.value)
+    assert "endDate" in text
+    assert 'use a quoted "YYYY-MM" string or null' in text
+    assert "not valid under any" not in text
+
+
+def test_unquoted_education_year_message(tmp_path):
+    def unquoted(data):
+        data["education"][0]["endDate"] = 2019
+
+    with pytest.raises(ProfileError, match='quoted "YYYY" or "YYYY-MM"'):
+        load_master(_write_variant(tmp_path, unquoted))
+
+
+def test_id_with_trailing_newline_rejected(tmp_path):
+    def newline_id(data):
+        data["skills"][0]["id"] = "sk-backend\n"
+
+    with pytest.raises(ProfileError, match="skills.0.id"):
+        load_master(_write_variant(tmp_path, newline_id))

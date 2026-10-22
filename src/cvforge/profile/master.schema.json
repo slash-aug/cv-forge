@@ -107,7 +107,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^[a-z0-9][a-z0-9-]*$"
+            "pattern": "^[a-z0-9][a-z0-9-]*$(?!\n)"
           },
           "angles": {
             "type": "array",
@@ -134,7 +134,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^[a-z0-9][a-z0-9-]*$"
+            "pattern": "^[a-z0-9][a-z0-9-]*$(?!\n)"
           },
           "name": {
             "type": "string"
@@ -159,20 +159,20 @@
               "properties": {
                 "id": {
                   "type": "string",
-                  "pattern": "^[a-z0-9][a-z0-9-]*$"
+                  "pattern": "^[a-z0-9][a-z0-9-]*$(?!\n)"
                 },
                 "title": {
                   "$ref": "#/$defs/L"
                 },
                 "startDate": {
                   "type": "string",
-                  "pattern": "^\\d{4}-(0[1-9]|1[0-2])$"
+                  "pattern": "^\\d{4}-(0[1-9]|1[0-2])$(?!\\n)"
                 },
                 "endDate": {
                   "anyOf": [
                     {
                       "type": "string",
-                      "pattern": "^\\d{4}-(0[1-9]|1[0-2])$"
+                      "pattern": "^\\d{4}-(0[1-9]|1[0-2])$(?!\\n)"
                     },
                     {
                       "type": "null"
@@ -186,7 +186,7 @@
                     "properties": {
                       "id": {
                         "type": "string",
-                        "pattern": "^[a-z0-9][a-z0-9-]*$"
+                        "pattern": "^[a-z0-9][a-z0-9-]*$(?!\n)"
                       },
                       "impact": {
                         "$ref": "#/$defs/L"
@@ -246,7 +246,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^[a-z0-9][a-z0-9-]*$"
+            "pattern": "^[a-z0-9][a-z0-9-]*$(?!\n)"
           },
           "name": {
             "$ref": "#/$defs/L"
@@ -273,7 +273,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^[a-z0-9][a-z0-9-]*$"
+            "pattern": "^[a-z0-9][a-z0-9-]*$(?!\n)"
           },
           "institution": {
             "type": "string"
@@ -286,7 +286,7 @@
           },
           "endDate": {
             "type": "string",
-            "pattern": "^\\d{4}(-(0[1-9]|1[0-2]))?$"
+            "pattern": "^\\d{4}(-(0[1-9]|1[0-2]))?$(?!\\n)"
           }
         },
         "required": [
@@ -306,7 +306,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^[a-z0-9][a-z0-9-]*$"
+            "pattern": "^[a-z0-9][a-z0-9-]*$(?!\n)"
           },
           "name": {
             "type": "string"
@@ -316,7 +316,7 @@
           },
           "date": {
             "type": "string",
-            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$"
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$(?!\\n)"
           },
           "url": {
             "type": "string"
@@ -347,7 +347,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^[a-z0-9][a-z0-9-]*$"
+            "pattern": "^[a-z0-9][a-z0-9-]*$(?!\n)"
           },
           "language": {
             "$ref": "#/$defs/L"
