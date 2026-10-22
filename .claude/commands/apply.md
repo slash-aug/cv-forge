@@ -91,7 +91,8 @@ Rulings:
 - **location.allowed:** for remote jobs, who may apply: country names, regions (`Europe`, `LATAM`) or `worldwide`. Empty when the posting does not say.
 - **sponsorship:**
   - `offered`: the posting mentions relocation support or visa sponsorship. Quote it.
-  - `refused`: the posting says there is no visa sponsorship, **or** that the candidate must already have the right to work in a country, **or** must already reside in one. Write all of these as `refused` with that quote.
+  - `refused`: the posting says there is no visa sponsorship, **or** that the candidate must already have the right to work in, or reside in, a country **other than Brazil or Portugal**. Write these as `refused` with that quote.
+  - A residence or work-right requirement for **Brazil or Portugal** ("must reside in Brazil", "necessário residir no Brasil", "right to work in Portugal") is **not** `refused`: the check treats both as home countries. For a remote job put the country in `location.allowed`; for a hybrid or on-site job put it in `location.job_countries`. Leave `sponsorship.status` as `silent` unless the posting says something else about sponsorship.
   - `silent`: nothing either way.
 - **salary.contract:** `clt` or `pj` only when the posting says so (Brazilian postings); otherwise `unknown`.
 - **languages_required:** ISO code (`en`, `pt`, `es`, `de`, ...), level as written (`C1`, `fluent`, `native`) when stated.

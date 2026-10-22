@@ -70,34 +70,37 @@ def _salary(lo, hi, cur, period, contract="unknown"):
 
 
 CASES = [
-    ("remote-europe-silent", req(allowed=["Europe"]), None, "skip"),
-    ("remote-ca-pl-uk", req(allowed=["Canada", "Poland", "United Kingdom"]), None, "skip"),
-    ("5plus-17-months", req(allowed=["worldwide"], years=_years(5)), None, "skip"),
-    ("3plus-17-months-worldwide", req(allowed=["worldwide"], years=_years(3)), None, "pass"),
-    ("hybrid-lisbon", req(workplace="hybrid", countries=["PT"]), None, "pass"),
-    ("onsite-sao-paulo", req(workplace="onsite", countries=["BR"]), None, "pass"),
-    ("onsite-de-sponsor", req(workplace="onsite", countries=["DE"]), SPONSOR, "pass"),
-    ("remote-europe-sponsor", req(allowed=["Europe"]), SPONSOR, "skip"),
+    ("remote-europe-silent", req(allowed=["Europe"]), None, "skip", {"location"}),
+    ("remote-ca-pl-uk", req(allowed=["Canada", "Poland", "United Kingdom"]), None, "skip",
+     {"location"}),
+    ("5plus-17-months", req(allowed=["worldwide"], years=_years(5)), None, "skip", {"years"}),
+    ("3plus-17-months-worldwide", req(allowed=["worldwide"], years=_years(3)), None, "pass", set()),
+    ("hybrid-lisbon", req(workplace="hybrid", countries=["PT"]), None, "pass", set()),
+    ("onsite-sao-paulo", req(workplace="onsite", countries=["BR"]), None, "pass", set()),
+    ("onsite-de-sponsor", req(workplace="onsite", countries=["DE"]), SPONSOR, "pass", set()),
+    ("remote-europe-sponsor", req(allowed=["Europe"]), SPONSOR, "skip", {"location"}),
     ("hybrid-de-refused", req(workplace="hybrid", countries=["DE"], sponsorship="refused"),
-     SPONSOR, "skip"),
+     SPONSOR, "skip", {"location"}),
     ("onsite-nl-offered", req(workplace="onsite", countries=["NL"], sponsorship="offered"),
-     None, "pass"),
-    ("remote-americas", req(allowed=["Americas"]), None, "pass"),
+     None, "pass", set()),
+    ("remote-americas", req(allowed=["Americas"]), None, "pass", set()),
     # The brief's row reads "1000 USD/month, floor 3000 BRL", but at ECB rates 1000 USD is
     # about 5500 BRL, above that floor. The case keeps its intent (a salary under the floor):
     ("salary-under-floor", req(allowed=["worldwide"], salary=_salary(None, 500, "USD", "month")),
-     None, "skip"),
+     None, "skip", {"salary"}),
     ("salary-gbp-year", req(allowed=["worldwide"],
-                            salary=_salary(75000, 104000, "GBP", "year")), None, "pass"),
+                            salary=_salary(75000, 104000, "GBP", "year")), None, "pass", set()),
     ("german-required", req(allowed=["worldwide"], languages=[
-        {"lang": "de", "level": "B2", "quote": "Fluent German"}]), None, "pass"),
+        {"lang": "de", "level": "B2", "quote": "Fluent German"}]), None, "pass", set()),
 ]
 
 
-@pytest.mark.parametrize("case,requirements,company,expect", CASES, ids=[c[0] for c in CASES])
-def test_batch_verdicts(case, requirements, company, expect):
+@pytest.mark.parametrize("case,requirements,company,expect,failing", CASES,
+                         ids=[c[0] for c in CASES])
+def test_batch_verdicts(case, requirements, company, expect, failing):
     v = check(requirements, posting(), MASTER, company, RATES, TODAY, clt_factor=1.4)
     assert ("pass" if v.passed else "skip") == expect, [r.message for r in v.results]
+    assert {r.rule for r in v.results if not r.ok} == failing
     assert [r.rule for r in v.results] == ["years", "location", "salary", "languages"]
     if case == "german-required":
         assert v.warnings == ["German B2 required; you have English (C1)"]
@@ -122,10 +125,32 @@ def test_no_years_stated():
     assert v.results[0].ok and v.results[0].message == "no years stated"
 
 
-def test_refused_wins_over_brazil():
-    v = check(req(workplace="onsite", countries=["BR"], sponsorship="refused"), posting(),
-              MASTER, None, RATES, TODAY, clt_factor=1.4)
-    assert not v.passed and v.results[1].quote == "Sponsorship quote."
+def _refused(quote, **kw):
+    r = req(sponsorship="refused", **kw)
+    r["sponsorship"]["quote"] = quote
+    return r
+
+
+@pytest.mark.parametrize("quote,kw", [
+    ("Must reside in Brazil", {"allowed": ["Brazil"]}),
+    ("Must reside in Brazil", {}),
+    ("Necess\u00e1rio residir no Brasil.", {"allowed": ["Brasil"]}),
+    ("Candidates must have the right to work in Portugal.",
+     {"workplace": "hybrid", "countries": ["PT"]}),
+])
+def test_residence_in_home_country_passes(quote, kw):
+    v = check(_refused(quote, **kw), posting(), MASTER, None, RATES, TODAY, clt_factor=1.4)
+    assert v.passed, [r.message for r in v.results]
+
+
+@pytest.mark.parametrize("quote,kw", [
+    ("Candidates must have the right to work in the EU.", {"allowed": ["Europe"]}),
+    ("Must have the right to work in the EU.", {"allowed": ["Brazil"]}),
+    ("We do not offer visa sponsorship.", {"workplace": "onsite", "countries": ["DE"]}),
+])
+def test_residence_elsewhere_skips(quote, kw):
+    v = check(_refused(quote, **kw), posting(), MASTER, SPONSOR, RATES, TODAY, clt_factor=1.4)
+    assert not v.passed and v.results[1].quote == quote
 
 
 def test_remote_empty_allowed_needs_sponsor_mark():

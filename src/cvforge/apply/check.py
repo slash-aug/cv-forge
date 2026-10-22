@@ -73,6 +73,14 @@ def region_class(token: str) -> str:
     return TOKEN_REGION.get(_fold(token), "other")
 
 
+HOME_WORD = re.compile(r"\b(brasil|brazil|br|portugal|pt)\b")
+
+
+def home_named(quote: str | None) -> set[str]:
+    """Brazil and Portugal as named in a quote ("must reside in Brazil" names his own country)."""
+    return {region_class(w) for w in HOME_WORD.findall(_fold(quote or ""))} & HOME
+
+
 # Rule 1: years
 
 
@@ -101,7 +109,14 @@ def _location(req: dict, company: dict | None) -> RuleResult:
         return RuleResult("location", ok, message, quote or loc.get("quote"))
 
     if sponsorship["status"] == "refused":
-        return result(False, "sponsorship or right to work refused", sponsorship.get("quote"))
+        # Rule 1 skips only a requirement for a country he is not in: a residence or work-right
+        # requirement that names Brazil or Portugal limits the job to his own country.
+        home = home_named(sponsorship.get("quote"))
+        if not home:
+            return result(False, "sponsorship or right to work refused", sponsorship.get("quote"))
+        return result(True, f"{workplace} job requiring residence or work rights in "
+                            f"{' or '.join(sorted(h.title() for h in home))}",
+                      sponsorship.get("quote"))
     if countries & HOME or (remote and allowed & HOME):
         return result(True, f"{workplace} job in Brazil or Portugal")
     if remote and allowed & OPEN:
