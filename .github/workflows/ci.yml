@@ -89,6 +89,7 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BEFORE_SHA: ${{ github.event.before }}
           AFTER_SHA: ${{ github.sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
           zero=0000000000000000000000000000000000000000
@@ -100,16 +101,16 @@ jobs:
             range="$BEFORE_SHA..$AFTER_SHA"
             commits=$(git rev-list --no-merges "$range")
           else
-            # New branch, force-push or unreachable before: check every commit
-            # not already on a remote ref, or the tip commit if that is empty.
-            range="$AFTER_SHA --not --remotes"
-            commits=$(git rev-list --no-merges "$AFTER_SHA" --not --remotes)
+            # New branch, force-push or unreachable before: check everything
+            # since the default branch, or the tip commit if that is empty.
+            range="origin/$DEFAULT_BRANCH..$AFTER_SHA"
+            commits=$(git rev-list --no-merges "$range")
             if [ -z "$commits" ]; then
               range="$AFTER_SHA^!"
               commits=$(git rev-list --no-merges "$range")
             fi
           fi
-          echo "Checking commits in $range"
+          echo "Checking $(echo "$commits" | grep -c .) commit(s) in $range"
           fail=0
           for sha in $commits; do
             git log -1 --format=%B "$sha" > "$RUNNER_TEMP/msg.txt"

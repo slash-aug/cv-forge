@@ -63,7 +63,7 @@ def untailored(master: dict, lang: str, angle: str | None = None) -> dict:
         "skills": [{"ref": s["id"], "keywords": s["keywords"]} for s in master.get("skills", [])],
         "education": [e["id"] for e in master.get("education", [])],
         "certificates": [c["id"] for c in master.get("certificates", [])],
-        "languages": [lang["id"] for lang in master.get("languages", [])],
+        "languages": [language["id"] for language in master.get("languages", [])],
     }
 
 
