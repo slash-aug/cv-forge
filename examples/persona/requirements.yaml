@@ -1,0 +1,22 @@
+years:
+  - min: 3
+    kind: required
+    quote: 3+ years of professional experience with Python and TypeScript.
+location:
+  workplace: remote
+  job_countries: []
+  allowed: [worldwide]
+  quote: This role is fully remote and open to candidates worldwide.
+sponsorship:
+  status: silent
+salary:
+  min: 55000
+  max: 65000
+  currency: EUR
+  period: year
+  contract: unknown
+  quote: We pay 55000 to 65000 EUR per year.
+languages_required:
+  - lang: English
+    level: fluent
+    quote: Fluent English.

@@ -1,0 +1,18 @@
+Senior Full-stack Engineer at Example Corp
+
+Example Corp builds invoicing tools for small teams. This is a fictional posting used by the cv-forge example persona.
+
+About the role
+You will build and ship product features end to end with a small team.
+
+Requirements
+- 3+ years of professional experience with Python and TypeScript.
+- Fluent English.
+
+Location
+This role is fully remote and open to candidates worldwide.
+
+Compensation
+We pay 55000 to 65000 EUR per year.
+
+Apply at https://jobs.example.com/senior-full-stack
