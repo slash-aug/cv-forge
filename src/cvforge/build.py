@@ -1,7 +1,10 @@
 """Compile LaTeX sources, natively or through a Windows engine from WSL."""
 from __future__ import annotations
 
+import os
+import re
 import shutil
+import signal
 import subprocess
 from pathlib import Path
 
@@ -34,8 +37,10 @@ def compile_tex(
     """Compile tex_source in a fresh build_dir/jobname and return the PDF path."""
     if not engine:
         raise LatexError("no LaTeX engine configured")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", jobname) or ".." in jobname:
+        raise LatexError(f"unsafe jobname: {jobname!r}")
     build_dir = Path(build_dir)
-    if engine.endswith(".exe"):
+    if engine.lower().endswith(".exe"):
         try:
             build_dir.resolve().relative_to("/mnt")
         except ValueError:
@@ -44,6 +49,8 @@ def compile_tex(
             ) from None
 
     job_dir = build_dir / jobname
+    if job_dir.resolve().parent != build_dir.resolve():
+        raise LatexError(f"jobname escapes build dir: {jobname!r}")
     shutil.rmtree(job_dir, ignore_errors=True)
     job_dir.mkdir(parents=True)
     if assets is not None:
@@ -52,17 +59,28 @@ def compile_tex(
 
     cmd = [engine, "-interaction=nonstopmode", "-halt-on-error", f"{jobname}.tex"]
     try:
-        proc = subprocess.run(cmd, cwd=job_dir, capture_output=True, timeout=timeout)
+        proc = subprocess.Popen(
+            cmd, cwd=job_dir, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT, start_new_session=True,
+        )
     except FileNotFoundError:
         raise LatexError(f"LaTeX engine not found: {engine}") from None
+    try:
+        stdout, _ = proc.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
+        # Kill the whole group; Windows grandchildren started via interop may survive.
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        proc.communicate()
         raise LatexError(
             f"LaTeX timed out after {timeout}s\n{_log_tail(job_dir, jobname)}"
         ) from None
 
     pdf = job_dir / f"{jobname}.pdf"
     if proc.returncode != 0 or not pdf.exists():
-        out = proc.stdout.decode("utf-8", errors="replace")
+        out = stdout.decode("utf-8", errors="replace")
         raise LatexError(
             f"LaTeX failed (exit {proc.returncode})\n{_log_tail(job_dir, jobname, out)}"
         )

@@ -87,3 +87,31 @@ def test_special_chars_round_trip(cfg):
     pdf = compile_tex(render_cv(tailored, M), engine=_need(cfg, "lualatex"),
                       build_dir=cfg.build_dir / "test", jobname="special")
     assert text in _text(pdf)
+
+
+@pytest.mark.parametrize("jobname", ["", ".", "..", "../x", "a/b", "ABS", ".hidden", "a..b"])
+def test_unsafe_jobname_rejected_before_touching_fs(tmp_path, jobname):
+    build = tmp_path / "build"
+    build.mkdir()
+    sentinel = tmp_path / "sentinel.txt"
+    sentinel.write_text("keep")
+    inner = build / "inner.txt"
+    inner.write_text("keep")
+    if jobname == "ABS":
+        jobname = str(tmp_path)
+    with pytest.raises(LatexError, match="jobname"):
+        compile_tex("x", engine="/bin/true", build_dir=build, jobname=jobname)
+    assert sentinel.exists() and inner.exists() and tmp_path.exists()
+
+
+def test_exe_check_is_case_insensitive(tmp_path):
+    with pytest.raises(LatexError, match="under /mnt/"):
+        compile_tex("x", engine="/mnt/d/x/LuaLaTeX.EXE", build_dir=tmp_path, jobname="t")
+
+
+def test_timeout_raises_latex_error(tmp_path):
+    stub = tmp_path / "slow.sh"
+    stub.write_text("#!/bin/sh\nsleep 30\n")
+    stub.chmod(0o755)
+    with pytest.raises(LatexError, match="timed out"):
+        compile_tex("x", engine=str(stub), build_dir=tmp_path / "b", jobname="t", timeout=1)
