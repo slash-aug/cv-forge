@@ -23,3 +23,17 @@ def test_contains_term_blank_term_never_matches():
 
 def test_contains_term_clean_text():
     assert not contains_term("a zebra project", "projectzebra")
+
+
+@pytest.mark.parametrize("text", ["AcmeCorp", "Acme Corp", "acme_corp"])
+def test_hyphenated_term_keeps_separators_significant(text):
+    assert not contains_term(f"worked at {text}", "acme-corp")
+
+
+def test_hyphenated_term_matches_literally():
+    assert contains_term("see ACME-CORP docs", "acme-corp")
+
+
+def test_trailing_separator_term_needs_the_separator():
+    assert not contains_term("Acme Payments", "ACME-")
+    assert contains_term("ticket acme-123", "ACME-")

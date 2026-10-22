@@ -326,3 +326,7 @@ def test_guard_tree_uses_denylist(tmp_path, monkeypatch):
     (repo / "n.txt").write_text("about Project-Zebra")
     _stage("n.txt")
     assert main(["guard", "tree"]) == 1
+
+
+def test_hyphenated_denylist_term_does_not_match_squashed_text():
+    assert check_content("AcmeCorp", denylist=["acme-corp"]) == []
