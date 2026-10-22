@@ -8,7 +8,13 @@ import yaml
 
 from cvforge import cli
 from cvforge.apply import http as apply_http
-from cvforge.apply.check import check, region_class
+from cvforge.apply.check import (
+    CAVEAT_TERMS,
+    caveat_sentences,
+    check,
+    region_class,
+    uncaptured_caveats,
+)
 from cvforge.apply.posting import Posting
 from cvforge.money.rates import Rates
 from cvforge.track import tracker
@@ -337,3 +343,98 @@ def test_cli_unpublished_currency_exit_0(env, capsys):
     _app(env, r)
     assert _run() == 0
     assert "warning: no exchange rate for ARS" in capsys.readouterr().out
+
+
+# Caveats
+
+def test_caveat_sentences_finds_terms_en_pt():
+    text = ("We build payments. Must reside in the EU.\nViagens ocasionais.\n"
+            "Great snacks! Is a 4 hour Time   Zone overlap needed?")
+    assert caveat_sentences(text) == [
+        "Must reside in the EU", "Viagens ocasionais", "Is a 4 hour Time   Zone overlap needed"]
+    assert caveat_sentences("Must reside in the EU. Must reside in the EU.") == [
+        "Must reside in the EU"]
+    assert "pj" in CAVEAT_TERMS and "time zone" in CAVEAT_TERMS
+
+
+def test_term_prefix_not_substring():
+    assert caveat_sentences("Contrato PJ") == ["Contrato PJ"]
+    assert caveat_sentences("We use pjax and the theory of travail") == []
+    assert caveat_sentences("Autorização de trabalho") == ["Autorização de trabalho"]
+    assert caveat_sentences("Fuso horário") == ["Fuso horário"]
+
+
+def test_uncaptured_caveat_warns():
+    text = "Must reside in the EU.\nOccasional travel."
+    r = req(allowed=["worldwide"])
+    r["location"]["quote"] = "Must reside in the EU."
+    assert uncaptured_caveats(r, text) == ["Occasional travel"]
+
+
+def test_captured_caveat_silent():
+    text = "Must reside in the EU.\nOccasional travel to Berlin."
+    r = req(allowed=["worldwide"])
+    r["location"]["quote"] = "Must   reside in the EU."
+    r["travel"] = {"requirement": "occasional", "quote": "Occasional travel to Berlin. And more"}
+    assert uncaptured_caveats(r, text) == []
+
+
+def test_hiring_model_eor_treated_as_clt_for_floor():
+    salary = _salary(None, 2000, "EUR", "month")  # 12000 BRL as PJ, 12000 x 0.5 as CLT
+    base = req(allowed=["worldwide"], salary=salary)
+    floor = {"x-preferences": {"payFloor": {"amount": 10000, "currency": "BRL",
+                                            "period": "month"}}}
+    master = {**MASTER, **floor}
+
+    def run(model):
+        r = copy.deepcopy(base)
+        if model:
+            r["hiring_model"] = {"type": model, "quote": "q"}
+        return check(r, posting(), master, None, RATES, TODAY, clt_factor=0.5)
+
+    assert run(None).passed
+    assert run("contractor").passed
+    assert not run("eor").passed
+    assert "CLT" in run("eor").results[2].message
+    r = copy.deepcopy(base)
+    r["salary"]["contract"] = "pj"
+    r["hiring_model"] = {"type": "eor", "quote": "q"}
+    assert check(r, posting(), master, None, RATES, TODAY, clt_factor=0.5).passed
+
+
+def test_timezone_and_travel_never_skip(env, capsys):
+    desc = ("Senior Engineer. 5+ years of experience required.\n"
+            "Fully remote, worldwide. We pay 9000 EUR per month.\n"
+            "Hired through an Employer of Record. 4 hours overlap with ET. Up to 10% travel.\n"
+            "You must be eligible to work here.")
+    data = _cli_req(["worldwide"])
+    data["location"]["quote"] = "Fully remote, worldwide."
+    data["hiring_model"] = {"type": "eor", "quote": "Hired through an Employer of Record."}
+    data["timezone"] = {"requirement": "4 hours overlap with ET",
+                        "quote": "4 hours overlap with ET."}
+    data["travel"] = {"requirement": "up to 10% travel", "quote": "Up to 10% travel."}
+    app = env / "applications" / "acme-senior-engineer"
+    posting(description=desc).save(app)
+    _rewrite(app, data)
+    tracker.upsert(env / "tracker.csv", {"slug": "acme-senior-engineer", "company": "Acme",
+                                         "role": "x", "date": "2026-10-21",
+                                         "status": "drafted"})
+    assert _run() == 0
+    out = capsys.readouterr().out
+    assert 'INFO hiring model: eor\n    "Hired through an Employer of Record."' in out
+    assert "INFO time zone: 4 hours overlap with ET" in out
+    assert "INFO travel: up to 10% travel" in out
+    assert 'WARN uncaptured: "You must be eligible to work here"' in out
+    assert out.index("PASS languages") < out.index("INFO hiring model")
+    assert out.rstrip().endswith("verdict: pass")
+    v = json.loads((app / "verdict.json").read_text(encoding="utf-8"))
+    assert v["caveats"]["hiring_model"]["type"] == "eor"
+    assert v["caveats"]["timezone"]["requirement"] == "4 hours overlap with ET"
+    assert v["caveats"]["travel"]["requirement"] == "up to 10% travel"
+    assert v["caveats"]["uncaptured"] == ["You must be eligible to work here"]
+
+
+def test_caveat_scan_catches_elegivel_and_residencia():
+    text = "Você é elegível para a vaga. Residência em Portugal é obrigatória."
+    assert caveat_sentences(text) == [
+        "Você é elegível para a vaga", "Residência em Portugal é obrigatória"]

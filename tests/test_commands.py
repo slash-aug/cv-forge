@@ -145,3 +145,9 @@ def test_outcome_reads_status_with_track_show():
     assert "cvforge track show <slug>" in text
     assert "cvforge track add <slug>" in text
     assert "below 60" in text
+
+
+def test_apply_documents_caveats():
+    text = _text(APPLY)
+    for needle in ("WARN uncaptured", "hiring_model", "timezone", "travel"):
+        assert needle in text
