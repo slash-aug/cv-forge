@@ -1,0 +1,42 @@
+lang: en
+angle: startup-generalist
+target:
+  company: Example Corp
+  role: Senior Full-stack Engineer
+summary:
+  ref: sum-generalist
+  text: Full-stack engineer who ships end to end in small teams.
+experience:
+  - ref: w-sampleworks
+    positions:
+      - ref: p-sampleworks-eng
+        bullets:
+          - ref: h-onboarding
+            text: Rebuilt onboarding, doubling activation among trial users.
+  - ref: w-examplepay
+    positions:
+      - ref: p-examplepay-lead
+        bullets:
+          - ref: h-team-lead
+            text: Led a team of 5 engineers through two product launches.
+          - ref: h-payments-integration
+            text: "Integração de pagamentos & reconciliação"
+      - ref: p-examplepay-dev
+        bullets:
+          - ref: h-load-time
+            text: Cut load time by 40% by reworking the checkout bundle.
+skills:
+  - ref: sk-backend
+    keywords: [Python, PostgreSQL, REST]
+  - ref: sk-frontend
+    keywords: [TypeScript, React]
+education: [ed-example-univ]
+certificates: [cert-cloud]
+languages: [lang-en, lang-pt]
+letter:
+  recipient: Hiring Team
+  opening: Dear Hiring Team,
+  paragraphs:
+    - I build and ship product features end to end, and I would like to bring that to your team.
+    - At ExamplePay I cut load time by 40% and led a team of 5 engineers.
+  closing: Kind regards, Ana Exemplo
