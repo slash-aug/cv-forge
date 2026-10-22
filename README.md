@@ -24,7 +24,7 @@ Phase 1 is the foundation: from a master profile to a checked PDF.
 - An audit step checks the tailored file against the master: every id must exist, every number in a reworded bullet must appear in its source highlight (numbers in the summary and letter must appear in the master), every skill keyword must be a keyword of that skill in the master, and confidential terms listed in the master are blocked.
 - Before anything is compiled, every rendered field, including those taken from the master (employer names, titles, institutions, contact links), is scanned for confidential terms; `build` and `master-cv` stop on a match.
 - A LaTeX renderer produces a CV and a matching cover letter, in English, Brazilian Portuguese or European Portuguese.
-- A compile step builds the PDFs, and an ATS check verifies the result: the page limit (CV at most 2 pages, letter exactly 1), a clean text layer (no unmapped glyphs or replacement characters), required text present (name, summary opening, every contact item), section headings in order, and date ranges joined by an ASCII hyphen. Layout checks fail the build on orphaned entry headers, stranded section headings, holes in a page, pages that end early and text colliding with the footer; a thin last page is reported as a note only, since a CV of one and a half pages is fine.
+- A compile step builds the PDFs, and an ATS check verifies the result: the page limit (CV at most 2 pages, letter exactly 1), a clean text layer (no unmapped glyphs or replacement characters), required text present (the CV must contain your name, the summary opening and every contact item; the letter must contain your name), section headings in order, and date ranges joined by an ASCII hyphen. Layout checks fail the build on orphaned entry headers, stranded section headings, holes in a page, pages that end early and text colliding with the footer; a thin last page is reported as a note only, since a CV of one and a half pages is fine.
 - Privacy guards run as git hooks and in CI, so personal data stays out of the repository.
 
 Commands:
@@ -114,7 +114,7 @@ LaTeX runs in `<build_dir>/.cvforge-jobs/<job>/`, which is wiped before each run
 A CV repository is easy to leak from by accident, so privacy is enforced by tooling and not by habit.
 
 - `data/` holds your real profile, tailored files and outputs. It is gitignored, and CI fails if any file under it is tracked.
-- Git hooks in `.githooks` block commits that contain private paths, terms from a personal denylist derived from your profile (matched ignoring case, width and separators), ID and phone number patterns, em dashes, or AI attribution in messages.
+- Git hooks in `.githooks` block commits that contain private paths, terms from a personal denylist derived from your profile (matched ignoring case and character width; a term without spaces or hyphens also matches when they are added, so `projectzebra` catches `Project Zebra`, while a hyphenated term like `acme-corp` matches only as written), ID and phone number patterns, em dashes, or AI attribution in messages.
 - In CI, `cvforge guard tree` runs the path and content rules on every tracked file, and `cvforge guard msg` checks every new commit message. CI has no master profile, so its denylist is empty; the other rules still apply.
 - Secret scanning runs in CI with gitleaks.
 - Everything public in this repository uses a fake persona and fake companies.
