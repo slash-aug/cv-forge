@@ -264,3 +264,24 @@ def test_compiled_cv_is_set_in_lato(cfg):
             names.add(str(font.get_object()["/BaseFont"]))
     assert any("Lato" in n for n in names), names
     assert not any("LMSans" in n or "LMRoman" in n for n in names), names
+
+
+@pytest.mark.latex
+def test_title_is_on_its_own_line_under_the_name(cfg):
+    from pypdf import PdfReader
+
+    from cvforge.build import compile_tex
+
+    if not cfg.lualatex:
+        pytest.skip("no lualatex engine")
+    pdf = compile_tex(render_cv(T, M), engine=cfg.lualatex,
+                      build_dir=cfg.build_dir / "test", jobname="cv_title", assets=ASSETS_DIR)
+    text = PdfReader(pdf).pages[0].extract_text()
+    lines = [ln.strip() for ln in text.splitlines()]
+    basics = M["basics"]
+    name = f"{basics['name'].split()[0]} {basics['name'].split()[-1]}"
+    title = basics["label"]["en"]
+    assert name in lines, lines[:6]
+    assert title in lines, lines[:6]
+    assert lines.index(title) == lines.index(name) + 1
+    assert "|" not in text
