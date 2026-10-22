@@ -57,7 +57,10 @@
       "Bash(curl -s -F:*)",
       "Bash(curl -sF:*)",
       "Bash(curl -s -X POST:*)",
-      "Bash(curl -sX POST:*)"
+      "Bash(curl -sX POST:*)",
+      "WebFetch(domain:linkedin.com)",
+      "WebFetch(domain:www.linkedin.com)",
+      "WebFetch(domain:*.linkedin.com)"
     ]
   }
 }
