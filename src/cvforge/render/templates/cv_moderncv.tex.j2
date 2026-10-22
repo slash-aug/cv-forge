@@ -1,0 +1,103 @@
+% Ported from ai-job-search (MIT): cv/main_example.tex
+% Compile with lualatex.
+
+\documentclass[11pt,a4paper,sans]{moderncv}
+\moderncvstyle{banking}
+\moderncvcolor{blue}
+% Plain-text contact labels and a real bullet glyph keep the PDF text layer clean for ATS.
+\moderncvicons{letters}
+\renewcommand{\labelitemi}{\textbullet}
+
+% Force the name and section headings to render in moderncv blue (color1).
+\renewcommand*{\namefont}{\fontsize{34}{36}\bfseries\upshape}
+\colorlet{firstnamecolor}{color1}
+\colorlet{lastnamecolor}{color1}
+\colorlet{namecolor}{color1}
+\renewcommand*{\sectionstyle}[1]{{\sectionfont\color{color1}#1}}
+
+\ifpdftex\usepackage[T1]{fontenc}\fi
+% hyperref is loaded by moderncv in \AtEndPreamble, so configure it there too.
+\AtEndPreamble{\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,
+    urlcolor=blue,
+    pdftitle={\VAR{(contact.first ~ " " ~ contact.last) | tex} - CV},
+    pdfpagemode=UseNone,
+}}
+\usepackage[scale=0.80]{geometry}
+
+\name{\VAR{contact.first | tex}}{\VAR{contact.last | tex}}
+%% if contact.title
+\title{\VAR{contact.title | tex}}
+%% endif
+%% if contact.address
+\address{\VAR{contact.address | tex}}{}{}
+%% endif
+% Contact goes through \extrainfo as plain visible text: no icons or letter labels in the text layer.
+\extrainfo{%
+%% for link in contact.links
+%% if link.href
+\href{\VAR{link.href | tex}}{\VAR{link.text | tex}}%
+%% else
+\VAR{link.text | tex}%
+%% endif
+%% if not loop.last
+\ \textbullet{}\ %
+%% endif
+%% endfor
+}
+
+\begin{document}
+
+\makecvtitle
+
+%% if summary
+\section{\VAR{headings.summary | tex}}
+\cvitem{}{\VAR{summary | tex}}
+%% endif
+
+%% if experience
+\section{\VAR{headings.experience | tex}}
+%% for job in experience
+\cventry{\VAR{job.dates | tex}}{\VAR{job.title | tex}}{\VAR{job.employer | tex}}{\VAR{job.location | tex}}{}{%
+%% if job.bullets
+\begin{itemize}
+%% for bullet in job.bullets
+\item \VAR{bullet | tex}
+%% endfor
+\end{itemize}%
+%% endif
+}
+%% endfor
+%% endif
+
+%% if skills
+\section{\VAR{headings.skills | tex}}
+%% for skill in skills
+\cvitem{\VAR{skill.name | tex}}{\VAR{skill.keywords | tex}}
+%% endfor
+%% endif
+
+%% if education
+\section{\VAR{headings.education | tex}}
+%% for ed in education
+\cventry{\VAR{ed.dates | tex}}{\VAR{ed.degree | tex}}{\VAR{ed.institution | tex}}{}{}{}
+%% endfor
+%% endif
+
+%% if certificates
+\section{\VAR{headings.certificates | tex}}
+%% for cert in certificates
+\cvitem{\VAR{cert.date | tex}}{\VAR{cert.name | tex}, \VAR{cert.issuer | tex}}
+%% endfor
+%% endif
+
+%% if languages
+\section{\VAR{headings.languages | tex}}
+%% for item in languages
+\cvitem{\VAR{item.name | tex}}{\VAR{item.detail | tex}}
+%% endfor
+%% endif
+
+\end{document}
