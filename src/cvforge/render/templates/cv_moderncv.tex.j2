@@ -34,16 +34,25 @@
 %% if contact.address
 \address{\VAR{contact.address | tex}}{}{}
 %% endif
-% Contact goes through \extrainfo as plain visible text: no icons or letter labels in the text layer.
+% Each contact item is its own header element, so moderncv wraps the line between
+% items instead of clipping it at the page edge. \extrainfo normally adds one element;
+% the patch lets it add several. Plain visible text: no icons or labels in the text layer.
+\usepackage{etoolbox}
+\makeatletter
+\patchcmd{\makehead}{\addtomakeheaddetails{\@extrainfo}}{\@extrainfo}{}%
+  {\PackageError{cvforge}{cannot patch moderncv \string\makehead\space for the contact line}{}}
+% Keep-with-next, as in the needspace package: break the page before an entry unless
+% #1 of space is left, so a header never ends a page apart from its first bullets.
+\newcommand*{\keepnext}[1]{\par\begingroup\setlength{\dimen@}{#1}%
+  \vskip\z@\@plus\dimen@\penalty-100\vskip\z@\@plus-\dimen@
+  \vskip\dimen@\penalty9999\vskip-\dimen@\vskip\z@skip\endgroup}
+\makeatother
 \extrainfo{%
 %% for link in contact.links
 %% if link.href
-\href{\VAR{link.href | url}}{\VAR{link.text | tex}}%
+\addtomakeheaddetails{\href{\VAR{link.href | url}}{\VAR{link.text | tex}}}%
 %% else
-\VAR{link.text | tex}%
-%% endif
-%% if not loop.last
-\ \textbullet{}\ %
+\addtomakeheaddetails{\VAR{link.text | tex}}%
 %% endif
 %% endfor
 }
@@ -60,6 +69,7 @@
 %% if experience
 \section{\VAR{headings.experience | tex}}
 %% for job in experience
+\keepnext{5\baselineskip}
 \cventry{\VAR{job.dates | tex}}{\VAR{job.title | tex}}{\VAR{job.employer | tex}}{\VAR{job.location | tex}}{}{%
 %% if job.bullets
 \begin{itemize}
@@ -82,6 +92,7 @@
 %% if education
 \section{\VAR{headings.education | tex}}
 %% for ed in education
+\keepnext{3\baselineskip}
 \cventry{\VAR{ed.dates | tex}}{\VAR{ed.degree | tex}}{\VAR{ed.institution | tex}}{}{}{}
 %% endfor
 %% endif

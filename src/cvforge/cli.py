@@ -71,6 +71,12 @@ def _headings(view: dict) -> list[str]:
     return [view["headings"][s] for s in SECTIONS if view.get(s)]
 
 
+def _cv_required(view: dict, name: str) -> list[str]:
+    """Text the CV text layer must contain: the name, the summary opening, every contact item."""
+    summary = [view["summary"][:40]] if view["summary"] else []
+    return [name, *summary, *(link["text"] for link in view["contact"]["links"])]
+
+
 def _engine(cfg: Config, name: str) -> str:
     engine = getattr(cfg, name)
     if not engine:
@@ -137,8 +143,8 @@ def cmd_build(args) -> int:
 
     cv_pdf = compile_tex(render_view(view), engine=_engine(cfg, "lualatex"),
                          build_dir=cfg.build_dir, jobname="cv", assets=ASSETS_DIR)
-    required = [name] + ([view["summary"][:40]] if view["summary"] else [])
-    cv_report = ats_check(cv_pdf, max_pages=2, required=required, headings=_headings(view))
+    cv_report = ats_check(cv_pdf, max_pages=2, required=_cv_required(view, name),
+                          headings=_headings(view))
     dest = _publish(cv_pdf, out, f"{first}_{last}_CV_{company}.pdf")
     print(f"CV: {dest}")
     _report("CV", cv_report)
@@ -166,8 +172,8 @@ def cmd_master_cv(args) -> int:
     out = Path(args.out) if args.out else cfg.data_dir / "review"
     pdf = compile_tex(render_view(view), engine=_engine(cfg, "lualatex"),
                       build_dir=cfg.build_dir, jobname="cv", assets=ASSETS_DIR)
-    report = ats_check(pdf, max_pages=LARGE_PAGE_CAP, required=[master["basics"]["name"]],
-                       headings=_headings(view))
+    report = ats_check(pdf, max_pages=LARGE_PAGE_CAP,
+                       required=_cv_required(view, master["basics"]["name"]), headings=_headings(view))
     dest = _publish(pdf, out, f"{first}_{last}_CV_master_{args.lang}.pdf")
     print(f"Master CV: {dest}")
     _report("Master CV (informational)", report)

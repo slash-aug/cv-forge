@@ -96,3 +96,36 @@ def test_build_scans_letter_context(tmp_path, capsys):
     master.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
     assert main(["build", T, "--master", str(master), "--out", str(tmp_path / "o")]) == 1
     assert "confidential letter.name" in capsys.readouterr().out
+
+
+def _capture_required(monkeypatch, tmp_path):
+    from cvforge import cli
+    from cvforge.checks.ats import AtsReport
+
+    seen = []
+    monkeypatch.setattr(cli, "load_config", lambda: cli.Config(tmp_path, tmp_path, "lua", "xe"))
+    monkeypatch.setattr(cli, "compile_tex", lambda *a, **k: tmp_path / "x.pdf")
+    monkeypatch.setattr(cli, "_publish", lambda pdf, out, name: out / name)
+
+    def fake_check(pdf, **kwargs):
+        seen.append(kwargs.get("required", []))
+        return AtsReport(True, [], "", 1, "stub")
+
+    monkeypatch.setattr(cli, "ats_check", fake_check)
+    return seen
+
+
+CONTACT_TEXTS = ["+351 900 000 000", "ana.exemplo@example.com",
+                 "github.com/ana-exemplo", "linkedin.com/in/ana-exemplo"]
+
+
+def test_build_requires_every_contact_item(monkeypatch, tmp_path):
+    seen = _capture_required(monkeypatch, tmp_path)
+    assert main(["build", T, "--master", P, "--out", str(tmp_path), "--no-letter"]) == 0
+    assert set(CONTACT_TEXTS) <= set(seen[0])
+
+
+def test_master_cv_requires_every_contact_item(monkeypatch, tmp_path):
+    seen = _capture_required(monkeypatch, tmp_path)
+    assert main(["master-cv", P, "--lang", "en", "--out", str(tmp_path)]) == 0
+    assert set(CONTACT_TEXTS) <= set(seen[0])
