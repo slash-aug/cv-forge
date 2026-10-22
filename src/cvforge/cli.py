@@ -1,13 +1,16 @@
-"""Command line interface: validate, audit, build, master-cv."""
+"""Command line interface: validate, audit, build, master-cv, intake, check, track."""
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import sys
+from dataclasses import asdict
 from datetime import date
 from pathlib import Path
 
 from cvforge.apply import http as apply_http
+from cvforge.apply.check import Verdict, check
 from cvforge.apply.companies import (
     add_company,
     add_sponsor,
@@ -20,12 +23,14 @@ from cvforge.apply.intake import (
     posting_from_text,
     resolve_shortlink,
 )
-from cvforge.apply.posting import canonical_url
+from cvforge.apply.posting import Posting, canonical_url
+from cvforge.apply.requirements import load_requirements, posting_text, quote_problems
 from cvforge.apply.workspace import create_app_dir
 from cvforge.build import LatexError, compile_tex
 from cvforge.checks.ats import AtsReport, ats_check
 from cvforge.config import Config, load_config
 from cvforge.guard import GuardError, check_message_file, check_staged, check_tree
+from cvforge.money.rates import MoneyError, load_rates
 from cvforge.profile.model import ProfileError, load_master, localized
 from cvforge.render.cv import build_cv_view, render_view
 from cvforge.render.letter import ASSETS_DIR, letter_context, render_letter_context
@@ -326,6 +331,85 @@ def cmd_due(args) -> int:
     return 1 if report.errors else 0
 
 
+def _write_verdict(app_dir: Path, today: date, verdict: str, *, results: Verdict | None = None,
+                   problems=(), override: str | None = None) -> None:
+    data = {"verdict": verdict, "checked": today.isoformat(), "override": override,
+            "problems": list(problems), "results": [], "warnings": []}
+    if results is not None:
+        data["results"] = [asdict(r) for r in results.results]
+        data["warnings"] = results.warnings
+    (app_dir / "verdict.json").write_text(
+        json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def _salary_stated(req: dict) -> bool:
+    salary = req.get("salary") or {}
+    return salary.get("max") is not None or salary.get("min") is not None
+
+
+def cmd_check(args) -> int:
+    cfg = load_config()
+    app_dir = cfg.data_dir / "applications" / args.slug
+    if not (app_dir / "posting.json").exists():
+        print(f"unknown slug '{args.slug}'", file=sys.stderr)
+        return 1
+    today = _today()
+    posting = Posting.load(app_dir)
+    try:
+        req = load_requirements(app_dir / "requirements.yaml")
+    except ProfileError as exc:
+        print(str(exc))
+        _write_verdict(app_dir, today, "invalid", problems=[str(exc)])
+        return 1
+    problems = quote_problems(req, posting_text(posting))
+    if problems:
+        for problem in problems:
+            print(problem)
+        _write_verdict(app_dir, today, "invalid", problems=problems)
+        return 1
+    master = load_master(Path(args.master) if args.master
+                         else cfg.data_dir / "profile" / "master.yaml")
+    company = find_company(load_registry(cfg.data_dir / "companies.yaml"), posting.company)
+    try:
+        rates = (load_rates(cfg.data_dir / "salary", today, apply_http.get)
+                 if _salary_stated(req) else None)
+        verdict = check(req, posting, master, company, rates, today, clt_factor=cfg.clt_factor)
+    except MoneyError as exc:
+        print(str(exc), file=sys.stderr)
+        _write_verdict(app_dir, today, "invalid", problems=[str(exc)])
+        return 1
+    for r in verdict.results:
+        print(f"{'PASS' if r.ok else 'SKIP'} {r.rule}: {r.message}")
+        if r.quote:
+            print(f'    "{r.quote}"')
+    for warning in verdict.warnings:
+        print(f"warning: {warning}")
+    path = cfg.data_dir / "tracker.csv"
+    if verdict.passed:
+        _write_verdict(app_dir, today, "pass", results=verdict)
+        print("verdict: pass")
+        return 0
+    if args.override:
+        _write_verdict(app_dir, today, "pass", results=verdict, override=args.override)
+        current = next((r["status"] for r in tracker.load(path) if r["slug"] == args.slug), "")
+        status = "drafted" if current in ("", "skipped") else current
+        _track(path, args.slug, status, today, note=f"override: {args.override}")
+        print(f"verdict: pass (override: {args.override})")
+        return 0
+    _write_verdict(app_dir, today, "skip", results=verdict)
+    reason = "; ".join(f"{r.rule}: {r.message}" for r in verdict.results if not r.ok)
+    _track(path, args.slug, "skipped", today, skip_reason=reason)
+    print("verdict: skip")
+    return 2
+
+
+def _track(path: Path, slug_: str, status: str, today: date, **kw) -> None:
+    try:
+        tracker.set_status(path, slug_, status, today, **kw)
+    except KeyError as exc:
+        print(f"warning: {exc.args[0]}; tracker not updated", file=sys.stderr)
+
+
 def _format_company(entry: dict) -> str:
     lines = [f"name: {entry['name']}"]
     lines.append("aliases: " + (", ".join(entry["aliases"]) or "-"))
@@ -434,6 +518,11 @@ def _parser() -> argparse.ArgumentParser:
     c = company.add_parser("show", help="show a company")
     c.add_argument("name")
     p.set_defaults(func=cmd_company)
+    p = sub.add_parser("check", help="eligibility check of a posting against requirements.yaml")
+    p.add_argument("slug")
+    p.add_argument("--master", help="master profile (default: <data_dir>/profile/master.yaml)")
+    p.add_argument("--override", metavar="REASON", help="continue past a skip and record why")
+    p.set_defaults(func=cmd_check)
     p = sub.add_parser("due", help="stages, follow-ups and stale applications")
     p.set_defaults(func=cmd_due)
     return parser

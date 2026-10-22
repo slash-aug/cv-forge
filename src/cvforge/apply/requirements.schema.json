@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "requirements.yaml: eligibility facts quoted from a job posting",
+  "type": "object",
+  "properties": {
+    "years": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "min": {"type": "number", "minimum": 0},
+          "kind": {"enum": ["required", "preferred"]},
+          "quote": {"type": "string", "minLength": 1}
+        },
+        "required": ["min", "kind", "quote"],
+        "additionalProperties": false
+      }
+    },
+    "location": {
+      "type": "object",
+      "properties": {
+        "workplace": {"enum": ["remote", "hybrid", "onsite"]},
+        "job_countries": {"type": "array", "items": {"type": "string"}},
+        "allowed": {"type": "array", "items": {"type": "string"}},
+        "quote": {"type": ["string", "null"]}
+      },
+      "required": ["workplace", "job_countries", "allowed"],
+      "additionalProperties": false
+    },
+    "sponsorship": {
+      "type": "object",
+      "properties": {
+        "status": {"enum": ["offered", "refused", "silent"]},
+        "quote": {"type": ["string", "null"]}
+      },
+      "required": ["status"],
+      "additionalProperties": false
+    },
+    "salary": {
+      "type": ["object", "null"],
+      "properties": {
+        "min": {"type": ["number", "null"], "minimum": 0},
+        "max": {"type": ["number", "null"], "minimum": 0},
+        "currency": {"type": ["string", "null"], "pattern": "^[A-Za-z]{3}$"},
+        "period": {"enum": ["hour", "month", "year", null]},
+        "contract": {"enum": ["clt", "pj", "unknown"]},
+        "quote": {"type": ["string", "null"]}
+      },
+      "additionalProperties": false
+    },
+    "languages_required": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "lang": {"type": "string", "minLength": 1},
+          "level": {"type": "string"},
+          "quote": {"type": "string", "minLength": 1}
+        },
+        "required": ["lang", "quote"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["years", "location", "sponsorship"],
+  "additionalProperties": false
+}
