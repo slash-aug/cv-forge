@@ -1,0 +1,149 @@
+basics:
+  name: Ana Exemplo
+  label:
+    en: Full-stack engineer
+    pt-BR: Engenheira full-stack
+    pt-PT: Engenheira full-stack
+  email: ana.exemplo@example.com
+  phone: "+351 900 000 000"
+  location:
+    city: Lisbon
+    countryCode: PT
+  profiles:
+    - network: GitHub
+      url: https://github.com/ana-exemplo
+    - network: LinkedIn
+      url: https://www.linkedin.com/in/ana-exemplo
+
+x-summaries:
+  - id: sum-generalist
+    angles: [startup-generalist, product-business]
+    text:
+      en: Full-stack engineer who ships end to end in small teams.
+      pt-BR: Engenheira full-stack que entrega de ponta a ponta em times pequenos.
+      pt-PT: Engenheira full-stack que entrega de ponta a ponta em equipas pequenas.
+  - id: sum-payments
+    angles: [payments-fintech, team-lead]
+    text: Engineer focused on payments, reconciliation and leading small teams.
+
+work:
+  - id: w-examplepay
+    name: ExamplePay
+    location: Lisbon, Portugal
+    x-mode: hybrid
+    positions:
+      - id: p-examplepay-lead
+        title:
+          en: Tech Lead
+          pt-BR: Tech Lead
+          pt-PT: Tech Lead
+        startDate: "2022-03"
+        endDate: "2024-05"
+        highlights:
+          - id: h-payments-integration
+            impact: "Integração de pagamentos & reconciliação"
+            technical: Built payment provider adapters with idempotent webhooks.
+            explain: Payment integration and reconciliation work.
+            angles: [payments-fintech]
+            evidence: ["https://example.com/case-study"]
+          - id: h-team-lead
+            impact: Led a team of 5 engineers through two product launches.
+            angles: [team-lead, startup-generalist]
+          - id: h-mentoring
+            impact: Mentored 3 junior engineers into mid-level roles.
+            angles: [team-lead]
+      - id: p-examplepay-dev
+        title: Software Engineer
+        startDate: "2020-01"
+        endDate: "2022-02"
+        highlights:
+          - id: h-load-time
+            impact: Cut load time by 40% by reworking the checkout bundle.
+            technical: Split bundles and cached API responses at the edge.
+            angles: [startup-generalist, product-business]
+          - id: h-ledger
+            impact: Replaced a manual ledger export with an automated nightly job.
+            angles: [payments-fintech]
+  - id: w-sampleworks
+    name: SampleWorks
+    location: Remote
+    x-mode: remote
+    x-international: true
+    positions:
+      - id: p-sampleworks-eng
+        title: Senior Engineer
+        startDate: "2024-06"
+        endDate: null
+        highlights:
+          - id: h-roadmap
+            impact: Shaped the product roadmap with customer interviews and usage data.
+            angles: [product-business]
+          - id: h-onboarding
+            impact:
+              en: Rebuilt onboarding, doubling activation among trial users.
+              pt-BR: Reconstruiu o onboarding, dobrando a ativação de usuários em teste.
+            angles: [startup-generalist, product-business]
+
+skills:
+  - id: sk-backend
+    name:
+      en: Backend
+      pt-BR: Back-end
+      pt-PT: Back-end
+    keywords: [Python, PostgreSQL, REST]
+  - id: sk-frontend
+    name: Frontend
+    keywords: [TypeScript, React]
+  - id: sk-practices
+    name: Practices
+    keywords: [Testing, Code review, CI/CD]
+
+education:
+  - id: ed-example-univ
+    institution: Universidade Exemplo
+    studyType:
+      en: BSc
+      pt-BR: Bacharelado
+      pt-PT: Licenciatura
+    area: Computer Science
+    endDate: "2019"
+
+certificates:
+  - id: cert-cloud
+    name: Example Cloud Practitioner
+    issuer: Example Cloud
+    date: "2023-04"
+    url: https://example.com/certs/cloud
+  - id: cert-agile
+    name: Example Agile Foundations
+    issuer: Example Institute
+    date: "2021-09"
+    locales: [en]
+
+languages:
+  - id: lang-pt
+    language:
+      en: Portuguese
+      pt-BR: Português
+      pt-PT: Português
+    fluency: Native
+  - id: lang-en
+    language: English
+    cefr: C1
+    fluency: Fluent
+    x-subscores:
+      reading: C2
+      speaking: C1
+
+x-preferences:
+  markets: [PT, EU]
+  payFloor:
+    amount: 3000
+    currency: EUR
+    period: month
+  relocation: false
+  visa:
+    EU: not needed
+  noticePeriod: 30 days
+
+x-confidential: ["projectzebra"]

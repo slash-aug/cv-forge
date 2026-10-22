@@ -1,0 +1,442 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "cv-forge master profile",
+  "$defs": {
+    "angle": {
+      "enum": [
+        "startup-generalist",
+        "payments-fintech",
+        "team-lead",
+        "product-business"
+      ]
+    },
+    "L": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "en": {
+              "type": "string"
+            },
+            "pt-BR": {
+              "type": "string"
+            },
+            "pt-PT": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "minProperties": 1
+        }
+      ]
+    }
+  },
+  "type": "object",
+  "properties": {
+    "basics": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "label": {
+          "$ref": "#/$defs/L"
+        },
+        "email": {
+          "type": "string"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "location": {
+          "type": "object",
+          "properties": {
+            "city": {
+              "type": "string"
+            },
+            "region": {
+              "type": "string"
+            },
+            "countryCode": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "city",
+            "countryCode"
+          ],
+          "additionalProperties": false
+        },
+        "profiles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "network": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "network",
+              "url"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "name",
+        "label",
+        "email",
+        "phone",
+        "location",
+        "profiles"
+      ],
+      "additionalProperties": false
+    },
+    "x-summaries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$(?!\n)"
+          },
+          "angles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/angle"
+            }
+          },
+          "text": {
+            "$ref": "#/$defs/L"
+          }
+        },
+        "required": [
+          "id",
+          "angles",
+          "text"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "work": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$(?!\n)"
+          },
+          "name": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "x-mode": {
+            "enum": [
+              "remote",
+              "onsite",
+              "hybrid"
+            ]
+          },
+          "x-international": {
+            "type": "boolean"
+          },
+          "positions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9][a-z0-9-]*$(?!\n)"
+                },
+                "title": {
+                  "$ref": "#/$defs/L"
+                },
+                "startDate": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-(0[1-9]|1[0-2])$(?!\\n)"
+                },
+                "endDate": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^\\d{4}-(0[1-9]|1[0-2])$(?!\\n)"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "highlights": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[a-z0-9][a-z0-9-]*$(?!\n)"
+                      },
+                      "impact": {
+                        "$ref": "#/$defs/L"
+                      },
+                      "technical": {
+                        "$ref": "#/$defs/L"
+                      },
+                      "explain": {
+                        "type": "string"
+                      },
+                      "angles": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/$defs/angle"
+                        }
+                      },
+                      "evidence": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "impact",
+                      "angles"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "title",
+                "startDate",
+                "endDate",
+                "highlights"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "x-mode",
+          "positions"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "skills": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$(?!\n)"
+          },
+          "name": {
+            "$ref": "#/$defs/L"
+          },
+          "keywords": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "keywords"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "education": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$(?!\n)"
+          },
+          "institution": {
+            "type": "string"
+          },
+          "studyType": {
+            "$ref": "#/$defs/L"
+          },
+          "area": {
+            "$ref": "#/$defs/L"
+          },
+          "endDate": {
+            "type": "string",
+            "pattern": "^\\d{4}(-(0[1-9]|1[0-2]))?$(?!\\n)"
+          }
+        },
+        "required": [
+          "id",
+          "institution",
+          "studyType",
+          "area",
+          "endDate"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "certificates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$(?!\n)"
+          },
+          "name": {
+            "type": "string"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$(?!\\n)"
+          },
+          "url": {
+            "type": "string"
+          },
+          "file": {
+            "type": "string"
+          },
+          "locales": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "issuer",
+          "date"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "languages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$(?!\n)"
+          },
+          "language": {
+            "$ref": "#/$defs/L"
+          },
+          "cefr": {
+            "type": "string"
+          },
+          "fluency": {
+            "$ref": "#/$defs/L"
+          },
+          "x-subscores": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "language",
+          "fluency"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "x-preferences": {
+      "type": "object",
+      "properties": {
+        "markets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "payFloor": {
+          "type": "object",
+          "properties": {
+            "amount": {
+              "type": "number"
+            },
+            "currency": {
+              "type": "string"
+            },
+            "period": {
+              "enum": [
+                "month",
+                "year"
+              ]
+            }
+          },
+          "required": [
+            "amount",
+            "currency",
+            "period"
+          ],
+          "additionalProperties": false
+        },
+        "relocation": {
+          "type": "boolean"
+        },
+        "visa": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "noticePeriod": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "markets",
+        "payFloor",
+        "relocation",
+        "visa"
+      ],
+      "additionalProperties": false
+    },
+    "x-confidential": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "basics",
+    "work",
+    "skills"
+  ],
+  "additionalProperties": false
+}
