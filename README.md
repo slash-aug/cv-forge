@@ -46,9 +46,9 @@ cvforge guard staged | tree | msg <file>       privacy checks used by the hooks 
 | Phase | Scope | Status |
 | --- | --- | --- |
 | 1 | Master profile, tailoring, audit, LaTeX CV and letter, ATS check, privacy guards, CI | Done |
-| 2 | Job discovery from public sources, with a ghost-job filter to drop stale or fake postings | Planned |
-| 3 | Salary estimates and drafted answers for common screening questions | Planned |
-| 4 | Application kit per posting and a tracker for where each application stands | Planned |
+| 2 | Apply flow: paste a job link or text to get a tailored, audited CV and letter, a salary suggestion, drafted screening answers, a copy-paste application kit and a tracker entry | Planned |
+| 3 | Job discovery from public sources, with hard filters and a ghost-job score to drop stale or fake postings | Planned |
+| 4 | Feedback loop: email sync for replies, an application report and follow-up reminders | Planned |
 | 5 | A clean local web UI to track every application and run cv-forge without the command line | Planned |
 
 ## Quick start
