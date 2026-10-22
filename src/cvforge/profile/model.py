@@ -13,8 +13,8 @@ class ProfileError(ValueError):
     pass
 
 
-def _schema() -> dict:
-    text = resources.files("cvforge.profile").joinpath(SCHEMA_FILE).read_text(encoding="utf-8")
+def load_schema(package: str = "cvforge.profile", filename: str = SCHEMA_FILE) -> dict:
+    text = resources.files(package).joinpath(filename).read_text(encoding="utf-8")
     return json.loads(text)
 
 
@@ -63,10 +63,18 @@ def _describe(error) -> str:
     return f"{_format_path(error.absolute_path)}: {message}{_date_hint(error)}"
 
 
-def _schema_problems(master: dict) -> list[str]:
-    validator = Draft202012Validator(_schema())
-    errors = sorted(validator.iter_errors(master), key=lambda e: [str(p) for p in e.absolute_path])
+def schema_problems(data, schema: dict) -> list[str]:
+    """Readable, path-prefixed schema violations, sorted by path (shared with the tailored loader)."""
+    validator = Draft202012Validator(schema)
+    errors = sorted(validator.iter_errors(data), key=lambda e: [str(p) for p in e.absolute_path])
     return [_describe(e) for e in errors]
+
+
+def read_yaml(path: Path, what: str):
+    try:
+        return yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+    except (yaml.YAMLError, OSError) as e:
+        raise ProfileError(f"{path}: cannot read {what}: {e}") from e
 
 
 def _iter_items(master: dict):
@@ -95,11 +103,8 @@ def _duplicate_id_problems(master: dict) -> list[str]:
 
 
 def load_master(path: Path) -> dict:
-    try:
-        master = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
-    except (yaml.YAMLError, OSError) as e:
-        raise ProfileError(f"{path}: cannot read master profile: {e}") from e
-    problems = _schema_problems(master)
+    master = read_yaml(path, "master profile")
+    problems = schema_problems(master, load_schema())
     if not problems:
         problems = _duplicate_id_problems(master)
     if problems:
