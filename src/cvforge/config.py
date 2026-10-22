@@ -23,6 +23,7 @@ class Config:
     build_dir: Path
     lualatex: str
     xelatex: str
+    daily_cap: int = 10
 
 
 def _engine(name: str) -> str:
@@ -54,4 +55,5 @@ def load_config(env: Mapping[str, str] | None = None, file: Path | None = None) 
         build_dir=Path(pick("build_dir") or default_build),
         lualatex=pick("lualatex") or _engine("lualatex"),
         xelatex=pick("xelatex") or _engine("xelatex"),
+        daily_cap=int(pick("daily_cap") or 10),
     )
