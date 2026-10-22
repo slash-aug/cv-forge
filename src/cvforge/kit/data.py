@@ -3,8 +3,9 @@ from __future__ import annotations
 
 import re
 
-from cvforge.profile.model import index
+from cvforge.profile.model import index, localized
 from cvforge.render.cv import build_cv_view
+from cvforge.text import split_name
 
 SCHEMA_VERSION = 1
 LIMITS = (200, 500, 1000, 2000)
@@ -64,7 +65,7 @@ def _fields(master: dict) -> list[dict]:
     basics = master["basics"]
     location = basics.get("location") or {}
     prefs = master.get("x-preferences") or {}
-    first, _, last = basics["name"].strip().partition(" ")
+    first, last = split_name(basics["name"])
     visa = prefs.get("visa")
     if isinstance(visa, dict):
         visa = "; ".join(f"{k}: {v}" for k, v in visa.items())
@@ -91,26 +92,25 @@ def _fields(master: dict) -> list[dict]:
 
 
 def _work(master: dict, tailored: dict) -> list[dict]:
+    """One entry per selected position, in CV order (employers as selected, newest role first)."""
     ids = index(master)
     lang = tailored["lang"]
     jobs = []
-    for n, entry in enumerate(tailored.get("experience", [])):
+    for entry in tailored.get("experience", []):
         employer = ids[entry["ref"]][1]
-        positions = [(ids[p["ref"]][1], p) for p in entry["positions"]]
-        positions.sort(key=lambda pair: pair[0]["startDate"], reverse=True)
-        latest = positions[0][0]
-        name = employer["name"]
-        name = name if isinstance(name, str) else name.get(lang) or next(iter(name.values()))
-        title = latest["title"]
-        title = title if isinstance(title, str) else title.get(lang) or next(iter(title.values()))
-        ends = [p["endDate"] for p, _ in positions]
-        text = "\n".join(f"- {b['text']}" for _, ref in positions for b in ref["bullets"])
-        jobs.append({
-            "key": f"work.{n}", "title": title, "company": name,
-            "start": min(p["startDate"] for p, _ in positions),
-            "end": None if any(e is None for e in ends) else max(ends),
-            "description": {str(limit): cut(text, limit) for limit in LIMITS},
-        })
+        company = localized(employer["name"], lang, item_id=employer["id"])
+        rows = sorted(((ids[p["ref"]][1], p) for p in entry["positions"]),
+                      key=lambda pair: pair[0]["startDate"], reverse=True)
+        for position, ref in rows:
+            text = "\n".join(f"- {b['text']}" for b in ref["bullets"])
+            jobs.append({
+                "key": f"work.{len(jobs)}",
+                "title": localized(position["title"], lang, item_id=position["id"]),
+                "company": company,
+                "start": position["startDate"],
+                "end": position.get("endDate"),
+                "description": {str(limit): cut(text, limit) for limit in LIMITS},
+            })
     return jobs
 
 

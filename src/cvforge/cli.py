@@ -45,7 +45,7 @@ from cvforge.render.letter import ASSETS_DIR, letter_context, render_letter_cont
 from cvforge.salary.market import load_market, match_market
 from cvforge.salary.suggest import Suggestion, below_floor, displays, suggest
 from cvforge.tailor.audit import Finding, audit, audit_rendered, load_tailored
-from cvforge.text import file_part, slug
+from cvforge.text import file_part, slug, split_name
 from cvforge.track import stages as stages_mod
 from cvforge.track import tracker
 from cvforge.track.due import due_report
@@ -55,7 +55,7 @@ LARGE_PAGE_CAP = 1000
 
 
 def name_parts(name: str) -> tuple[str, str]:
-    first, _, last = name.strip().partition(" ")
+    first, last = split_name(name)
     return file_part(first), file_part(last.replace(" ", "_"))
 
 
