@@ -27,7 +27,7 @@ cvforge = "cvforge.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-cvforge = ["**/*.j2", "**/*.json", "**/*.cls", "render/assets/**/*.ttf", "render/assets/**/*.otf", "render/assets/**/*.md"]
+cvforge = ["**/*.j2", "**/*.json", "**/*.cls", "render/assets/**/*.ttf", "render/assets/**/*.otf", "render/assets/**/*.md", "render/assets/**/*.txt"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

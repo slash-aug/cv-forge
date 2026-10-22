@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from cvforge.profile.model import ProfileError, load_master
-from cvforge.render.letter import ASSETS_DIR, render_letter
+from cvforge.render.letter import ASSETS_DIR, format_letter_date, render_letter
 from cvforge.tailor.audit import load_tailored
 
 PERSONA = Path(__file__).resolve().parent.parent / "examples" / "persona"
@@ -27,6 +27,8 @@ def test_letter_header_closing_and_date():
     assert "Ana Exemplo" in out
     assert r"\href{mailto:ana.exemplo@example.com}" in out
     assert "linkedin.com/in/ana-exemplo" in out
+    assert "github.com" not in out
+    assert r"\mbox{" in out
     assert "21 October 2026" in out
     assert r"\closing{Kind regards,}" in out
     assert r"\signature{Ana Exemplo}" in out
@@ -39,7 +41,7 @@ def test_letter_date_portuguese(lang):
 
 
 def test_letter_default_date_is_today():
-    assert f"{date.today().year}" in render_letter(T, M)
+    assert format_letter_date(date.today(), "en") in render_letter(T, M)
 
 
 def test_letter_has_no_danish():
@@ -61,3 +63,14 @@ def test_assets_present():
     assert (ASSETS_DIR / "cover.cls").read_text().startswith("% Ported from ai-job-search (MIT)")
     assert (ASSETS_DIR / "OpenFonts" / "fonts" / "raleway" / "Raleway-Medium.otf").exists()
     assert (ASSETS_DIR / "OpenFonts" / "fonts" / "lato" / "Lato-Lig.ttf").exists()
+
+
+def test_unknown_locale_raises():
+    with pytest.raises(ProfileError, match="fr"):
+        render_letter({**T, "lang": "fr"}, M, today=TODAY)
+
+
+@pytest.mark.parametrize("font", ["lato", "raleway"])
+def test_ofl_licence_shipped(font):
+    text = (ASSETS_DIR / "OpenFonts" / "fonts" / font / "OFL.txt").read_text()
+    assert "SIL OPEN FONT LICENSE Version 1.1" in text
