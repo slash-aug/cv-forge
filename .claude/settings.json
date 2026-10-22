@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv/bin/cvforge:*)",
+      "Bash(cvforge:*)",
+      "Bash(pdftotext:*)",
+      "Bash(pytest:*)"
+    ],
+    "ask": [
+      "Edit(.claude/settings.json)",
+      "Edit(.claude/settings.local.json)",
+      "Edit(.github/**)",
+      "Bash(git push:*)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(~/.ssh/**)",
+      "Read(~/.aws/**)",
+      "Read(~/.gnupg/**)",
+      "Bash(curl -d:*)",
+      "Bash(curl --data:*)",
+      "Bash(curl -F:*)",
+      "Bash(curl --form:*)",
+      "Bash(curl -T:*)",
+      "Bash(curl --upload-file:*)",
+      "Bash(curl -X POST:*)",
+      "Bash(curl -X PUT:*)",
+      "Bash(curl -XPOST:*)",
+      "Bash(curl --request POST:*)",
+      "Bash(wget --post-data:*)",
+      "Bash(wget --post-file:*)",
+      "Bash(wget --method=POST:*)",
+      "Bash(scp:*)",
+      "Bash(sftp:*)",
+      "Bash(ssh:*)",
+      "Bash(nc:*)",
+      "Bash(ncat:*)",
+      "Bash(netcat:*)"
+    ]
+  }
+}
