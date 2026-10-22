@@ -39,15 +39,7 @@ cvforge guard staged | tree | msg <file>       privacy checks used by the hooks 
 
 ## Flow
 
-```mermaid
-flowchart LR
-    M[Master profile] --> T[Tailor to a job]
-    T --> A[Audit against master]
-    A --> R[Render LaTeX]
-    R --> C[Compile PDF]
-    C --> K[ATS check]
-    K --> H((You review and submit))
-```
+![Flow: master profile, tailor to a job, audit against master, render LaTeX, compile PDF, ATS check, you review and submit](docs/flow.svg)
 
 ## Roadmap
 

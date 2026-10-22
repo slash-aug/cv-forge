@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1198 100" width="1198" height="100" role="img" aria-label="Flow: Master profile, Tailor to a job, Audit against master, Render LaTeX, Compile PDF, ATS check, You review and submit">
+<style>.box{fill:#f6f8fa;stroke:#57606a;stroke-width:1.5}.last{fill:#ddf4ff;stroke:#0969da}.t{fill:#1f2328;font:600 14px -apple-system,Segoe UI,Helvetica,Arial,sans-serif}.a{stroke:#57606a;stroke-width:1.5;fill:none}.h{fill:#57606a}
+@media (prefers-color-scheme:dark){.box{fill:#161b22;stroke:#8b949e}.last{fill:#0c2d6b;stroke:#4493f8}.t{fill:#e6edf3}.a{stroke:#8b949e}.h{fill:#8b949e}}</style>
+<rect class="box" x="10" y="18" width="146" height="64" rx="8"/>
+<text class="t" x="83.0" y="55.0" text-anchor="middle">Master profile</text>
+<path class="a" d="M159 50.0H174"/><path class="h" d="M173 45.0L180 50.0L173 55.0Z"/>
+<rect class="box" x="182" y="18" width="146" height="64" rx="8"/>
+<text class="t" x="255.0" y="55.0" text-anchor="middle">Tailor to a job</text>
+<path class="a" d="M331 50.0H346"/><path class="h" d="M345 45.0L352 50.0L345 55.0Z"/>
+<rect class="box" x="354" y="18" width="146" height="64" rx="8"/>
+<text class="t" x="427.0" y="46.0" text-anchor="middle">Audit against</text>
+<text class="t" x="427.0" y="64.0" text-anchor="middle">master</text>
+<path class="a" d="M503 50.0H518"/><path class="h" d="M517 45.0L524 50.0L517 55.0Z"/>
+<rect class="box" x="526" y="18" width="146" height="64" rx="8"/>
+<text class="t" x="599.0" y="55.0" text-anchor="middle">Render LaTeX</text>
+<path class="a" d="M675 50.0H690"/><path class="h" d="M689 45.0L696 50.0L689 55.0Z"/>
+<rect class="box" x="698" y="18" width="146" height="64" rx="8"/>
+<text class="t" x="771.0" y="55.0" text-anchor="middle">Compile PDF</text>
+<path class="a" d="M847 50.0H862"/><path class="h" d="M861 45.0L868 50.0L861 55.0Z"/>
+<rect class="box" x="870" y="18" width="146" height="64" rx="8"/>
+<text class="t" x="943.0" y="55.0" text-anchor="middle">ATS check</text>
+<path class="a" d="M1019 50.0H1034"/><path class="h" d="M1033 45.0L1040 50.0L1033 55.0Z"/>
+<rect class="box last" x="1042" y="18" width="146" height="64" rx="32"/>
+<text class="t" x="1115.0" y="46.0" text-anchor="middle">You review</text>
+<text class="t" x="1115.0" y="64.0" text-anchor="middle">and submit</text>
+</svg>
