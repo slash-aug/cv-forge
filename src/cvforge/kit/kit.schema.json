@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "cv-forge application kit",
+  "type": "object",
+  "properties": {
+    "schema_version": {"const": 1},
+    "slug": {"type": "string"},
+    "lang": {"enum": ["en", "pt-BR", "pt-PT"]},
+    "company": {"type": "string"},
+    "role": {"type": "string"},
+    "links": {
+      "type": "object",
+      "properties": {
+        "apply": {"type": ["string", "null"]},
+        "posting": {"type": ["string", "null"]},
+        "cv_pdf": {"type": ["string", "null"]},
+        "letter_pdf": {"type": ["string", "null"]}
+      },
+      "required": ["apply", "posting", "cv_pdf", "letter_pdf"],
+      "additionalProperties": false
+    },
+    "fields": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "key": {"type": "string"}, "label": {"type": "string"},
+          "value": {"type": "string"}, "group": {"enum": ["personal", "links", "preferences"]}
+        },
+        "required": ["key", "label", "value", "group"],
+        "additionalProperties": false
+      }
+    },
+    "work": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "key": {"type": "string"}, "title": {"type": "string"}, "company": {"type": "string"},
+          "start": {"type": "string"}, "end": {"type": ["string", "null"]},
+          "description": {
+            "type": "object",
+            "properties": {
+              "200": {"type": "string"}, "500": {"type": "string"},
+              "1000": {"type": "string"}, "2000": {"type": "string"}
+            },
+            "required": ["200", "500", "1000", "2000"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["key", "title", "company", "start", "end", "description"],
+        "additionalProperties": false
+      }
+    },
+    "education": {"type": "array", "items": {"type": "object", "required": ["key"]}},
+    "languages": {"type": "array", "items": {"type": "object", "required": ["key"]}},
+    "certificates": {"type": "array", "items": {"type": "object", "required": ["key"]}},
+    "salary": {
+      "type": ["object", "null"],
+      "properties": {
+        "confirmed": {"type": "boolean"}, "text": {"type": "string"},
+        "sources": {"type": "array", "items": {"type": "string"}}
+      },
+      "required": ["confirmed", "text", "sources"],
+      "additionalProperties": false
+    },
+    "answers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "question": {"type": "string"}, "answer": {"type": "string"},
+          "limit": {"type": ["integer", "null"]}
+        },
+        "required": ["question", "answer", "limit"],
+        "additionalProperties": false
+      }
+    },
+    "recruiter_note": {
+      "type": ["object", "null"],
+      "properties": {"connect": {"type": "string"}, "message": {"type": "string"}},
+      "required": ["connect", "message"],
+      "additionalProperties": false
+    },
+    "tracker": {"type": "array", "items": {"type": "string"}}
+  },
+  "required": ["schema_version", "slug", "lang", "company", "role", "links", "fields", "work",
+               "education", "languages", "certificates", "salary", "answers", "recruiter_note",
+               "tracker"],
+  "additionalProperties": false
+}

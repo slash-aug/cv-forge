@@ -1,0 +1,198 @@
+{% macro block(id, label, text, limit=None) %}
+<div class="item{% if limit and text|length > limit %} over{% endif %}">
+  <div class="head">
+    <span class="label">{{ label }}</span>
+    <span class="count">{{ text|length }}{% if limit %} / {{ limit }}{% endif %} chars</span>
+    <button type="button" data-copy="{{ id }}">Copy</button>
+  </div>
+  <div class="val" id="{{ id }}">{{ text }}</div>
+</div>
+{% endmacro %}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kit: {{ kit.role }} at {{ kit.company }}</title>
+<style>
+:root {
+  --bg: #f6f6f4; --card: #ffffff; --text: #1d1f21; --muted: #5d6368; --line: #dcdcd6;
+  --accent: #1f5fbf; --accent-text: #ffffff; --ok: #1a7f37; --warn: #a15c00; --warn-bg: #fff4e0;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15171a; --card: #1e2125; --text: #e6e6e3; --muted: #9aa0a6; --line: #34383d;
+    --accent: #6ea8fe; --accent-text: #0b1220; --ok: #56d364; --warn: #f0b35a; --warn-bg: #3a2c12;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text); line-height: 1.5;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+main { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 1.4rem; margin: 0 0 4px; }
+h2 { font-size: 1.1rem; margin: 40px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+h3 { font-size: 1rem; margin: 0 0 12px; }
+.sub { color: var(--muted); margin: 0 0 8px; }
+.links { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0; padding: 0; list-style: none; }
+a { color: var(--accent); }
+.item { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 0 0 10px; }
+.head { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+.label { font-weight: 600; flex: 1; min-width: 0; }
+.count { color: var(--muted); font-size: 0.8rem; white-space: nowrap; }
+.over .count { color: var(--warn); font-weight: 600; }
+.val { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.95rem; }
+button {
+  font: inherit; font-size: 0.85rem; cursor: pointer; padding: 4px 12px; border-radius: 6px;
+  border: 1px solid var(--accent); background: var(--accent); color: var(--accent-text);
+}
+button.done { background: transparent; color: var(--ok); border-color: var(--ok); }
+.job { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 12px 4px; margin: 0 0 16px; }
+.job .item { background: var(--bg); }
+.notice { background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 10px 12px; }
+.cmds { margin: 0; padding-left: 20px; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.9em; }
+@media (max-width: 480px) {
+  .head { flex-wrap: wrap; gap: 4px 12px; }
+}
+</style>
+</head>
+<body>
+<main>
+<h1>{{ kit.role }}</h1>
+<p class="sub">{{ kit.company }}</p>
+<ul class="links">
+{% if kit.links.apply %}
+  <li><a href="{{ kit.links.apply }}">Apply page</a></li>
+{% endif %}
+{% if kit.links.posting and kit.links.posting != kit.links.apply %}
+  <li><a href="{{ kit.links.posting }}">Job posting</a></li>
+{% endif %}
+{% if kit.links.cv_pdf %}
+  <li><a href="{{ kit.links.cv_pdf }}">CV (PDF)</a></li>
+{% endif %}
+{% if kit.links.letter_pdf %}
+  <li><a href="{{ kit.links.letter_pdf }}">Cover letter (PDF)</a></li>
+{% endif %}
+</ul>
+
+{% for label, fields in groups %}
+{% if fields %}
+<h2>{{ label }}</h2>
+{% for f in fields %}
+{{ block("f-" ~ f.key, f.label, f.value) }}
+{% endfor %}
+{% endif %}
+{% endfor %}
+
+{% if work %}
+<h2>Work experience</h2>
+{% for w in work %}
+{% set n = loop.index %}
+<section class="job">
+  <h3>{{ w.title }}, {{ w.company }}</h3>
+  {{ block("w" ~ n ~ "-title", "Job title", w.title) }}
+  {{ block("w" ~ n ~ "-company", "Company", w.company) }}
+  {{ block("w" ~ n ~ "-start", "Start (YYYY-MM)", w.start) }}
+  {{ block("w" ~ n ~ "-end", "End (YYYY-MM, empty if current)", w.end or "") }}
+  {% for v in w.variants %}
+  {{ block("w" ~ n ~ "-d" ~ loop.index, "Description, up to " ~ (v.limits|join(" / ")) ~ " chars", v.text, v.limits[-1]) }}
+  {% endfor %}
+</section>
+{% endfor %}
+{% endif %}
+
+{% if kit.education %}
+<h2>Education</h2>
+{% for e in kit.education %}
+{% set n = loop.index %}
+{{ block("e" ~ n ~ "-institution", "Institution", e.institution) }}
+{{ block("e" ~ n ~ "-degree", "Degree", e.degree) }}
+{% if e.dates %}
+{{ block("e" ~ n ~ "-dates", "Dates", e.dates) }}
+{% endif %}
+{% endfor %}
+{% endif %}
+
+{% if kit.languages %}
+<h2>Languages</h2>
+{% for l in kit.languages %}
+{{ block("l" ~ loop.index, l.name, l.detail or l.name) }}
+{% endfor %}
+{% endif %}
+
+{% if kit.certificates %}
+<h2>Certificates</h2>
+{% for c in kit.certificates %}
+{{ block("c" ~ loop.index, c.name, c.name ~ (", " ~ c.issuer if c.issuer else "") ~ ", " ~ c.date) }}
+{% endfor %}
+{% endif %}
+
+{% if kit.salary %}
+<h2>Expected salary</h2>
+{% if kit.salary.confirmed %}
+{{ block("salary", "Expected salary", kit.salary.text) }}
+{% for s in kit.salary.sources %}
+<p class="sub">Source: {{ s }}</p>
+{% endfor %}
+{% else %}
+<p class="notice">{{ kit.salary.text }}</p>
+{% endif %}
+{% endif %}
+
+{% if kit.answers %}
+<h2>Screening answers</h2>
+{% for a in kit.answers %}
+<p class="sub">{{ a.question }}</p>
+{{ block("a" ~ loop.index, "Answer", a.answer, a.limit) }}
+{% endfor %}
+{% endif %}
+
+{% if kit.recruiter_note %}
+<h2>Recruiter note</h2>
+{{ block("note-connect", "Connection request", kit.recruiter_note.connect) }}
+{{ block("note-message", "Message", kit.recruiter_note.message) }}
+{% endif %}
+
+<h2>After applying</h2>
+<ul class="cmds">
+{% for c in kit.tracker %}
+  <li><code>{{ c }}</code></li>
+{% endfor %}
+</ul>
+</main>
+<script>
+function fallbackCopy(text) {
+  return new Promise(function (resolve, reject) {
+    var area = document.createElement('textarea');
+    area.value = text;
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (err) { ok = false; }
+    document.body.removeChild(area);
+    if (ok) { resolve(); } else { reject(new Error('copy failed')); }
+  });
+}
+function copyText(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(text).catch(function () { return fallbackCopy(text); });
+  }
+  return fallbackCopy(text);
+}
+document.addEventListener('click', function (event) {
+  var button = event.target.closest('button[data-copy]');
+  if (!button) { return; }
+  var text = document.getElementById(button.dataset.copy).textContent;
+  copyText(text).then(function () {
+    button.textContent = 'Copied';
+    button.classList.add('done');
+    setTimeout(function () { button.textContent = 'Copy'; button.classList.remove('done'); }, 1500);
+  }, function () { button.textContent = 'Failed'; });
+});
+</script>
+</body>
+</html>
