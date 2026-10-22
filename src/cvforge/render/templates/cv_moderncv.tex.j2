@@ -16,6 +16,12 @@
 \renewcommand*{\sectionstyle}[1]{{\sectionfont\color{color1}#1}}
 
 \ifpdftex\usepackage[T1]{fontenc}\fi
+% Lato from the bundled OFL fonts (copied into the job dir); moderncv banking uses the sans family.
+\usepackage{fontspec}
+\setmainfont{Lato-Reg.ttf}[Path=OpenFonts/fonts/lato/, UprightFont=Lato-Reg.ttf, BoldFont=Lato-Bol.ttf,
+    ItalicFont=Lato-RegIta.ttf, BoldItalicFont=Lato-BolIta.ttf]
+\setsansfont{Lato-Reg.ttf}[Path=OpenFonts/fonts/lato/, UprightFont=Lato-Reg.ttf, BoldFont=Lato-Bol.ttf,
+    ItalicFont=Lato-RegIta.ttf, BoldItalicFont=Lato-BolIta.ttf]
 % hyperref is loaded by moderncv in \AtEndPreamble, so configure it there too.
 \AtEndPreamble{\hypersetup{
     colorlinks=true,
