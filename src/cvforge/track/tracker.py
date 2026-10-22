@@ -2,11 +2,10 @@
 from __future__ import annotations
 
 import csv
-import unicodedata
 from datetime import date
 from pathlib import Path
 
-from cvforge.text import fold, squash
+from cvforge.text import fold_accents, squash
 
 COLUMNS: tuple[str, ...] = (
     "date", "company", "sector", "role", "role_type", "channel", "status", "contact_person",
@@ -26,8 +25,7 @@ UNSAFE_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
 
 def _key(text: str) -> str:
     """Case, accent and separator-insensitive form for matching names."""
-    plain = unicodedata.normalize("NFKD", fold(text))
-    return squash("".join(ch for ch in plain if not unicodedata.combining(ch)))
+    return squash(fold_accents(text))
 
 
 def _today() -> date:

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "cv-forge company registry",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "name": {"type": "string", "minLength": 1},
+      "aliases": {"type": "array", "items": {"type": "string", "minLength": 1}},
+      "careers_url": {"type": ["string", "null"]},
+      "ats": {"enum": ["ashby", "greenhouse", "lever", "teamtailor", "other", null]},
+      "sponsor": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "type": {"enum": ["pt-tech-visa", "nl-ind", "uk-sponsor", "other"]},
+            "source": {"type": "string", "minLength": 1},
+            "date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"}
+          },
+          "required": ["type", "source", "date"],
+          "additionalProperties": false
+        }
+      },
+      "notes": {"type": "string"}
+    },
+    "required": ["name"],
+    "additionalProperties": false
+  }
+}

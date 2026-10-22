@@ -10,6 +10,12 @@ def fold(text: str) -> str:
     return unicodedata.normalize("NFKC", text).casefold()
 
 
+def fold_accents(text: str) -> str:
+    """Case-folded text with combining accents removed."""
+    plain = unicodedata.normalize("NFKD", fold(text))
+    return "".join(ch for ch in plain if not unicodedata.combining(ch))
+
+
 def squash(text: str) -> str:
     """Folded text without whitespace, underscores or hyphens."""
     return SEPARATORS.sub("", fold(text))

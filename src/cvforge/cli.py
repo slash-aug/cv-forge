@@ -8,6 +8,12 @@ from datetime import date
 from pathlib import Path
 
 from cvforge.apply import http as apply_http
+from cvforge.apply.companies import (
+    add_company,
+    add_sponsor,
+    find_company,
+    load_registry,
+)
 from cvforge.apply.intake import (
     IntakeError,
     fetch_posting,
@@ -320,6 +326,42 @@ def cmd_due(args) -> int:
     return 1 if report.errors else 0
 
 
+def _format_company(entry: dict) -> str:
+    lines = [f"name: {entry['name']}"]
+    lines.append("aliases: " + (", ".join(entry["aliases"]) or "-"))
+    lines.append(f"careers_url: {entry.get('careers_url') or '-'}")
+    lines.append(f"ats: {entry.get('ats') or '-'}")
+    lines.append("sponsor:" + ("" if entry["sponsor"] else " -"))
+    for s in entry["sponsor"]:
+        lines.append(f"  {s['type']} ({s['source']}, {s['date']})")
+    if entry.get("notes"):
+        lines.append(f"notes: {entry['notes']}")
+    return "\n".join(lines)
+
+
+def cmd_company(args) -> int:
+    path = load_config().data_dir / "companies.yaml"
+    try:
+        if args.action == "add":
+            entry = add_company(path, args.name, careers_url=args.careers, ats=args.ats,
+                                aliases=args.alias)
+        elif args.action == "sponsor":
+            day = date.fromisoformat(args.date) if args.date else _today()
+            entry = add_sponsor(path, args.name, type=args.type, source=args.source, day=day)
+        else:
+            entry = find_company(load_registry(path), args.name)
+            if entry is None:
+                print(f"unknown company '{args.name}'", file=sys.stderr)
+                return 1
+            print(_format_company(entry))
+            return 0
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    print(f"{args.action}: {entry['name']}")
+    return 0
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="cvforge")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -377,6 +419,21 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--channel")
     p.add_argument("--force", action="store_true", help="intake even if already tracked")
     p.set_defaults(func=cmd_intake)
+    p = sub.add_parser("company", help="company registry and visa sponsor marks")
+    company = p.add_subparsers(dest="action", required=True)
+    c = company.add_parser("add", help="add a company or fill in its details")
+    c.add_argument("name")
+    c.add_argument("--careers")
+    c.add_argument("--ats")
+    c.add_argument("--alias", action="append", default=[])
+    c = company.add_parser("sponsor", help="mark a company as a visa sponsor")
+    c.add_argument("name")
+    c.add_argument("--type", required=True)
+    c.add_argument("--source", required=True)
+    c.add_argument("--date")
+    c = company.add_parser("show", help="show a company")
+    c.add_argument("name")
+    p.set_defaults(func=cmd_company)
     p = sub.add_parser("due", help="stages, follow-ups and stale applications")
     p.set_defaults(func=cmd_due)
     return parser
