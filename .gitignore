@@ -13,3 +13,4 @@ docs/superpowers/
 .claude/local/
 .claude/settings.local.json
 cvforge.toml
+.superpowers/

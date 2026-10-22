@@ -1,0 +1,5 @@
+#!/bin/sh
+# Blocks private paths and sensitive content in staged files.
+root="$(git rev-parse --show-toplevel)"
+if [ -x "$root/.venv/bin/cvforge" ]; then exec "$root/.venv/bin/cvforge" guard staged; fi
+exec cvforge guard staged
