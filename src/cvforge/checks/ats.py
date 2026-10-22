@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -37,13 +38,16 @@ def _is_note(problem: str) -> bool:
     return problem.startswith("layout check skipped")
 
 
-def _heading_order_problem(norm: str, headings: Sequence[str]) -> str | None:
+def _heading_order_problem(text: str, headings: Sequence[str]) -> str | None:
+    """Headings must each start a line, in the given order."""
+    lines = "\n".join(normalize_text(line) for line in text.splitlines())
     pos = 0
     for heading in headings:
-        found = norm.find(normalize_text(heading), pos)
-        if found == -1:
-            return f"heading {heading!r} not found in order (after position {pos})"
-        pos = found + len(normalize_text(heading))
+        pattern = rf"(?m)^[^\S\n]*{re.escape(normalize_text(heading))}(?!\w)"
+        match = re.compile(pattern).search(lines, pos)
+        if match is None:
+            return f"heading {heading!r} not found at a line start, in order"
+        pos = match.end()
     return None
 
 
@@ -52,7 +56,7 @@ def _layout_problems(pdf: Path) -> list[str]:
         return [LAYOUT_SKIPPED]
     try:
         return [f"layout: {m}" for m in layout.find_orphans(layout.parse_pdf(pdf))]
-    except RuntimeError as exc:
+    except (RuntimeError, OSError) as exc:
         return [f"layout check skipped: {exc}"]
 
 
@@ -90,7 +94,7 @@ def ats_check(
     for req in required:
         if normalize_text(req) not in norm:
             problems.append(f"required text missing: {req!r}")
-    order = _heading_order_problem(norm, headings)
+    order = _heading_order_problem(text, headings)
     if order:
         problems.append(order)
     problems.extend(_layout_problems(pdf))

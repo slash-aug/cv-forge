@@ -115,3 +115,35 @@ def test_unreadable_pdf_is_reported_not_raised(tmp_path):
     bad.write_bytes(b"not a pdf")
     report = ats_check(bad, max_pages=1)
     assert not report.ok
+
+
+PT_HEADINGS = ["Resumo", "Experiência Profissional", "Competências", "Formação",
+               "Certificações", "Idiomas"]
+PT_TEXT = ("Ana Exemplo\nResumo\n  Engenheira de integração.\nExperiência Profissional\n"
+           "  Experiência em pagamentos e reconciliação\nCompetências\n  Python\n"
+           "Formação\n  Licenciatura\nCertificações\n  X\nIdiomas\n  Português\n")
+
+
+def _stub(monkeypatch, text):
+    monkeypatch.setattr(ats, "extract_text_layer", lambda p: (text, 1, "pypdf"))
+    monkeypatch.setattr(ats, "_layout_problems", lambda p: [])
+
+
+def test_pt_br_headings_and_accented_required_pass(monkeypatch):
+    _stub(monkeypatch, PT_TEXT)
+    report = ats_check(Path("x.pdf"), max_pages=1, headings=PT_HEADINGS,
+                       required=["Experiência em pagamentos e reconciliação", "Formação"])
+    assert report.ok, report.problems
+
+
+def test_heading_word_in_prose_does_not_mask_missing_heading(monkeypatch):
+    text = PT_TEXT.replace("Experiência Profissional\n", "  Atuei com Experiência Profissional ampla\n")
+    _stub(monkeypatch, text)
+    report = ats_check(Path("x.pdf"), max_pages=1, headings=PT_HEADINGS)
+    assert not report.ok and any("heading" in p for p in report.problems)
+
+
+def test_heading_must_start_a_line(monkeypatch):
+    _stub(monkeypatch, "Skills\n  I list Education here\n")
+    report = ats_check(Path("x.pdf"), max_pages=1, headings=["Skills", "Education"])
+    assert any("Education" in p for p in report.problems)

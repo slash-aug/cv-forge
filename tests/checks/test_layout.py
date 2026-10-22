@@ -10,10 +10,8 @@ describes a document that compiles cleanly, reports the expected page count,
 and passes the text-layer check, while the rendered page is visibly broken.
 """
 
-import io
 import subprocess
 import unittest
-from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -55,8 +53,7 @@ class TestGapAndBottomSpace(unittest.TestCase):
         self.assertTrue(Page(A4_HEIGHT, []).empty)
 
     def test_report_flags_the_hole(self):
-        with redirect_stdout(io.StringIO()):  # report() prints its per-page measurements
-            problems = report(Path("synthetic"), [self.holed])
+        problems = report(Path("synthetic"), [self.holed])
         self.assertTrue(any("hole" in m for m in problems), problems)
 
 
