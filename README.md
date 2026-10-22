@@ -21,7 +21,7 @@ Phase 1 is the foundation: from a master profile to a checked PDF.
 - A tailored selection picks which items to show for a given role. Text can be reworded for the target, but nothing outside the master profile can be invented.
 - An audit step compares the tailored CV with the master and flags claims that drifted from the facts (numbers, titles, dates, skills).
 - A LaTeX renderer produces a CV and a matching cover letter, in English, Brazilian Portuguese or European Portuguese.
-- A compile step builds the PDFs, and an ATS check verifies the result: text layer extracts cleanly, dates and characters survive, layout is single-column and within page limits.
+- A compile step builds the PDFs, and an ATS check verifies the result: text layer extracts cleanly, dates and characters survive, layout checks catch orphaned headers, stranded section headings, large gaps and thin last pages.
 - Privacy guards run as git hooks and in CI, so personal data stays out of the repository.
 
 Commands:
