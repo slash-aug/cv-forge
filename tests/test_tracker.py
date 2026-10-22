@@ -94,3 +94,11 @@ def test_daily_cap_warns_not_blocks(tmp_path, monkeypatch, capsys):
     assert "daily cap" in (out.out + out.err).lower()
     rows = tracker.load(tmp_path / "tracker.csv")
     assert tracker.applied_on(rows, date(2026, 5, 1)) == 11
+
+
+def test_set_status_can_clear_skip_reason(tmp_path):
+    path = tmp_path / "t.csv"
+    tracker.save(path, [{"slug": "a", "status": "skipped", "skip_reason": "location: x"}])
+    row = tracker.set_status(path, "a", "drafted", date(2026, 10, 22), clear_skip_reason=True)
+    assert (row["status"], row["skip_reason"]) == ("drafted", "")
+    assert tracker.load(path)[0]["skip_reason"] == ""

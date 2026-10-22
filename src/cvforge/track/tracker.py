@@ -85,7 +85,7 @@ def upsert(path: Path, row: dict) -> dict:
 
 
 def set_status(path: Path, slug: str, status: str, today: date, *, note: str = "",
-               skip_reason: str = "") -> dict:
+               skip_reason: str = "", clear_skip_reason: bool = False) -> dict:
     status = LEGACY_STATUS.get(status, status)
     if status not in STATUSES:
         raise ValueError(f"unknown status '{status}'")
@@ -98,6 +98,8 @@ def set_status(path: Path, slug: str, status: str, today: date, *, note: str = "
     row["status"] = status
     if note:
         row["notes"] = f"{row['notes']}; {note}" if row["notes"] else note
+    if clear_skip_reason:
+        row["skip_reason"] = ""
     if skip_reason:
         row["skip_reason"] = skip_reason
     row["last_update"] = today.isoformat()

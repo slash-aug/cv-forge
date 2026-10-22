@@ -291,3 +291,31 @@ def test_cli_quote_problems_exit_1(env, capsys):
 
 def test_cli_unknown_slug(env, capsys):
     assert cli.main(["check", "nope", "--master", str(PERSONA)]) == 1
+
+
+def _rewrite(app, requirements):
+    (app / "requirements.yaml").write_text(yaml.safe_dump(requirements), encoding="utf-8")
+
+
+def test_pass_after_skip_resets_row(env, capsys):
+    app = _app(env, _cli_req(["Europe"]))
+    assert _run() == 2
+    _rewrite(app, _cli_req(["worldwide"]))
+    assert _run() == 0
+    row = tracker.load(env / "tracker.csv")[0]
+    assert (row["status"], row["skip_reason"]) == ("drafted", "")
+
+
+def test_override_after_skip_clears_skip_reason(env, capsys):
+    _app(env, _cli_req(["Europe"]))
+    assert _run() == 2
+    assert _run("--override", "referral") == 0
+    row = tracker.load(env / "tracker.csv")[0]
+    assert (row["status"], row["skip_reason"]) == ("drafted", "")
+
+
+def test_pass_keeps_later_status(env, capsys):
+    _app(env, _cli_req(["worldwide"]))
+    tracker.set_status(env / "tracker.csv", "acme-senior-engineer", "applied", TODAY)
+    assert _run() == 0
+    assert tracker.load(env / "tracker.csv")[0]["status"] == "applied"

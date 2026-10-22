@@ -452,15 +452,18 @@ def cmd_check(args) -> int:
     for warning in verdict.warnings:
         print(f"warning: {warning}")
     path = cfg.data_dir / "tracker.csv"
+    current = next((r["status"] for r in tracker.load(path) if r["slug"] == args.slug), "")
     if verdict.passed:
         _write_verdict(app_dir, today, "pass", results=verdict)
+        if current == "skipped":  # an earlier skip no longer holds
+            _track(path, args.slug, "drafted", today, clear_skip_reason=True)
         print("verdict: pass")
         return 0
     if args.override:
         _write_verdict(app_dir, today, "pass", results=verdict, override=args.override)
-        current = next((r["status"] for r in tracker.load(path) if r["slug"] == args.slug), "")
         status = "drafted" if current in ("", "skipped") else current
-        _track(path, args.slug, status, today, note=f"override: {args.override}")
+        _track(path, args.slug, status, today, note=f"override: {args.override}",
+               clear_skip_reason=current == "skipped")
         print(f"verdict: pass (override: {args.override})")
         return 0
     _write_verdict(app_dir, today, "skip", results=verdict)
@@ -625,7 +628,13 @@ def cmd_kit(args) -> int:
     names = {"cv_pdf": f"{first}_{last}_CV_{company}.pdf",
              "letter_pdf": f"{first}_{last}_Cover_Letter_{company}.pdf"}
     files = {k: v for k, v in names.items() if (app_dir / v).exists()}
+    findings = _audit_tailored(tailored, master, app_dir)
     kit = build_kit(master, tailored, posting, salary, slug=args.slug, files=files)
+    findings += audit_rendered(master, kit=kit)
+    if findings:
+        _print_findings(findings)
+        print("kit not written: audit failed", file=sys.stderr)
+        return 1
     (app_dir / "kit.json").write_text(
         json.dumps(kit, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     html = app_dir / "kit.html"

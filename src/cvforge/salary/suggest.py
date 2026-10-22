@@ -19,7 +19,7 @@ from cvforge.money.normalise import (
 from cvforge.money.rates import Rates, convert
 
 POSITION = 0.75
-ROUND_TO = 100
+ROUND_TO = {"hour": 1, "month": 100, "year": 1000}
 
 
 @dataclass(frozen=True)
@@ -39,8 +39,9 @@ def displays(amount: float, currency: str, period: str, rates: Rates) -> tuple[f
     return monthly(m, "BRL", rates), annual(m, "EUR", rates), annual(m, "USD", rates)
 
 
-def _round(value: float) -> float:
-    return round(value / ROUND_TO) * ROUND_TO
+def _round(value: float, period: str) -> float:
+    step = ROUND_TO[period]
+    return round(value / step) * step
 
 
 def _num(value) -> float | None:
@@ -71,7 +72,7 @@ def _range(posted: dict | None, market: list[dict], floor: Money, rates: Rates):
 def suggest(posted: dict | None, market: list[dict], floor: Money, rates: Rates,
             *, clt_factor: float) -> Suggestion:
     low, high, cur, period, basis, sources, contract = _range(posted, market, floor, rates)
-    amount = _round(low + POSITION * (high - low))
+    amount = _round(low + POSITION * (high - low), period)
     factor = clt_factor if contract == "clt" else 1.0
     floor_brl = monthly(floor, "BRL", rates)
     brl = monthly(Money(amount, cur, period), "BRL", rates)
@@ -79,7 +80,7 @@ def suggest(posted: dict | None, market: list[dict], floor: Money, rates: Rates,
         # Lift to the floor on the contract's own basis, rounding up so it stays above.
         per_month = convert(floor_brl / factor, "BRL", cur, rates)
         raw = per_month if period == "month" else monthly_to_period(per_month, period)
-        amount = math.ceil(raw / ROUND_TO) * ROUND_TO
+        amount = math.ceil(raw / ROUND_TO[period]) * ROUND_TO[period]
         sources = [*sources, "lifted to payFloor"]
     brl_m, eur_y, usd_y = displays(amount, cur, period, rates)
     return Suggestion(basis, amount, cur, period, brl_m, eur_y, usd_y, sources)
