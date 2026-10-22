@@ -4,6 +4,8 @@ from importlib import resources
 
 import jinja2
 
+from cvforge.profile.model import ProfileError
+
 _ESCAPES = {
     "&": r"\&",
     "%": r"\%",
@@ -22,6 +24,7 @@ _MONTHS = {
     "pt-BR": ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"],
     "pt-PT": ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"],
 }
+_DATE = re.compile(r"(\d{4})(?:-(0[1-9]|1[0-2]))?")
 _ONGOING = {"en": "Present", "pt-BR": "Atual", "pt-PT": "Presente"}
 
 
@@ -32,15 +35,18 @@ def escape_tex(s: str) -> str:
     )
 
 
-def format_date(value: str, lang: str) -> str:
+def format_date(value: str, lang: str, *, item_id: str = "date") -> str:
     """'YYYY-MM' becomes 'Mon YYYY' in the locale; a bare 'YYYY' stays as is."""
-    year, _, month = value.partition("-")
+    match = _DATE.fullmatch(value)
+    if not match:
+        raise ProfileError(f"{item_id}: malformed date {value!r} (expected YYYY or YYYY-MM)")
+    year, month = match.groups()
     return f"{_MONTHS[lang][int(month) - 1]} {year}" if month else year
 
 
-def format_range(start: str, end: str | None, lang: str) -> str:
-    stop = _ONGOING[lang] if end is None else format_date(end, lang)
-    return f"{format_date(start, lang)} - {stop}"
+def format_range(start: str, end: str | None, lang: str, *, item_id: str = "date") -> str:
+    stop = _ONGOING[lang] if end is None else format_date(end, lang, item_id=item_id)
+    return f"{format_date(start, lang, item_id=item_id)} - {stop}"
 
 
 def jinja_env(package: str = "cvforge.render") -> jinja2.Environment:

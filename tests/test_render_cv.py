@@ -3,15 +3,16 @@ from pathlib import Path
 
 import pytest
 
+from cvforge.config import load_config
 from cvforge.profile.model import ProfileError, load_master
 from cvforge.render.cv import build_cv_view, render_cv
-from cvforge.render.latex import escape_tex, format_range, jinja_env
+from cvforge.render.latex import escape_tex, format_date, format_range, jinja_env
 from cvforge.tailor.audit import load_tailored
 
 PERSONA = Path(__file__).resolve().parent.parent / "examples" / "persona"
 M = load_master(PERSONA / "master.yaml")
 T = load_tailored(PERSONA / "tailored.yaml")
-EM_DASH = "—"
+EM_DASH = chr(0x2014)
 
 
 def test_escape():
@@ -96,7 +97,72 @@ def test_missing_locale_raises_naming_id():
         render_cv({**T, "lang": "pt-PT"}, master)
 
 
-def test_certificate_locale_restriction_raises():
-    tailored = {**T, "lang": "pt-PT", "certificates": ["cert-agile"]}
-    with pytest.raises(ProfileError, match="cert-agile"):
-        render_cv(tailored, M)
+def test_certificate_excluded_by_locale_is_skipped():
+    tailored = {**T, "lang": "pt-PT", "certificates": ["cert-agile", "cert-cloud"]}
+    tex = render_cv(tailored, M)
+    assert "Example Agile Foundations" not in tex
+    assert "Example Cloud Practitioner" in tex
+
+
+def test_certificate_included_when_locale_listed():
+    tex = render_cv({**T, "certificates": ["cert-agile"]}, M)
+    assert "Example Agile Foundations" in tex
+
+
+def test_preamble_no_icons_and_plain_bullets():
+    tex = render_cv(T, M)
+    assert r"\moderncvicons{letters}" in tex
+    assert r"\renewcommand{\labelitemi}{\textbullet}" in tex
+    assert tex.index(r"\moderncvstyle{banking}") < tex.index(r"\renewcommand{\labelitemi}")
+
+
+def test_empty_bullets_have_no_itemize():
+    tailored = copy.deepcopy(T)
+    tailored["experience"][0]["positions"][0]["bullets"] = []
+    tex = render_cv(tailored, M)
+    assert tex.count(r"\begin{itemize}") == 2 and tex.count(r"\end{itemize}") == 2
+
+
+def test_format_date_malformed_names_item():
+    with pytest.raises(ProfileError, match="p-x.*2024-13"):
+        format_date("2024-13", "en", item_id="p-x")
+    with pytest.raises(ProfileError, match="p-x"):
+        format_date("junk", "en", item_id="p-x")
+
+
+def test_master_company_name_is_escaped():
+    master = copy.deepcopy(M)
+    master["work"][1]["name"] = "A&B 100% x_y"
+    assert r"{A\&B 100\% x\_y}" in render_cv(T, master)
+
+
+def test_profile_handle_is_first_path_segment():
+    master = copy.deepcopy(M)
+    master["basics"]["profiles"] = [
+        {"network": "GitHub", "url": "https://github.com/ana-exemplo/repo/"},
+        {"network": "Site", "url": "https://ana.example.com/me"},
+    ]
+    tex = render_cv(T, master)
+    assert r"\social[github]{ana-exemplo}" in tex
+    assert r"\homepage{ana.example.com/me}" in tex
+
+
+@pytest.mark.latex
+def test_compiled_text_layer_is_ats_clean(tmp_path):
+    engine = load_config().lualatex
+    if not engine:
+        pytest.skip("no lualatex engine")
+    import subprocess
+
+    from pypdf import PdfReader
+
+    build = Path(load_config().build_dir) / "test_render_cv"
+    build.mkdir(parents=True, exist_ok=True)
+    (build / "cv.tex").write_text(render_cv(T, M), encoding="utf-8")
+    subprocess.run([engine, "-interaction=nonstopmode", "cv.tex"], cwd=build,
+                   capture_output=True, check=True, timeout=300)
+    text = "\n".join(p.extract_text() for p in PdfReader(build / "cv.pdf").pages)
+    for token in ("GITHUB", "LINKEDIN", "MOBILE", chr(0x1F7E4)):
+        assert token not in text
+    assert "Integração de pagamentos & reconciliação" in text
+    assert "Jun 2024 - Present" in text

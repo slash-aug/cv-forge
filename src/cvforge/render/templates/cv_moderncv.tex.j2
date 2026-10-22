@@ -4,6 +4,9 @@
 \documentclass[11pt,a4paper,sans]{moderncv}
 \moderncvstyle{banking}
 \moderncvcolor{blue}
+% Plain-text contact labels and a real bullet glyph keep the PDF text layer clean for ATS.
+\moderncvicons{letters}
+\renewcommand{\labelitemi}{\textbullet}
 
 % Force the name and section headings to render in moderncv blue (color1).
 \renewcommand*{\namefont}{\fontsize{34}{36}\bfseries\upshape}
@@ -57,11 +60,14 @@
 \section{\VAR{headings.experience | tex}}
 %% for job in experience
 \cventry{\VAR{job.dates | tex}}{\VAR{job.title | tex}}{\VAR{job.employer | tex}}{\VAR{job.location | tex}}{}{%
+%% if job.bullets
 \begin{itemize}
 %% for bullet in job.bullets
 \item \VAR{bullet | tex}
 %% endfor
-\end{itemize}}
+\end{itemize}%
+%% endif
+}
 %% endfor
 %% endif
 
@@ -88,8 +94,8 @@
 
 %% if languages
 \section{\VAR{headings.languages | tex}}
-%% for lang in languages
-\cvitem{\VAR{lang.name | tex}}{\VAR{lang.detail | tex}}
+%% for item in languages
+\cvitem{\VAR{item.name | tex}}{\VAR{item.detail | tex}}
 %% endfor
 %% endif
 

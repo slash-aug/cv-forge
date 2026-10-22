@@ -16,7 +16,7 @@ INTERNATIONAL = {
     "pt-PT": "(Freelance internacional remoto)",
 }
 REMOTE = {"en": "Remote", "pt-BR": "Remoto", "pt-PT": "Remoto"}
-SOCIAL = {"github": "github.com/", "linkedin": "linkedin.com/in/"}
+SOCIAL = {"github": "github.com", "linkedin": "linkedin.com"}
 
 
 def _lookup(ids: dict, ref: str, kind: str) -> dict:
@@ -32,16 +32,14 @@ def _contact(basics: dict, lang: str) -> dict:
     address = ", ".join(p for p in (location.get("city"), location.get("countryCode")) if p)
     socials, homepages = [], []
     for profile in basics.get("profiles", []):
-        url = profile["url"].rstrip("/")
-        bare = url.split("://", 1)[-1]
+        host, _, path = profile["url"].split("://", 1)[-1].strip("/").partition("/")
+        host = host.removeprefix("www.")
         kind = profile["network"].lower()
-        prefix = SOCIAL.get(kind)
-        if prefix and bare.lower().startswith(prefix.lower()) or (
-            prefix and bare.lower().startswith("www." + prefix.lower())
-        ):
-            socials.append((kind, bare.rsplit("/", 1)[-1]))
+        handle = path.removeprefix("in/") if kind == "linkedin" else path
+        if kind in SOCIAL and host == SOCIAL[kind] and handle:
+            socials.append((kind, handle.split("/")[0]))
         else:
-            homepages.append(bare)
+            homepages.append(f"{host}/{path}" if path else host)
     label = basics.get("label")
     return {
         "first": first, "last": last, "address": address, "email": basics.get("email"),
@@ -58,7 +56,7 @@ def _positions(employer: dict, entry: dict, lang: str, ids: dict) -> list[dict]:
         position = _lookup(ids, ref["ref"], "position")
         rows.append({
             "start": position["startDate"],
-            "dates": format_range(position["startDate"], position.get("endDate"), lang),
+            "dates": format_range(position["startDate"], position.get("endDate"), lang, item_id=position["id"]),
             "title": localized(position["title"], lang, item_id=position["id"]),
             "employer": localized(employer["name"], lang, item_id=employer["id"]),
             "location": location,
@@ -88,15 +86,15 @@ def build_cv_view(tailored: dict, master: dict) -> dict:
             localized(ed["area"], lang, item_id=ref) if ed.get("area") else "",
         ) if p)
         start, end = ed.get("startDate"), ed.get("endDate")
-        dates = (format_range(start, end, lang) if start else format_date(end, lang)) if (start or end) else ""
+        dates = (format_range(start, end, lang, item_id=ref) if start else format_date(end, lang, item_id=ref)) if (start or end) else ""
         education.append({"dates": dates, "degree": degree,
                           "institution": localized(ed["institution"], lang, item_id=ref)})
     certificates = []
     for ref in tailored.get("certificates", []):
         cert = _lookup(ids, ref, "certificate")
         if "locales" in cert and lang not in cert["locales"]:
-            raise ProfileError(f"{ref}: missing translation '{lang}'")
-        certificates.append({"date": format_date(cert["date"], lang),
+            continue  # `locales` lists the CV languages that show this certificate
+        certificates.append({"date": format_date(cert["date"], lang, item_id=ref),
                              "name": cert["name"], "issuer": cert["issuer"]})
     languages = []
     for ref in tailored.get("languages", []):
