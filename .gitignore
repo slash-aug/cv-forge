@@ -1,0 +1,14 @@
+data/
+.venv/
+__pycache__/
+*.egg-info/
+*.aux
+*.log
+*.out
+build/
+*.pdf
+!examples/**/*.pdf
+docs/superpowers/
+.claude/agents/
+.claude/local/
+.claude/settings.local.json
