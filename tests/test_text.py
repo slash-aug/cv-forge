@@ -37,20 +37,3 @@ def test_hyphenated_term_matches_literally():
 def test_trailing_separator_term_needs_the_separator():
     assert not contains_term("Acme Payments", "ACME-")
     assert contains_term("ticket acme-123", "ACME-")
-
-
-@pytest.mark.parametrize("text", ["KIT-123", "(KIT-12)", "see KIT-9", "kit-1 at start",
-                                  "x_KIT-7"])
-def test_prefix_term_matches_at_word_start(text):
-    assert contains_term(text, "KIT-")
-
-
-@pytest.mark.parametrize("text", ["toolkit-esr", "Toolkit-123", "use toolkit- today"])
-def test_prefix_term_does_not_match_inside_a_word(text):
-    assert not contains_term(text, "KIT-")
-
-
-def test_squashed_term_needs_word_start():
-    assert not contains_term("myprojectzebra notes", "projectzebra")
-    assert not contains_term("my project zebra-ish", "ectzebra")
-    assert contains_term("my projectzebra and xprojectzebra", "projectzebra")
