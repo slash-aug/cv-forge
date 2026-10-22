@@ -12,3 +12,4 @@ docs/superpowers/
 .claude/agents/
 .claude/local/
 .claude/settings.local.json
+cvforge.toml
