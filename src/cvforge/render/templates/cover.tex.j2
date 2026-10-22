@@ -1,0 +1,43 @@
+% Ported from ai-job-search (MIT): cover_letters/cover_example.tex
+% Compile with xelatex.
+
+\documentclass[]{cover}
+\usepackage{fancyhdr}
+
+\pagestyle{fancy}
+\fancyhf{}
+
+\rfoot{Page \thepage \hspace{0pt}}
+\thispagestyle{empty}
+\renewcommand{\headrulewidth}{0pt}
+\begin{document}
+
+% Contact is visible plain text (no icons, no labels) so the PDF text layer stays clean for ATS.
+\namesection{}{\Huge{\VAR{name | tex}}}{\urlstyle{same}%
+%% for link in links
+%% if link.href
+\mbox{\href{\VAR{link.href | tex}}{\VAR{link.text | tex}}}%
+%% else
+\mbox{\VAR{link.text | tex}}%
+%% endif
+%% if not loop.last
+\ | \ %
+%% endif
+%% endfor
+}
+
+\currentdate{\VAR{date | tex}}
+\companyname{\VAR{letter.recipient | tex}}
+\lettercontent{\VAR{letter.opening | tex}}
+
+%% for paragraph in letter.paragraphs
+\lettercontent{\VAR{paragraph | tex}}
+
+%% endfor
+\begin{flushright}
+% No trailing \\ inside \closing{}: cover.cls appends its own.
+\closing{\VAR{letter.closing | tex}}
+
+\signature{\VAR{name | tex}}
+\end{flushright}
+\end{document}

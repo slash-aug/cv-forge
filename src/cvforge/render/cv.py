@@ -1,5 +1,6 @@
 """Render a tailored CV to moderncv LaTeX: view-model builder, then template."""
 from cvforge.profile.model import ProfileError, index, localized
+from cvforge.render.contact import contact_links
 from cvforge.render.latex import escape_tex, format_date, format_range, jinja_env
 
 HEADINGS = {
@@ -29,18 +30,10 @@ def _contact(basics: dict, lang: str) -> dict:
     first, _, last = basics["name"].partition(" ")
     location = basics.get("location") or {}
     address = ", ".join(p for p in (location.get("city"), location.get("countryCode")) if p)
-    links = []
-    if basics.get("phone"):
-        links.append({"text": basics["phone"], "href": ""})
-    if basics.get("email"):
-        links.append({"text": basics["email"], "href": "mailto:" + basics["email"]})
-    for profile in basics.get("profiles", []):
-        bare = profile["url"].split("://", 1)[-1].strip("/").removeprefix("www.")
-        links.append({"text": bare, "href": "https://" + profile["url"].split("://", 1)[-1].strip("/")})
     label = basics.get("label")
     return {
         "first": first, "last": last, "address": address,
-        "links": links,
+        "links": contact_links(basics),
         "title": localized(label, lang, item_id="basics.label") if label else "",
     }
 
