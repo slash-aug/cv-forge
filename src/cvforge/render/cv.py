@@ -86,8 +86,11 @@ def build_cv_view(tailored: dict, master: dict) -> dict:
         cert = _lookup(ids, ref, "certificate")
         if "locales" in cert and lang not in cert["locales"]:
             continue  # `locales` lists the CV languages that show this certificate
+        issuer = cert["issuer"]
+        if issuer.casefold() in cert["name"].casefold():
+            issuer = ""  # the name already names the issuer
         certificates.append({"date": format_date(cert["date"], lang, item_id=ref),
-                             "name": cert["name"], "issuer": cert["issuer"]})
+                             "name": cert["name"], "issuer": issuer})
     languages = []
     for ref in tailored.get("languages", []):
         item = _lookup(ids, ref, "language")

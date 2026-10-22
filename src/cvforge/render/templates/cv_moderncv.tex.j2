@@ -113,7 +113,7 @@
 \keepnext{8\baselineskip}
 \section{\VAR{headings.certificates | tex}}
 %% for cert in certificates
-\cvitem{\VAR{cert.date | tex}}{\VAR{cert.name | tex}, \VAR{cert.issuer | tex}}
+\cvitem{\VAR{cert.date | tex}}{\VAR{cert.name | tex}\BLOCK{if cert.issuer}, \VAR{cert.issuer | tex}\BLOCK{endif}}
 %% endfor
 %% endif
 

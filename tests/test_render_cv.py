@@ -12,6 +12,7 @@ from cvforge.render.latex import (
     format_range,
     jinja_env,
 )
+from cvforge.render.letter import ASSETS_DIR
 from cvforge.tailor.audit import load_tailored
 
 PERSONA = Path(__file__).resolve().parent.parent / "examples" / "persona"
@@ -165,6 +166,18 @@ def test_certificate_included_when_locale_listed():
     assert "Example Agile Foundations" in tex
 
 
+def test_certificate_omits_issuer_already_in_name():
+    master = copy.deepcopy(M)
+    certs = master["certificates"]
+    base = next(c for c in certs if c["id"] == "cert-agile")
+    certs.append({**base, "id": "cert-dup", "name": "Acme Test Certificate (90/100)", "issuer": "ACME test"})
+    certs.append({**base, "id": "cert-other", "name": "Plain Certificate", "issuer": "Other Body"})
+    tex = render_cv({**T, "certificates": ["cert-dup", "cert-other"]}, master)
+    assert r"Acme Test Certificate (90/100)}" in tex
+    assert "ACME test" not in tex
+    assert "Plain Certificate, Other Body" in tex
+
+
 def test_preamble_no_icons_and_plain_bullets():
     tex = render_cv(T, M)
     assert r"\moderncvicons{letters}" in tex
@@ -211,7 +224,7 @@ def _compiled_text(cfg, tailored, jobname):
     if not cfg.lualatex:
         pytest.skip("no lualatex engine")
     pdf = compile_tex(render_cv(tailored, M), engine=cfg.lualatex,
-                      build_dir=cfg.build_dir / "test", jobname=jobname)
+                      build_dir=cfg.build_dir / "test", jobname=jobname, assets=ASSETS_DIR)
     return "\n".join(p.extract_text() for p in PdfReader(pdf).pages)
 
 
@@ -233,3 +246,21 @@ def test_compiled_pt_br_text_layer_keeps_accents(cfg):
     text = _compiled_text(cfg, T_PT, "cv_ats_pt")
     assert "Integração de pagamentos & reconciliação" in text
     assert "jun 2024 - Atual" in text
+
+
+@pytest.mark.latex
+def test_compiled_cv_is_set_in_lato(cfg):
+    from pypdf import PdfReader
+
+    from cvforge.build import compile_tex
+
+    if not cfg.lualatex:
+        pytest.skip("no lualatex engine")
+    pdf = compile_tex(render_cv(T, M), engine=cfg.lualatex,
+                      build_dir=cfg.build_dir / "test", jobname="cv_fonts", assets=ASSETS_DIR)
+    names = set()
+    for page in PdfReader(pdf).pages:
+        for font in (page["/Resources"].get("/Font") or {}).values():
+            names.add(str(font.get_object()["/BaseFont"]))
+    assert any("Lato" in n for n in names), names
+    assert not any("LMSans" in n or "LMRoman" in n for n in names), names
