@@ -147,3 +147,36 @@ def test_heading_must_start_a_line(monkeypatch):
     _stub(monkeypatch, "Skills\n  I list Education here\n")
     report = ats_check(Path("x.pdf"), max_pages=1, headings=["Skills", "Education"])
     assert any("Education" in p for p in report.problems)
+
+
+def _pages(monkeypatch, pages):
+    monkeypatch.setattr(ats, "extract_text_layer", lambda p: ("text", len(pages), "pdftotext"))
+    monkeypatch.setattr(layout, "find_pdftotext", lambda: "/usr/bin/pdftotext")
+    monkeypatch.setattr(layout, "parse_pdf", lambda p: pages)
+
+
+def _line(top, left=50.0):
+    return layout.Line(top=top, bottom=top + 10, left=left, height=10.0, text="word")
+
+
+def _full_page():
+    return layout.Page(842.0, [_line(50 + 14 * i) for i in range(50)])
+
+
+def test_layout_hole_fails(monkeypatch):
+    _pages(monkeypatch, [layout.Page(842.0, [_line(50), _line(64), _line(400)])])
+    report = ats_check(Path("x.pdf"), max_pages=1)
+    assert not report.ok and any("hole" in p for p in report.problems)
+
+
+def test_layout_early_page_end_fails(monkeypatch):
+    _pages(monkeypatch, [layout.Page(842.0, [_line(50), _line(64)]), _full_page()])
+    report = ats_check(Path("x.pdf"), max_pages=2)
+    assert not report.ok and any("early" in p for p in report.problems)
+
+
+def test_layout_thin_last_page_is_only_a_note(monkeypatch):
+    _pages(monkeypatch, [_full_page(), layout.Page(842.0, [_line(50), _line(64)])])
+    report = ats_check(Path("x.pdf"), max_pages=2)
+    assert report.ok, report.problems
+    assert any(p.startswith("note: ") and "last page" in p for p in report.problems)

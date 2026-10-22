@@ -15,16 +15,17 @@ from cvforge.checks.textlayer import (
 )
 
 LAYOUT_SKIPPED = "layout check skipped: pdftotext not installed"
+NOTE = "note: "
 
 
 @dataclass
 class AtsReport:
     """Result of `ats_check`.
 
-    `problems` holds real problems plus, when the layout check could not run, one
-    informational skip note that starts with "layout check skipped". The skip
-    note never makes `ok` False: `ok` is True exactly when `problems` contains
-    nothing but skip notes.
+    `problems` holds real problems plus informational notes: a skip note starting
+    with "layout check skipped" when the layout check could not run, and advice
+    starting with "note: " (a thin last page). Notes never make `ok` False: `ok` is
+    True exactly when `problems` contains nothing but notes.
     """
 
     ok: bool
@@ -35,7 +36,7 @@ class AtsReport:
 
 
 def _is_note(problem: str) -> bool:
-    return problem.startswith("layout check skipped")
+    return problem.startswith(("layout check skipped", NOTE))
 
 
 def _heading_order_problem(text: str, headings: Sequence[str]) -> str | None:
@@ -55,9 +56,11 @@ def _layout_problems(pdf: Path) -> list[str]:
     if layout.find_pdftotext() is None:
         return [LAYOUT_SKIPPED]
     try:
-        return [f"layout: {m}" for m in layout.find_orphans(layout.parse_pdf(pdf))]
+        pages = layout.parse_pdf(pdf)
     except (RuntimeError, OSError) as exc:
         return [f"layout check skipped: {exc}"]
+    return ([f"layout: {m}" for m in layout.report(pdf, pages)]
+            + [f"{NOTE}layout: {m}" for m in layout.find_thin_last_page(pages)])
 
 
 def ats_check(
