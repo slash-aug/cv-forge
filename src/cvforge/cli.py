@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import shutil
 import sys
 from dataclasses import asdict
@@ -36,7 +37,7 @@ from cvforge.profile.model import ProfileError, load_master, localized
 from cvforge.render.cv import build_cv_view, render_view
 from cvforge.render.letter import ASSETS_DIR, letter_context, render_letter_context
 from cvforge.salary.market import load_market, match_market
-from cvforge.salary.suggest import Suggestion, displays, suggest
+from cvforge.salary.suggest import Suggestion, below_floor, displays, suggest
 from cvforge.tailor.audit import Finding, audit, audit_rendered, load_tailored
 from cvforge.text import file_part, slug
 from cvforge.track import stages as stages_mod
@@ -442,20 +443,34 @@ def cmd_salary(args) -> int:
     market_path = Path(args.market) if args.market else cfg.data_dir / "salary" / "market.csv"
     rows = match_market(load_market(market_path), role=posting.title,
                         seniority=_seniority(posting.title), country=country)
+    confirm_amount = None
+    if args.confirm:
+        try:
+            confirm_amount = float(args.confirm)
+        except ValueError:
+            confirm_amount = float("nan")
+        if not math.isfinite(confirm_amount) or confirm_amount <= 0:
+            print(f"invalid amount '{args.confirm}': must be a positive number", file=sys.stderr)
+            return 1
     try:
         rates = load_rates(cfg.data_dir / "salary", _today(), apply_http.get)
         s = suggest((req or {}).get("salary") if req and _salary_stated(req) else None,
                     rows, floor, rates, clt_factor=cfg.clt_factor)
-        if args.confirm:
-            amount = float(args.confirm)
+        if confirm_amount is not None:
+            amount = confirm_amount
+            contract = ((req or {}).get("salary") or {}).get("contract") \
+                if s.basis == "posting" else "unknown"
+            if below_floor(amount, s.currency, s.period, contract or "unknown", floor, rates,
+                           clt_factor=cfg.clt_factor):
+                print(f"warning: {amount:,.0f} {s.currency}/{s.period} is below your pay floor "
+                      f"({pay_floor['amount']} {pay_floor['currency']}/{pay_floor['period']})"
+                      f"{' (CLT basis x' + str(cfg.clt_factor) + ')' if contract == 'clt' else ''}",
+                      file=sys.stderr)
             brl, eur, usd = displays(amount, s.currency, s.period, rates)
             s = Suggestion(s.basis, amount, s.currency, s.period, brl, eur, usd,
                            [*s.sources, "amount set by candidate"])
     except MoneyError as exc:
         print(str(exc), file=sys.stderr)
-        return 1
-    except ValueError:
-        print(f"invalid amount '{args.confirm}'", file=sys.stderr)
         return 1
     data = {**asdict(s), "confirmed": args.confirm is not None, "rates_day": rates.day}
     (app_dir / "salary.json").write_text(

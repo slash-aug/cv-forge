@@ -11,7 +11,7 @@ from cvforge.apply import http as apply_http
 from cvforge.apply.posting import Posting
 from cvforge.money.normalise import Money
 from cvforge.money.rates import Rates
-from cvforge.salary.market import MARKET_COLUMNS, load_market, match_market
+from cvforge.salary.market import MARKET_COLUMNS, MarketError, load_market, match_market
 from cvforge.salary.suggest import suggest
 
 TODAY = date(2026, 10, 22)
@@ -162,3 +162,108 @@ def test_confirm_replaces_amount(env):
 
 def test_unknown_slug(env):
     assert cli.main(["salary", "nope", "--master", str(PERSONA)]) == 1
+
+
+# Fix round 1
+
+
+def test_clt_posting_lifted_to_floor_exact():
+    # CLT 1000-1500 BRL/month -> 1375 -> 1400; x1.4 = 1960 < 3000; lifted: 3000 / 1.4 = 2142.9 -> 2200
+    s = suggest(posted(1000, 1500, "BRL", contract="clt"), [], FLOOR, RATES, clt_factor=1.4)
+    assert s.amount == 2200
+    assert s.amount * 1.4 >= 3000
+    assert "lifted to payFloor" in s.sources
+
+
+def test_clt_posting_above_floor_not_lifted():
+    s = suggest(posted(3000, 5000, "BRL", contract="clt"), [], FLOOR, RATES, clt_factor=1.4)
+    assert s.amount == 4500
+
+
+def test_yearly_posting_lifted_to_floor_exact():
+    # 12000-18000 BRL/year -> 16500/year = 1375/month < 3000; floor 36000/year
+    s = suggest(posted(12000, 18000, "BRL", "year"), [], FLOOR, RATES, clt_factor=1.4)
+    assert (s.amount, s.period) == (36000, "year")
+    assert s.brl_month == pytest.approx(3000)
+
+
+def _set_req(app, **salary):
+    path = app / "requirements.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data["salary"] = {"min": None, "max": None, "currency": None, "period": None,
+                      "contract": "unknown", "quote": None, **salary}
+    path.write_text(yaml.safe_dump(data), encoding="utf-8")
+
+
+def test_cli_floor_path(env, capsys):
+    _set_req(env)
+    assert _run() == 0
+    out = capsys.readouterr().out
+    data = json.loads((env / "salary.json").read_text(encoding="utf-8"))
+    assert data["basis"] == "floor"
+    assert (data["amount"], data["currency"], data["period"]) == (3000, "EUR", "month")
+    assert "Suggested (floor): 3,000 EUR/month" in out and "payFloor" in out
+
+
+@pytest.mark.parametrize("bad", ["nan", "inf", "-inf", "0", "-5", "abc"])
+def test_confirm_rejects_bad_amount(env, capsys, bad):
+    assert _run(f"--confirm={bad}") == 1
+    assert "invalid amount" in capsys.readouterr().err
+    assert not (env / "salary.json").exists()
+
+
+def test_confirm_below_floor_warns_but_writes(env, capsys):
+    # persona floor 3000 EUR/month; 1000 USD/month is far below
+    assert _run("--confirm", "1000") == 0
+    err = capsys.readouterr().err
+    assert "below" in err and "floor" in err and "3000" in err
+    data = json.loads((env / "salary.json").read_text(encoding="utf-8"))
+    assert data["confirmed"] is True and data["amount"] == 1000
+
+
+def test_confirm_above_floor_no_warning(env, capsys):
+    assert _run("--confirm", "7000") == 0
+    assert capsys.readouterr().err == ""
+
+
+def test_confirm_below_floor_uses_clt_basis(env, capsys):
+    _set_req(env, min=2000, max=2000, currency="EUR", period="month", contract="clt",
+             quote="x")
+    # 2200 EUR x 1.4 = 3080 >= 3000: no warning; 2100 x 1.4 = 2940 < 3000: warning
+    assert _run("--confirm", "2200") == 0
+    assert capsys.readouterr().err == ""
+    assert _run("--confirm", "2100") == 0
+    assert "below" in capsys.readouterr().err
+
+
+def test_no_confirm_no_amount_error(env, capsys):
+    assert _run() == 0
+    assert "invalid amount" not in capsys.readouterr().err
+
+
+def _market(tmp_path, body):
+    p = tmp_path / "m.csv"
+    p.write_text(",".join(MARKET_COLUMNS) + "\n" + body, encoding="utf-8")
+    return p
+
+
+def test_market_non_numeric_names_file_and_row(tmp_path):
+    p = _market(tmp_path, "a,any,BR,BRL,month,1,2,3,s,2026\nb,any,BR,BRL,month,x,2,3,s,2026\n")
+    with pytest.raises(MarketError) as exc:
+        load_market(p)
+    assert "m.csv" in str(exc.value) and "row 3" in str(exc.value) and "low" in str(exc.value)
+
+
+def test_market_missing_columns(tmp_path):
+    p = tmp_path / "m.csv"
+    p.write_text("role,country\nx,BR\n", encoding="utf-8")
+    with pytest.raises(MarketError) as exc:
+        load_market(p)
+    assert "m.csv" in str(exc.value) and "low" in str(exc.value)
+
+
+def test_cli_market_error_exit_1(env, tmp_path, capsys):
+    p = _market(tmp_path, "frontend engineer,any,BR,BRL,month,oops,2,3,s,2026\n")
+    assert cli.main(["salary", "acme-frontend", "--master", str(PERSONA),
+                     "--market", str(p)]) == 1
+    assert "m.csv" in capsys.readouterr().err

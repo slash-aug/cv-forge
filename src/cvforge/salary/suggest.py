@@ -85,6 +85,13 @@ def suggest(posted: dict | None, market: list[dict], floor: Money, rates: Rates,
     return Suggestion(basis, amount, cur, period, brl_m, eur_y, usd_y, sources)
 
 
+def below_floor(amount: float, currency: str, period: str, contract: str, floor: Money,
+                rates: Rates, *, clt_factor: float) -> bool:
+    """True when the amount, on the same basis suggest() uses, is under the floor."""
+    brl = monthly(Money(amount, currency, period), "BRL", rates)
+    return pj_equivalent(brl, contract, clt_factor) < monthly(floor, "BRL", rates)
+
+
 def monthly_to_period(per_month: float, period: str) -> float:
     return {"month": per_month, "year": per_month * MONTHS_PER_YEAR,
             "hour": per_month / HOURS_PER_MONTH}[period]
