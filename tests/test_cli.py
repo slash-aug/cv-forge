@@ -1,0 +1,66 @@
+import copy
+from pathlib import Path
+
+import pytest
+import yaml
+
+from cvforge.cli import main
+
+PERSONA = Path(__file__).resolve().parent.parent / "examples" / "persona"
+P = str(PERSONA / "master.yaml")
+T = str(PERSONA / "tailored.yaml")
+
+
+def test_validate_ok(capsys):
+    assert main(["validate", P]) == 0
+    assert capsys.readouterr().out.strip() == "ok"
+
+
+def test_validate_bad_file(tmp_path, capsys):
+    bad = tmp_path / "m.yaml"
+    bad.write_text("basics: {}\n", encoding="utf-8")
+    assert main(["validate", str(bad)]) == 1
+    assert capsys.readouterr().err.strip()
+
+
+def test_audit_clean(capsys):
+    assert main(["audit", T, "--master", P]) == 0
+
+
+def test_audit_reports_findings(tmp_path, capsys):
+    data = yaml.safe_load(Path(T).read_text(encoding="utf-8"))
+    data = copy.deepcopy(data)
+    data["experience"][0]["positions"][0]["bullets"][0]["text"] = "Rebuilt onboarding, tripling activation by 75%."
+    bad = tmp_path / "t.yaml"
+    bad.write_text(yaml.safe_dump(data), encoding="utf-8")
+    assert main(["audit", str(bad), "--master", P]) == 1
+    assert "number" in capsys.readouterr().out
+
+
+def test_build_stops_on_findings(tmp_path, capsys):
+    data = yaml.safe_load(Path(T).read_text(encoding="utf-8"))
+    data["experience"][0]["positions"][0]["bullets"][0]["text"] = "Doubled activation by 75%."
+    bad = tmp_path / "t.yaml"
+    bad.write_text(yaml.safe_dump(data), encoding="utf-8")
+    assert main(["build", str(bad), "--master", P, "--out", str(tmp_path / "o")]) == 1
+    assert not (tmp_path / "o").exists()
+
+
+@pytest.mark.latex
+def test_build_writes_both_pdfs(cfg, tmp_path, capsys):
+    out = tmp_path / "out"
+    assert main(["build", T, "--master", P, "--out", str(out)]) == 0
+    assert (out / "Ana_Exemplo_CV_Example_Corp.pdf").exists()
+    assert (out / "Ana_Exemplo_Cover_Letter_Example_Corp.pdf").exists()
+
+
+@pytest.mark.latex
+def test_master_cv(cfg, tmp_path, capsys):
+    out = tmp_path / "rev"
+    assert main(["master-cv", P, "--lang", "en", "--out", str(out)]) == 0
+    assert (out / "Ana_Exemplo_CV_master_en.pdf").exists()
+
+
+def test_master_cv_missing_translation(tmp_path, capsys):
+    assert main(["master-cv", P, "--lang", "pt-PT", "--out", str(tmp_path)]) == 1
+    assert "pt-PT" in capsys.readouterr().err
