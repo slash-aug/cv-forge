@@ -18,6 +18,7 @@ def test_letter_structure_and_escaping():
     assert r"\documentclass[]{cover}" in out
     assert "Dear Hiring Team," in out
     for p in T["letter"]["paragraphs"]:
+        p = p if isinstance(p, str) else p["text"]
         assert p.replace("%", r"\%") in out
     assert r"40\% " in out
 
@@ -80,3 +81,11 @@ def test_unknown_locale_raises():
 def test_ofl_licence_shipped(font):
     text = (ASSETS_DIR / "OpenFonts" / "fonts" / font / "OFL.txt").read_text()
     assert "SIL OPEN FONT LICENSE Version 1.1" in text
+
+
+def test_dict_paragraph_renders():
+    paragraph = {"text": "Grew sales by 40%.", "refs": ["h-load-time"]}
+    t = {**T, "letter": {**T["letter"], "paragraphs": [paragraph]}}
+    out = render_letter(t, M, today=TODAY)
+    assert r"Grew sales by 40\%." in out
+    assert "refs" not in out

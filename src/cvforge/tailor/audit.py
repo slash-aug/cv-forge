@@ -13,6 +13,9 @@ from cvforge.profile.model import (
 from cvforge.text import contains_term
 
 SCHEMA_FILE = "tailored.schema.json"
+EM_DASH = "\u2014"
+CONNECT_LIMIT = 160
+MESSAGE_LIMIT = 1200
 NUMBER = re.compile(r"\d+(?:[.,]\d+)?")
 
 
@@ -50,6 +53,10 @@ def _highlight_numbers(highlight: dict) -> set[str]:
     return found
 
 
+def _para_text(paragraph) -> str:
+    return paragraph if isinstance(paragraph, str) else paragraph.get("text", "")
+
+
 def _strings(tailored: dict):
     """Yield (location, text) for every free-text string, in document order."""
     target = tailored.get("target", {})
@@ -67,7 +74,13 @@ def _strings(tailored: dict):
     for key in ("recipient", "opening", "closing"):
         yield f"letter.{key}", letter.get(key, "")
     for i, paragraph in enumerate(letter.get("paragraphs", [])):
-        yield f"letter.paragraphs.{i}", paragraph
+        yield f"letter.paragraphs.{i}", _para_text(paragraph)
+    note = tailored.get("recruiter_note") or {}
+    for key in ("connect", "message"):
+        if key in note:
+            yield f"recruiter_note.{key}", note[key]
+    for i, answer in enumerate(tailored.get("answers", [])):
+        yield f"answers.{i}.answer", answer.get("answer", "")
 
 
 def _resolve(ids: dict, ref, kind: str, findings: list[Finding]):
@@ -133,13 +146,69 @@ def _broad_numbers(ids: dict, summary: dict | None = None) -> set[str]:
     return allowed
 
 
+def _ref_numbers(refs: list, ids: dict, findings: list[Finding]) -> set[str]:
+    """Numbers found in the cited highlights and summaries; unknown refs become findings."""
+    allowed: set[str] = set()
+    for ref in refs:
+        entry = ids.get(ref)
+        if entry is None or entry[0] not in ("highlight", "summary"):
+            found = "no such id" if entry is None else f"is a {entry[0]}"
+            findings.append(
+                Finding("unknown-ref", str(ref), f"expected a highlight or summary id, {found}")
+            )
+        elif entry[0] == "highlight":
+            allowed |= _highlight_numbers(entry[1])
+        else:
+            for text in _texts(entry[1].get("text")):
+                allowed |= _numbers(text)
+    return allowed
+
+
+def _check_prose(location: str, text: str, refs: list | None, ids: dict, findings: list[Finding]):
+    """Text with refs may only use numbers from them; text without keeps the broad rule."""
+    if refs:
+        allowed = _ref_numbers(refs, ids, findings)
+    else:
+        allowed = _broad_numbers(ids)
+    _check_numbers(location, text, allowed, findings)
+
+
 def _audit_letter(tailored: dict, ids: dict, findings: list[Finding]):
     letter = tailored.get("letter") or {}
-    allowed = _broad_numbers(ids)
-    _check_numbers("letter.opening", letter.get("opening", ""), allowed, findings)
+    _check_prose("letter.opening", letter.get("opening", ""), None, ids, findings)
     for i, paragraph in enumerate(letter.get("paragraphs", [])):
-        _check_numbers(f"letter.paragraphs.{i}", paragraph, allowed, findings)
-    _check_numbers("letter.closing", letter.get("closing", ""), allowed, findings)
+        refs = paragraph.get("refs") if isinstance(paragraph, dict) else None
+        _check_prose(f"letter.paragraphs.{i}", _para_text(paragraph), refs, ids, findings)
+    _check_prose("letter.closing", letter.get("closing", ""), None, ids, findings)
+
+
+def _audit_note_and_answers(tailored: dict, ids: dict, findings: list[Finding]):
+    note = tailored.get("recruiter_note")
+    if note:
+        refs = note.get("refs")
+        for key, limit in (("connect", CONNECT_LIMIT), ("message", MESSAGE_LIMIT)):
+            text = note.get(key, "")
+            _check_prose(f"recruiter_note.{key}", text, refs, ids, findings)
+            if len(text) > limit:
+                extra = (
+                    " (LinkedIn's free limit is 200, we keep a margin)" if key == "connect" else ""
+                )
+                findings.append(
+                    Finding("length", f"recruiter_note.{key}", f"{len(text)} characters, limit {limit}{extra}")
+                )
+    for i, answer in enumerate(tailored.get("answers", [])):
+        location = f"answers.{i}.answer"
+        text = answer.get("answer", "")
+        _check_prose(location, text, answer.get("refs"), ids, findings)
+        limit = answer.get("limit")
+        if limit is not None and len(text) > limit:
+            findings.append(Finding("length", location, f"{len(text)} characters, limit {limit}"))
+
+
+def _audit_em_dash(tailored: dict, findings: list[Finding]):
+    for location, text in _strings(tailored):
+        if EM_DASH in text:
+            findings.append(Finding("em-dash", location, "contains an em dash"))
 
 
 def _audit_skills(tailored: dict, ids: dict, findings: list[Finding]):
@@ -205,5 +274,7 @@ def audit(tailored: dict, master: dict) -> list[Finding]:
     _audit_skills(tailored, ids, findings)
     _audit_id_lists(tailored, ids, findings)
     _audit_letter(tailored, ids, findings)
+    _audit_note_and_answers(tailored, ids, findings)
+    _audit_em_dash(tailored, findings)
     _audit_confidential(tailored, master, findings)
     return findings

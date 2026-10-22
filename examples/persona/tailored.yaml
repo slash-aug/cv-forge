@@ -38,5 +38,10 @@ letter:
   opening: Dear Hiring Team,
   paragraphs:
     - I build and ship product features end to end, and I would like to bring that to your team.
-    - At ExamplePay I cut load time by 40% and led a team of 5 engineers.
+    - text: At ExamplePay I cut load time by 40% and led a team of 5 engineers.
+      refs: [h-load-time, h-team-lead]
   closing: Kind regards,
+recruiter_note:
+  connect: Hi, I am a full-stack engineer interested in the Senior Full-stack role at Example Corp.
+  message: I cut load time by 40% at ExamplePay and would be glad to talk about the role.
+  refs: [h-load-time]
