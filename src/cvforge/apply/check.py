@@ -7,6 +7,7 @@ from datetime import date
 
 from cvforge.apply.experience import engineering_months, years_limit
 from cvforge.apply.posting import Posting
+from cvforge.apply.requirements import _quotes, normalise_quote, posting_text
 from cvforge.money.normalise import Money, monthly, pj_equivalent
 from cvforge.money.rates import MoneyError, NoRate, Rates
 from cvforge.text import fold_accents
@@ -50,6 +51,24 @@ LEVEL_WORDS = (("native", 7), ("mother tongue", 7), ("bilingual", 7), ("nativo",
 CEFR_TOKEN = re.compile(r"\b([abc][12])\b")
 
 
+# Posting caveats: terms matched after folding case and accents, as word prefixes.
+CAVEAT_TERMS = (
+    "reside", "residen", "eligib", "overlap", "travel", "time zone", "timezone",
+    "work authori", "right to work", "citizen", "contractor", "employer of record", "eor",
+    "resid", "elegib", "fuso", "sobrepos", "viage", "cidadan", "autoriza", "pj", "clt")
+
+
+def _term_pattern(term: str) -> str:
+    body = r"\s+".join(map(re.escape, term.split()))
+    return body + r"(?![0-9a-z])" if len(term) <= 3 else body  # eor, pj, clt: whole words only
+
+
+CAVEAT_RE = re.compile(
+    r"(?<![0-9a-z])(?:" + "|".join(_term_pattern(t) for t in CAVEAT_TERMS) + ")")
+SENTENCE_BREAK = re.compile(r"[.!?\n]+")
+HIRING_CONTRACT = {"eor": "clt", "contractor": "pj"}
+
+
 @dataclass(frozen=True)
 class RuleResult:
     rule: str
@@ -63,6 +82,7 @@ class Verdict:
     passed: bool
     results: list[RuleResult]
     warnings: list[str] = field(default_factory=list)
+    caveats: dict = field(default_factory=dict)
 
 
 def _fold(text: str) -> str:
@@ -147,6 +167,8 @@ def _salary(req: dict, master: dict, rates: Rates | None,
     if rates is None:
         raise MoneyError("currency rates are needed for the salary rule")
     contract = (salary.get("contract") or "unknown").lower()
+    if contract == "unknown":  # an Employer of Record in Brazil hires through CLT
+        contract = HIRING_CONTRACT.get((req.get("hiring_model") or {}).get("type"), contract)
     which = "max" if salary.get("max") is not None else "min"
     stated = f"{which} {amount:g} {salary['currency'].upper()}/{salary['period']}"
     try:
@@ -242,6 +264,33 @@ def _languages(req: dict, master: dict) -> tuple[RuleResult, list[str]]:
     return RuleResult("languages", True, message, quote), warnings
 
 
+def caveat_sentences(posting_text: str) -> list[str]:
+    """Every sentence with a caveat term, in posting order, without duplicates."""
+    found: dict[str, None] = {}
+    for raw in SENTENCE_BREAK.split(posting_text):
+        sentence = raw.strip()
+        if sentence and CAVEAT_RE.search(_fold(sentence)):
+            found.setdefault(sentence)
+    return list(found)
+
+
+def uncaptured_caveats(req: dict, posting_text: str) -> list[str]:
+    """Caveat sentences that no quote in requirements.yaml overlaps."""
+    quotes = [normalise_quote(q) for _, q in _quotes(req) if q]
+    quotes = [q for q in quotes if q]
+    missed = []
+    for sentence in caveat_sentences(posting_text):
+        norm = normalise_quote(sentence)
+        if norm and not any(q in norm or norm in q for q in quotes):
+            missed.append(sentence)
+    return missed
+
+
+def _caveats(req: dict, text: str) -> dict:
+    return {"hiring_model": req.get("hiring_model"), "timezone": req.get("timezone"),
+            "travel": req.get("travel"), "uncaptured": uncaptured_caveats(req, text)}
+
+
 def check(req: dict, posting: Posting, master: dict, company: dict | None, rates: Rates | None,
           today: date, *, clt_factor: float) -> Verdict:
     """Apply the four rules in order. Languages only ever warn."""
@@ -253,4 +302,5 @@ def check(req: dict, posting: Posting, master: dict, company: dict | None, rates
         salary,
         languages,
     ]
-    return Verdict(all(r.ok for r in results), results, salary_warnings + warnings)
+    return Verdict(all(r.ok for r in results), results, salary_warnings + warnings,
+                   _caveats(req, posting_text(posting)))

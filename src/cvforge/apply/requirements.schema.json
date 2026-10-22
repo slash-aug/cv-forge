@@ -48,6 +48,33 @@
       },
       "additionalProperties": false
     },
+    "hiring_model": {
+      "type": "object",
+      "properties": {
+        "type": {"enum": ["eor", "contractor", "employee", "unknown"]},
+        "quote": {"type": "string", "minLength": 1}
+      },
+      "required": ["type", "quote"],
+      "additionalProperties": false
+    },
+    "timezone": {
+      "type": "object",
+      "properties": {
+        "requirement": {"type": "string", "minLength": 1},
+        "quote": {"type": "string", "minLength": 1}
+      },
+      "required": ["requirement", "quote"],
+      "additionalProperties": false
+    },
+    "travel": {
+      "type": "object",
+      "properties": {
+        "requirement": {"type": "string", "minLength": 1},
+        "quote": {"type": "string", "minLength": 1}
+      },
+      "required": ["requirement", "quote"],
+      "additionalProperties": false
+    },
     "languages_required": {
       "type": "array",
       "items": {

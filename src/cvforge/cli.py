@@ -441,10 +441,11 @@ def cmd_due(args) -> int:
 def _write_verdict(app_dir: Path, today: date, verdict: str, *, results: Verdict | None = None,
                    problems=(), override: str | None = None) -> None:
     data = {"verdict": verdict, "checked": today.isoformat(), "override": override,
-            "problems": list(problems), "results": [], "warnings": []}
+            "problems": list(problems), "results": [], "warnings": [], "caveats": {}}
     if results is not None:
         data["results"] = [asdict(r) for r in results.results]
         data["warnings"] = results.warnings
+        data["caveats"] = results.caveats
     (app_dir / "verdict.json").write_text(
         json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
@@ -452,6 +453,18 @@ def _write_verdict(app_dir: Path, today: date, verdict: str, *, results: Verdict
 def _salary_stated(req: dict) -> bool:
     salary = req.get("salary") or {}
     return salary.get("max") is not None or salary.get("min") is not None
+
+
+def _print_caveats(caveats: dict) -> None:
+    """Information only: caveats never change the verdict or the exit code."""
+    for key, label in (("hiring_model", "hiring model"), ("timezone", "time zone"),
+                       ("travel", "travel")):
+        item = caveats.get(key)
+        if item:
+            print(f"INFO {label}: {item.get('type') or item.get('requirement')}")
+            print(f'    "{item["quote"]}"')
+    for sentence in caveats.get("uncaptured", []):
+        print(f'WARN uncaptured: "{sentence}"')
 
 
 def cmd_check(args) -> int:
@@ -491,6 +504,7 @@ def cmd_check(args) -> int:
             print(f'    "{r.quote}"')
     for warning in verdict.warnings:
         print(f"warning: {warning}")
+    _print_caveats(verdict.caveats)
     path = cfg.data_dir / "tracker.csv"
     current = next((r["status"] for r in tracker.load(path) if r["slug"] == args.slug), "")
     if verdict.passed:

@@ -67,6 +67,9 @@ def _quotes(req: dict):
         yield f"{key}.quote", (req.get(key) or {}).get("quote")
     for i, item in enumerate(req.get("languages_required") or []):
         yield f"languages_required.{i}.quote", item.get("quote")
+    for key in ("hiring_model", "timezone", "travel"):
+        if req.get(key):
+            yield f"{key}.quote", req[key].get("quote")
 
 
 def quote_problems(req: dict, posting_text: str) -> list[str]:

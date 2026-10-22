@@ -82,6 +82,12 @@ salary:                      # or null when no figure is stated
   quote: null
 languages_required:
   - {lang: en, level: C1, quote: "Fluent English (C1)"}
+hiring_model:                # optional, only when the posting says
+  {type: eor, quote: "Hired through an Employer of Record"}   # eor | contractor | employee | unknown
+timezone:                    # optional
+  {requirement: "4 hours overlap with ET", quote: "4 hours overlap with ET"}
+travel:                      # optional
+  {requirement: "up to 10% travel", quote: "up to 10% travel"}
 ```
 
 Rulings:
@@ -95,6 +101,7 @@ Rulings:
   - A residence or work-right requirement for **Brazil or Portugal** ("must reside in Brazil", "necessário residir no Brasil", "right to work in Portugal") is **not** `refused`: the check treats both as home countries. For a remote job put the country in `location.allowed`; for a hybrid or on-site job put it in `location.job_countries`. Leave `sponsorship.status` as `silent` unless the posting says something else about sponsorship.
   - `silent`: nothing either way.
 - **salary.contract:** `clt` or `pj` only when the posting says so (Brazilian postings); otherwise `unknown`.
+- **hiring_model, timezone, travel:** optional, each with an exact quote. `eor` is CLT through an Employer of Record, `contractor` is PJ. The candidate is fully flexible on hours, so time zone and travel are information only and never cause a skip. Look for "reside", "eligible", "overlap" and "travel" in the posting.
 - **languages_required:** ISO code (`en`, `pt`, `es`, `de`, ...), level as written (`C1`, `fluent`, `native`) when stated.
 
 ---
@@ -106,7 +113,8 @@ Rulings:
 ```
 
 - Exit `1`: a quote does not match the posting, or the YAML is invalid. Fix `requirements.yaml` using the printed problems and rerun.
-- Exit `0`: verdict pass. Show any `warning:` lines (for example a language level) and continue.
+- Exit `0`: verdict pass. Show any `warning:` lines (for example a language level) and the `INFO` caveat lines (hiring model, time zone, travel) and continue.
+- `WARN uncaptured: "<sentence>"`: the posting has a sentence about residence, eligibility, overlap, travel or the hiring model that no quote covers. Read it, update `requirements.yaml` (sponsorship, location, hiring_model, timezone, travel) and rerun the check before tailoring. It never changes the verdict or the exit code.
 - Exit `2`: verdict skip. Show the `SKIP` lines with their quotes and **stop**. The tracker already records the skip. Continue only if the candidate explicitly asks to override; then rerun with their reason in their words:
   ```
   .venv/bin/cvforge check <slug> --override "<their reason>"

@@ -95,3 +95,21 @@ def test_quote_problems_cover_every_field():
     problems = quote_problems(req, POSTING)
     assert [p.split(":")[0] for p in problems] == [
         "sponsorship.quote", "salary.quote", "languages_required.0.quote"]
+
+
+def test_new_fields_need_verified_quotes(tmp_path):
+    ok = _req(hiring_model={"type": "eor", "quote": "Hired through an Employer of Record"},
+              timezone={"requirement": "4h overlap", "quote": "4 hours overlap with ET"},
+              travel={"requirement": "10%", "quote": "up to 10% travel"})
+    assert load_requirements(_write(tmp_path, ok))["travel"]["requirement"] == "10%"
+    posting = (POSTING + "\nHired through an Employer of Record.\n4 hours overlap with ET.\n"
+               "Up to 10% travel.")
+    assert quote_problems(ok, posting) == []
+    for key in ("hiring_model", "timezone", "travel"):
+        bad = {**ok, key: {**ok[key], "quote": "invented sentence"}}
+        assert quote_problems(bad, posting) == [
+            f'{key}.quote: not in the posting: "invented sentence"']
+    with pytest.raises(RequirementsError):
+        load_requirements(_write(tmp_path, _req(hiring_model={"type": "slave", "quote": "x"})))
+    with pytest.raises(RequirementsError):
+        load_requirements(_write(tmp_path, _req(travel={"requirement": "x"})))
