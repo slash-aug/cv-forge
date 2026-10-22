@@ -1,0 +1,5 @@
+#!/bin/sh
+# Blocks AI attribution and em dashes in commit messages.
+root="$(git rev-parse --show-toplevel)"
+if [ -x "$root/.venv/bin/cvforge" ]; then exec "$root/.venv/bin/cvforge" guard msg "$1"; fi
+exec cvforge guard msg "$1"

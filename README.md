@@ -5,3 +5,11 @@ cv-forge is a job-search copilot: it keeps one master profile of everything you 
 Work in progress. Full documentation arrives with the first release.
 
 Built on [ai-job-search](https://github.com/ai-job-search-dev/ai-job-search) (MIT).
+
+## Enable the hooks
+
+Privacy and attribution guards run as git hooks (private paths, denylisted terms, CPF/phone numbers, em dashes, AI attribution in messages):
+
+```bash
+git config core.hooksPath .githooks
+```
