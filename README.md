@@ -37,6 +37,35 @@ cvforge master-cv <master> --lang en           render a full CV straight from th
 cvforge guard staged | tree | msg <file>       privacy checks used by the hooks and CI
 ```
 
+## Apply flow (Phase 2)
+
+Phase 2 turns one job posting into everything you need to apply. Python does the deterministic steps; the Claude commands `/apply` and `/outcome` (in `.claude/commands/`) drive them and write the two YAML files in between.
+
+- **Intake:** `cvforge intake <link>` or `cvforge intake - --company X --role Y` with pasted text on stdin saves the posting under `data/applications/<slug>/` and adds a tracker row. A posting guard flags stale or suspicious text. LinkedIn links are refused: paste the text instead. A posting that is already tracked exits with 3.
+- **Eligibility:** Claude records what the posting says (years, location, sponsorship, pay, languages) in `requirements.yaml`, each fact with a quote. `cvforge check <slug>` verifies every quote appears verbatim in the posting, then compares the facts with your preferences in the master profile. Exit 2 means skip; `--override "reason"` continues and records why.
+- **Companies:** `cvforge company add | sponsor | show` keeps a registry with visa sponsor marks and their sources.
+- **Salary:** `cvforge salary <slug>` suggests an expected salary from the posting range, an optional market CSV (see `examples/salary/market.template.csv`) and your pay floor, converted with ECB rates cached per day. `--confirm [AMOUNT]` locks it in.
+- **Answers:** `cvforge answers <slug>` looks up screening answers in the answer bank and your knock-out facts; `--save` audits the tailored file and stores its answers.
+- **Kit:** `cvforge kit <slug>` writes `kit.json` and a copy-ready `kit.html` with your details, work history cut to common field limits, salary, answers and links to the PDFs.
+- **Tracker:** `cvforge track add | status | stage | done | show` records stages and follow-ups, and `cvforge due` lists what needs attention. `/outcome` records a result and what you learned.
+
+A full run on the example persona, with no network:
+
+```bash
+cat examples/persona/posting.txt | cvforge intake - --company "Example Corp" --role "Senior Full-stack Engineer"
+cp examples/persona/requirements.yaml data/applications/example-corp-senior-full-stack-engineer/
+cvforge check example-corp-senior-full-stack-engineer --master examples/persona/master.yaml
+cp examples/persona/tailored.yaml data/applications/example-corp-senior-full-stack-engineer/
+cvforge build data/applications/example-corp-senior-full-stack-engineer/tailored.yaml \
+  --master examples/persona/master.yaml --out data/applications/example-corp-senior-full-stack-engineer/
+cvforge salary example-corp-senior-full-stack-engineer --master examples/persona/master.yaml
+cvforge kit example-corp-senior-full-stack-engineer --master examples/persona/master.yaml
+cvforge track status example-corp-senior-full-stack-engineer applied
+cvforge due
+```
+
+`tests/test_apply_e2e.py` runs the same sequence. The human still clicks submit.
+
 ## Flow
 
 ![Flow: master profile, tailor to a job, audit against master, render LaTeX, compile PDF, ATS check, you review and submit](docs/flow.svg)
@@ -45,11 +74,12 @@ cvforge guard staged | tree | msg <file>       privacy checks used by the hooks 
 
 | Phase | Scope | Status |
 | --- | --- | --- |
-| 1 | Master profile, tailoring, audit, LaTeX CV and letter, ATS check, privacy guards, CI | Done |
-| 2 | Apply flow: paste a job link or text to get a tailored, audited CV and letter, a salary suggestion, drafted screening answers, a copy-paste application kit and a tracker entry | Planned |
-| 3 | Job discovery from public sources, with hard filters and a ghost-job score to drop stale or fake postings | Planned |
-| 4 | Feedback loop: email sync for replies, an application report and follow-up reminders | Planned |
-| 5 | A clean local web UI to track every application and run cv-forge without the command line | Planned |
+| 1 | Foundation: master profile, tailoring, audit, LaTeX CV and letter, ATS check, privacy guards, CI | Done |
+| 2 | Apply flow: job link or pasted text, eligibility check, company registry with visa sponsor marks, salary suggestion, answer bank, copy-ready kit page, tracker with stages and a due view | Done |
+| 3 | Firefox extension: fills job forms from the kit, never on linkedin.com, never submits | Planned |
+| 4 | Discovery and company watchlist: job sources, Strider and Gupy tracking, ghost-job filter | Planned |
+| 5 | Feedback loop: email sync for replies, an application report and follow-up reminders | Planned |
+| 6 | A clean local web UI to track every application and run cv-forge without the command line | Planned |
 
 ## Quick start
 
@@ -117,4 +147,4 @@ cv-forge prepares material. It does not log in to job sites, fill in forms or se
 
 ## Credit and licence
 
-cv-forge builds on [ai-job-search](https://github.com/ai-job-search-dev/ai-job-search) (MIT), whose LaTeX templates and ATS checks it adapts. Licensed under the MIT licence; see `LICENSE`.
+cv-forge builds on [ai-job-search](https://github.com/ai-job-search-dev/ai-job-search) (MIT), whose LaTeX templates and ATS checks it adapts. The posting guard and the `/outcome` command are adapted from it as well. Licensed under the MIT licence; see `LICENSE`.

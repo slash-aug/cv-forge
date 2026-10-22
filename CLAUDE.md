@@ -19,6 +19,15 @@ Venv: `.venv/bin/cvforge`
 - `cvforge audit`: check a tailored selection against master (ids, numbers, skill keywords, confidential terms)
 - `cvforge build`: render the PDF and run ATS checks
 - `cvforge master-cv`: build the full master CV
+- `cvforge intake <link|->`: save a posting (link, or pasted text on stdin with `--company` and `--role`) and track it
+- `cvforge check <slug>`: verify requirements.yaml quotes and run the eligibility check (exit 2 = skip, `--override`)
+- `cvforge company add|sponsor|show`: company registry with visa sponsor marks
+- `cvforge salary <slug>`: suggest an expected salary (`--confirm [AMOUNT]`)
+- `cvforge answers <slug>`: answer bank lookup and knock-out facts (`--save`)
+- `cvforge kit <slug>`: write kit.json and kit.html to copy into forms
+- `cvforge track add|status|stage|done|show`: record applications and stages
+- `cvforge due`: stages, follow-ups and stale applications
+- `/apply` and `/outcome`: Claude commands that drive the apply flow
 - `cvforge guard staged` / `tree` / `msg`: privacy checks used by the git hooks and CI
 
 ## Tests
