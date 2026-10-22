@@ -22,7 +22,7 @@ Venv: `.venv/bin/cvforge`
 - `cvforge intake <link|->`: save a posting (link, or pasted text on stdin with `--company` and `--role`) and track it
 - `cvforge check <slug>`: verify requirements.yaml quotes and run the eligibility check (exit 2 = skip, `--override`)
 - `cvforge company add|sponsor|show`: company registry with visa sponsor marks
-- `cvforge salary <slug>`: suggest an expected salary (`--confirm [AMOUNT]`)
+- `cvforge salary <slug>`: suggest an expected salary at the market rate (`--confirm [AMOUNT]`, `--note` keeps the reasoning in salary.json)
 - `cvforge answers <slug>`: answer bank lookup and knock-out facts (`--save`)
 - `cvforge kit <slug>`: write kit.json and kit.html to copy into forms
 - `cvforge track add|status|stage|done|show`: record applications and stages

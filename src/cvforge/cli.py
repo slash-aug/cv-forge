@@ -639,6 +639,9 @@ def cmd_salary(args) -> int:
         print(str(exc), file=sys.stderr)
         return 1
     data = {**asdict(s), "confirmed": args.confirm is not None, "rates_day": rates.day}
+    explanation = args.note.strip() if args.note else _previous_explanation(app_dir)
+    if explanation:
+        data["explanation"] = explanation
     (app_dir / "salary.json").write_text(
         json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"Suggested ({s.basis}): {s.amount:,.0f} {s.currency}/{s.period}")
@@ -648,8 +651,20 @@ def cmd_salary(args) -> int:
     print(f"  Rates: ECB {rates.day}")
     for src in s.sources:
         print(f"  Source: {src}")
+    if explanation:
+        print(f"  Why: {explanation}")
     print("confirmed" if data["confirmed"] else "not confirmed: rerun with --confirm [AMOUNT]")
     return 0
+
+
+def _previous_explanation(app_dir: Path) -> str | None:
+    """The explanation kept in an earlier salary.json, so a rerun without --note keeps it."""
+    try:
+        old = json.loads((app_dir / "salary.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    value = old.get("explanation") if isinstance(old, dict) else None
+    return value if isinstance(value, str) and value.strip() else None
 
 
 def _windows_path(path: Path) -> str | None:
@@ -824,6 +839,8 @@ def _parser() -> argparse.ArgumentParser:
                    help="confirm the suggestion, optionally replacing the amount")
     p.add_argument("--market", help="market CSV (default: <data_dir>/salary/market.csv)")
     p.add_argument("--master", help="master profile (default: <data_dir>/profile/master.yaml)")
+    p.add_argument("--note", metavar="TEXT",
+                   help="why this amount; kept in salary.json across reruns until replaced")
     p.set_defaults(func=cmd_salary)
     p = sub.add_parser("kit", help="write kit.json and kit.html to copy into application forms")
     p.add_argument("slug")
