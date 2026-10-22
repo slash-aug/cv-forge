@@ -1,5 +1,6 @@
 """Tailored selection loader and grounding audit against the master profile."""
 import re
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -91,7 +92,9 @@ def _audit_experience(tailored: dict, ids: dict, findings: list[Finding]):
         work = _resolve(ids, work_sel.get("ref"), "work", findings)
         for pos_sel in work_sel.get("positions", []):
             position = _resolve(ids, pos_sel.get("ref"), "position", findings)
-            if position is not None and work is not None and position not in work["positions"]:
+            if position is not None and work is not None and position["id"] not in {
+                p["id"] for p in work["positions"]
+            }:
                 findings.append(
                     Finding("wrong-parent", pos_sel["ref"], f"not a position of {work['id']}")
                 )
@@ -99,7 +102,7 @@ def _audit_experience(tailored: dict, ids: dict, findings: list[Finding]):
                 highlight = _resolve(ids, bullet.get("ref"), "highlight", findings)
                 if highlight is None:
                     continue
-                if position is not None and highlight not in position["highlights"]:
+                if position is not None and highlight["id"] not in {h["id"] for h in position["highlights"]}:
                     findings.append(
                         Finding("wrong-parent", bullet["ref"], f"not a highlight of {position['id']}")
                     )
@@ -108,18 +111,35 @@ def _audit_experience(tailored: dict, ids: dict, findings: list[Finding]):
                 )
 
 
-def _audit_summary(tailored: dict, master: dict, ids: dict, findings: list[Finding]):
+def _audit_summary(tailored: dict, ids: dict, findings: list[Finding]):
     selection = tailored.get("summary", {})
     summary = _resolve(ids, selection.get("ref"), "summary", findings)
     if summary is None:
         return
+    _check_numbers(
+        selection["ref"], selection.get("text", ""), _broad_numbers(ids, summary), findings
+    )
+
+
+def _broad_numbers(ids: dict, summary: dict | None = None) -> set[str]:
+    """Numbers allowed in free prose: all highlights plus the given summary (or every summary)."""
     allowed: set[str] = set()
-    for text in _texts(summary.get("text")):
-        allowed |= _numbers(text)
     for kind, item in ids.values():
         if kind == "highlight":
             allowed |= _highlight_numbers(item)
-    _check_numbers(selection["ref"], selection.get("text", ""), allowed, findings)
+        elif kind == "summary" and (summary is None or item is summary):
+            for text in _texts(item.get("text")):
+                allowed |= _numbers(text)
+    return allowed
+
+
+def _audit_letter(tailored: dict, ids: dict, findings: list[Finding]):
+    letter = tailored.get("letter") or {}
+    allowed = _broad_numbers(ids)
+    _check_numbers("letter.opening", letter.get("opening", ""), allowed, findings)
+    for i, paragraph in enumerate(letter.get("paragraphs", [])):
+        _check_numbers(f"letter.paragraphs.{i}", paragraph, allowed, findings)
+    _check_numbers("letter.closing", letter.get("closing", ""), allowed, findings)
 
 
 def _audit_skills(tailored: dict, ids: dict, findings: list[Finding]):
@@ -140,12 +160,20 @@ def _audit_id_lists(tailored: dict, ids: dict, findings: list[Finding]):
             _resolve(ids, ref, kind, findings)
 
 
+def _fold(text: str) -> str:
+    return unicodedata.normalize("NFKC", text).casefold()
+
+
+def _squash(text: str) -> str:
+    return re.sub(r"[\s_-]+", "", _fold(text))
+
+
 def _audit_confidential(tailored: dict, master: dict, findings: list[Finding]):
     terms = [t for t in master.get("x-confidential", []) if t]
     for location, text in _strings(tailored):
-        lowered = text.lower()
+        folded, squashed = _fold(text), _squash(text)
         for term in terms:
-            if term.lower() in lowered:
+            if _fold(term) in folded or _squash(term) in squashed:
                 findings.append(Finding("confidential", location, f"contains confidential term '{term}'"))
 
 
@@ -153,9 +181,10 @@ def audit(tailored: dict, master: dict) -> list[Finding]:
     """Grounding findings in document order (confidential scan last); empty means grounded."""
     ids = index(master)
     findings: list[Finding] = []
-    _audit_summary(tailored, master, ids, findings)
+    _audit_summary(tailored, ids, findings)
     _audit_experience(tailored, ids, findings)
     _audit_skills(tailored, ids, findings)
     _audit_id_lists(tailored, ids, findings)
+    _audit_letter(tailored, ids, findings)
     _audit_confidential(tailored, master, findings)
     return findings

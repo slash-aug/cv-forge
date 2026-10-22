@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from cvforge.profile.model import ProfileError, load_master
+from cvforge.profile.model import ProfileError, index, load_master
 from cvforge.tailor.audit import Finding, audit, load_tailored
 
 PERSONA = Path(__file__).resolve().parent.parent / "examples" / "persona"
@@ -120,3 +120,47 @@ def test_load_tailored_rejects_bad_schema(tmp_path):
     path.write_text("lang: fr\n", encoding="utf-8")
     with pytest.raises(ProfileError, match="lang"):
         load_tailored(path)
+
+
+def test_letter_escalated_number_flagged():
+    t = _variant(lambda d: d["letter"]["paragraphs"].__setitem__(1, "I cut load time by 90%."))
+    assert [(f.kind, f.ref) for f in audit(t, M)] == [("number", "letter.paragraphs.1")]
+
+
+def test_letter_opening_and_closing_numbers_flagged():
+    def bump(d):
+        d["letter"]["opening"] = "Dear team, 7 reasons."
+        d["letter"]["closing"] = "Regards, 9."
+
+    refs = [(f.kind, f.ref) for f in audit(_variant(bump), M)]
+    assert refs == [("number", "letter.opening"), ("number", "letter.closing")]
+
+
+def test_letter_numbers_grounded_by_any_highlight():
+    t = _variant(lambda d: d["letter"]["paragraphs"].append("I mentored 3 engineers."))
+    assert audit(t, M) == []
+
+
+@pytest.mark.parametrize("variant", ["Project Zebra", "project-zebra", "PROJECT_ZEBRA", "ＰｒｏｊｅｃｔＺｅｂｒａ"])
+def test_confidential_separator_and_width_variants(variant):
+    t = _variant(lambda d: d["letter"]["paragraphs"].append(f"Worked on {variant} once."))
+    assert [f.kind for f in audit(t, M)] == ["confidential"]
+
+
+def test_confidential_in_bullet_and_keyword():
+    def leak(d):
+        _bullet(d, "h-load-time").update(text="Cut load time by 40% on ProjectZebra.")
+        d["skills"][0]["keywords"].append("projectzebra")
+
+    got = [(f.kind, f.ref) for f in audit(_variant(leak), M)]
+    assert ("confidential", "h-load-time") in got
+    assert ("confidential", "sk-backend") in got
+
+
+def test_decimal_comma_grounded_by_decimal_point():
+    m = copy.deepcopy(M)
+    for _, item in index(m).values():
+        if item.get("id") == "h-load-time":
+            item["impact"] = "Cut load time by 40% to 2.5 seconds."
+    t = _variant(lambda d: _bullet(d, "h-load-time").update(text="Cut load time to 2,5 seconds."))
+    assert audit(t, m) == []
