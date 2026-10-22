@@ -45,7 +45,7 @@ from cvforge.render.cv import build_cv_view, render_view
 from cvforge.render.letter import ASSETS_DIR, letter_context, render_letter_context
 from cvforge.salary.market import load_market, match_market
 from cvforge.salary.suggest import Suggestion, below_floor, displays, suggest
-from cvforge.tailor.audit import Finding, audit, audit_rendered, load_tailored
+from cvforge.tailor.audit import Finding, audit, audit_rendered, figures, load_tailored
 from cvforge.text import file_part, slug, split_name
 from cvforge.track import stages as stages_mod
 from cvforge.track import tracker
@@ -138,16 +138,41 @@ def cmd_validate(args) -> int:
     return 0
 
 
+def _answer_figures(master: dict, lang: str, app_dir: Path) -> set[str]:
+    """Numbers an honest screening answer may hold that no highlight has: the knock-out facts
+    (years from dates, notice) and, once confirmed, the salary as `cvforge salary` shows it."""
+    facts = knockout_facts(master, engineering_months(master, _today()), lang)
+    found = figures(*facts.values())
+    salary_path = app_dir / "salary.json"
+    if salary_path.exists():
+        salary = json.loads(salary_path.read_text(encoding="utf-8"))
+        if salary.get("confirmed"):
+            amount = float(salary["amount"])
+            found |= figures(f"{amount:g}", f"{amount:.0f}", f"{amount:,.0f}", f"{amount:,.2f}")
+            for key in ("brl_month", "eur_year", "usd_year"):
+                value = float(salary[key])
+                found |= figures(f"{value:.0f}", f"{value:,.0f}")
+    return found
+
+
+def _audit_tailored(tailored: dict, master: dict, app_dir: Path) -> list[Finding]:
+    return audit(tailored, master,
+                 extra_allowed=_answer_figures(master, tailored["lang"], app_dir))
+
+
 def cmd_audit(args) -> int:
-    findings = audit(load_tailored(Path(args.tailored)), load_master(Path(args.master)))
+    path = Path(args.tailored)
+    master = load_master(Path(args.master))
+    findings = _audit_tailored(load_tailored(path), master, path.resolve().parent)
     _print_findings(findings)
     return 1 if findings else 0
 
 
 def cmd_build(args) -> int:
     master = load_master(Path(args.master))
-    tailored = load_tailored(Path(args.tailored))
-    findings = audit(tailored, master)
+    tailored_path = Path(args.tailored)
+    tailored = load_tailored(tailored_path)
+    findings = _audit_tailored(tailored, master, tailored_path.resolve().parent)
     if findings:
         _print_findings(findings)
         return 1
@@ -470,7 +495,7 @@ def cmd_answers(args) -> int:
             print(f"no tailored.yaml for '{args.slug}'", file=sys.stderr)
             return 1
         tailored = load_tailored(tailored_path)
-        findings = audit(tailored, master)
+        findings = _audit_tailored(tailored, master, app_dir)
         if findings:
             for f in findings:
                 print(f"{f.kind} {f.ref}: {f.message}", file=sys.stderr)

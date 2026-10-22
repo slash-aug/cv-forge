@@ -129,3 +129,23 @@ def test_master_cv_requires_every_contact_item(monkeypatch, tmp_path):
     seen = _capture_required(monkeypatch, tmp_path)
     assert main(["master-cv", P, "--lang", "en", "--out", str(tmp_path)]) == 0
     assert set(CONTACT_TEXTS) <= set(seen[0])
+
+
+def test_build_allows_knockout_figures_in_answers(monkeypatch, tmp_path, capsys):
+    from datetime import date
+
+    from cvforge import cli
+    from cvforge.answers.facts import knockout_facts
+    from cvforge.apply.experience import engineering_months
+
+    _capture_required(monkeypatch, tmp_path)
+    monkeypatch.setattr(cli, "_today", lambda: date(2026, 10, 22))
+    master = cli.load_master(Path(P))
+    years = knockout_facts(master, engineering_months(master, date(2026, 10, 22)), "en")["years"]
+    data = yaml.safe_load(Path(T).read_text(encoding="utf-8"))
+    data["answers"] = [{"question": "Years?", "answer": f"{years} of engineering.", "refs": []}]
+    app = tmp_path / "app"
+    app.mkdir()
+    (app / "tailored.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
+    assert main(["build", str(app / "tailored.yaml"), "--master", P, "--out", str(tmp_path),
+                 "--no-letter"]) == 0, capsys.readouterr().out

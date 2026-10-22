@@ -253,3 +253,20 @@ def test_persona_tailored_still_clean():
     assert "recruiter_note" in T
     assert any(isinstance(p, dict) for p in T["letter"]["paragraphs"])
     assert audit(T, M) == []
+
+
+def _answer(text):
+    return _variant(lambda d: d.update(answers=[
+        {"question": "How many years?", "answer": text, "refs": [], "limit": None}]))
+
+
+def test_extra_allowed_numbers_apply_to_answers():
+    t = _answer("I have 6 years and 9 months of experience.")
+    assert _kinds(t) == ["number"]
+    assert audit(t, M, extra_allowed={"6", "9"}) == []
+    assert [f.message for f in audit(t, M, extra_allowed={"6"})] == ["not in the master text: 9"]
+
+
+def test_extra_allowed_numbers_do_not_apply_to_letter():
+    t = _variant(lambda d: d["letter"].update(closing="Available in 30 days."))
+    assert [f.ref for f in audit(t, M, extra_allowed={"30"})] == ["letter.closing"]
