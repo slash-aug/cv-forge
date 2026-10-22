@@ -149,20 +149,16 @@ def test_profiles_are_visible_urls_without_scheme_or_www():
 
 
 @pytest.mark.latex
-def test_compiled_text_layer_is_ats_clean(tmp_path):
-    engine = load_config().lualatex
-    if not engine:
-        pytest.skip("no lualatex engine")
-    import subprocess
-
+def test_compiled_text_layer_is_ats_clean(cfg):
     from pypdf import PdfReader
 
-    build = Path(load_config().build_dir) / "test_render_cv"
-    build.mkdir(parents=True, exist_ok=True)
-    (build / "cv.tex").write_text(render_cv(T, M), encoding="utf-8")
-    subprocess.run([engine, "-interaction=nonstopmode", "cv.tex"], cwd=build,
-                   capture_output=True, check=True, timeout=300)
-    text = "\n".join(p.extract_text() for p in PdfReader(build / "cv.pdf").pages)
+    from cvforge.build import compile_tex
+
+    if not cfg.lualatex:
+        pytest.skip("no lualatex engine")
+    pdf = compile_tex(render_cv(T, M), engine=cfg.lualatex,
+                      build_dir=cfg.build_dir / "test", jobname="cv_ats")
+    text = "\n".join(p.extract_text() for p in PdfReader(pdf).pages)
     for token in ("GITHUB", "LINKEDIN", "MOBILE", chr(0x1F7E4)):
         assert token not in text
     assert "Integração de pagamentos & reconciliação" in text
