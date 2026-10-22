@@ -1,0 +1,29 @@
+from pathlib import Path
+
+from cvforge.config import Config, load_config
+
+
+def test_env_overrides(tmp_path):
+    c = load_config(env={"CVFORGE_DATA_DIR": str(tmp_path), "CVFORGE_LUALATEX": "/x/lualatex"}, file=None)
+    assert c.data_dir == tmp_path and c.lualatex == "/x/lualatex"
+
+
+def test_file_used_when_no_env(tmp_path):
+    f = tmp_path / "cvforge.toml"
+    f.write_text('[cvforge]\nbuild_dir = "/mnt/d/b"\n')
+    assert load_config(env={}, file=f).build_dir == Path("/mnt/d/b")
+
+
+def test_env_beats_file(tmp_path):
+    f = tmp_path / "cvforge.toml"
+    f.write_text('[cvforge]\nxelatex = "/from/file"\n')
+    c = load_config(env={"CVFORGE_XELATEX": "/from/env"}, file=f)
+    assert c.xelatex == "/from/env"
+
+
+def test_defaults_are_typed(tmp_path):
+    c = load_config(env={}, file=tmp_path / "missing.toml")
+    assert isinstance(c, Config)
+    assert c.data_dir.name == "data"
+    assert isinstance(c.lualatex, str) and isinstance(c.xelatex, str)
+    assert c.build_dir.name in {"cv-forge-build", "build"}
