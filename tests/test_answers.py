@@ -182,3 +182,19 @@ def test_need_and_have_questions_stay_distinct(tmp_path, asked, other):
     assert len(bank) == 2
     assert lookup(bank, asked, "en")["answer"] == "Yes."
     assert lookup(bank, other, "en")["answer"] == "No."
+
+
+def test_visa_keys_read_as_names():
+    from cvforge.answers.facts import visa_text
+
+    assert visa_text({"eu_blue_card": "eligible", "portugal": "CPLP mobility"}) == (
+        "EU Blue Card: eligible; Portugal: CPLP mobility")
+    assert visa_text({"EU": "not needed", "uk_skilled_worker": "no"}) == "EU: not needed; UK Skilled Worker: no"
+    assert visa_text({}) == "" and visa_text(None) == ""
+    assert visa_text("Needs sponsorship") == "Needs sponsorship"
+
+
+def test_knockout_visa_uses_names():
+    master = {**MASTER, "x-preferences": {**MASTER["x-preferences"],
+                                          "visa": {"eu_blue_card": "eligible"}}}
+    assert knockout_facts(master, 24, "en")["visa"] == "EU Blue Card: eligible"

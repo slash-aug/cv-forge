@@ -305,3 +305,28 @@ def test_corrupt_rate_cache_is_a_clean_error(env, capsys):
     cache.write_text("{", encoding="utf-8")
     assert _run() == 1
     assert "rate cache" in capsys.readouterr().err
+
+
+def test_note_is_stored_with_the_salary(env, capsys):
+    assert _run("--confirm", "--note", "Top of the posted range; strong AI fit.") == 0
+    data = json.loads((env / "salary.json").read_text(encoding="utf-8"))
+    assert data["explanation"] == "Top of the posted range; strong AI fit."
+    assert "Why: Top of the posted range; strong AI fit." in capsys.readouterr().out
+
+
+def test_note_survives_a_rerun_without_one(env):
+    assert _run("--note", "Market median for the country.") == 0
+    assert _run("--confirm") == 0
+    data = json.loads((env / "salary.json").read_text(encoding="utf-8"))
+    assert data["confirmed"] is True and data["explanation"] == "Market median for the country."
+
+
+def test_new_note_replaces_the_old_one(env):
+    assert _run("--note", "first") == 0
+    assert _run("--note", "second") == 0
+    assert json.loads((env / "salary.json").read_text(encoding="utf-8"))["explanation"] == "second"
+
+
+def test_no_note_means_no_explanation(env):
+    assert _run() == 0
+    assert "explanation" not in json.loads((env / "salary.json").read_text(encoding="utf-8"))

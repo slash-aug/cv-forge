@@ -235,3 +235,11 @@ def test_corrupt_salary_json_is_a_clean_error(tmp_path, monkeypatch, capsys):
     err = capsys.readouterr().err
     assert "salary.json" in err and "amount" in err
     assert not (app / "kit.json").exists()
+
+
+def test_kit_visa_field_uses_names():
+    master = {**MASTER, "x-preferences": {**MASTER["x-preferences"],
+                                          "visa": {"eu_blue_card": "eligible", "portugal": "CPLP mobility"}}}
+    k = build_kit(master, TAILORED, POSTING, SALARY, slug="example-corp", files=FILES)
+    visa = next(f["value"] for f in k["fields"] if f["key"] == "prefs.visa")
+    assert visa == "EU Blue Card: eligible; Portugal: CPLP mobility"

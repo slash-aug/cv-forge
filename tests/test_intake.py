@@ -355,3 +355,30 @@ def test_jsonld_accepts_entity_escaped_block():
     page = GUPY_PAGE.split('<script id="__NEXT_DATA__"')[0]
     p = fetch_posting("https://other.example/jobs/9", get=lambda u, **k: page, today=TODAY)
     assert p.title == "Desenvolvedor Backend | Python"
+
+
+GH_EMBED_URL = "https://careers.lumenforge.example/job-application/7070707"
+GH_EMBED_PAGE = (FIX / "greenhouse_embedded.html").read_text(encoding="utf-8")
+
+
+def test_greenhouse_job_embedded_in_next_flight_data():
+    p = fetch_posting(GH_EMBED_URL, get=lambda u, **k: GH_EMBED_PAGE, today=TODAY)
+    assert (p.company, p.title, p.source) == ("Lumen Forge", "Fullstack Engineer", "greenhouse")
+    assert p.location == "Remote"
+    assert p.apply_url == "https://careers.lumenforge.example/job-application/7070707?gh_jid=7070707"
+    assert "<" not in p.description
+    assert "café software" in p.description and "Thank you!" in p.description
+    assert "Employment type: Contract" in p.description
+
+
+def test_greenhouse_embedded_with_inline_content():
+    page = GH_EMBED_PAGE.replace('\\"content\\":\\"$24\\"', '\\"content\\":\\"&lt;p&gt;Inline body&lt;/p&gt;\\"')
+    assert page != GH_EMBED_PAGE
+    p = fetch_posting(GH_EMBED_URL, get=lambda u, **k: page, today=TODAY)
+    assert "Inline body" in p.description
+
+
+def test_flight_data_without_greenhouse_job_still_asks_for_paste():
+    page = GH_EMBED_PAGE.replace('\\"job\\":', '\\"other\\":')
+    with pytest.raises(IntakeError, match="paste the text instead"):
+        fetch_posting(GH_EMBED_URL, get=lambda u, **k: page, today=TODAY)

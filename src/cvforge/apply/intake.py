@@ -21,6 +21,8 @@ GUPY_CONTRACT = {"vacancy_type_effective": "CLT", "vacancy_legal_entity": "PJ",
                  "vacancy_type_internship": "internship", "vacancy_type_trainee": "trainee",
                  "vacancy_type_temporary": "temporary", "vacancy_type_freelancer": "freelancer",
                  "vacancy_type_autonomous": "freelancer"}
+FLIGHT_PUSH = re.compile(r"self\.__next_f\.push\(\[1,(\"(?:[^\"\\]|\\.)*\")\]\)", re.DOTALL)
+GH_EMBEDDED_JOB = re.compile(r'"job":(?=\{"absolute_url":)')
 HREF = re.compile(r"href\s*=\s*[\"'](https?://[^\"']+)[\"']", re.IGNORECASE)
 NO_POSTING = "no readable posting; paste the text instead"
 WORKPLACE = {"remote": "remote", "hybrid": "hybrid", "onsite": "onsite", "on-site": "onsite"}
@@ -126,12 +128,59 @@ def _ashby(org: str, job_id: str, url: str, get: Get, today: date) -> Posting:
                   apply_url=job.get("applyUrl"), source="ashby", today=today, markup=markup)
 
 
-def _greenhouse(org: str, job_id: str, url: str, get: Get, today: date) -> Posting:
-    job = _json(get(f"https://boards-api.greenhouse.io/v1/boards/{org}/jobs/{job_id}"))
+def _greenhouse_job(job: dict, *, org: str, url: str, today: date) -> Posting:
+    """A Greenhouse job record, from the board API or embedded in a careers page."""
+    markup = _plain_html(job.get("content") or "")
+    for field in job.get("metadata") or []:
+        if isinstance(field, dict) and field.get("name") == "Employment Type" and isinstance(field.get("value"), str):
+            markup += f"<p>Employment type: {html.escape(field['value'])} (Greenhouse job field)</p>"
     return _build(company=job.get("company_name") or org, title=job.get("title", ""),
                   location=(job.get("location") or {}).get("name", ""), url=url,
-                  apply_url=job.get("absolute_url"), source="greenhouse", today=today,
-                  markup=_plain_html(job.get("content") or ""))
+                  apply_url=job.get("absolute_url"), source="greenhouse", today=today, markup=markup)
+
+
+def _greenhouse(org: str, job_id: str, url: str, get: Get, today: date) -> Posting:
+    job = _json(get(f"https://boards-api.greenhouse.io/v1/boards/{org}/jobs/{job_id}"))
+    return _greenhouse_job(job, org=org, url=url, today=today)
+
+
+def _flight_data(page: str) -> str:
+    """The Next.js App Router stream (self.__next_f pushes) of a page, joined into one string."""
+    parts = []
+    for chunk in FLIGHT_PUSH.findall(page):
+        try:
+            parts.append(json.loads(chunk))
+        except ValueError:
+            continue
+    return "".join(parts)
+
+
+def _flight_text(flight: str, ref: str) -> str | None:
+    """A text row ("<id>:T<hex byte length>,<text>") that a "$<id>" value points to."""
+    match = re.search(r"(?:^|\n)" + re.escape(ref) + r":T([0-9a-fA-F]+),", flight)
+    if match is None:
+        return None
+    raw = flight.encode("utf-8")
+    start = len(flight[:match.end()].encode("utf-8"))
+    return raw[start:start + int(match.group(1), 16)].decode("utf-8", errors="replace")
+
+
+def _greenhouse_embedded(url: str, page: str, today: date) -> Posting | None:
+    """A Greenhouse job that a custom careers site (Next.js) ships in its page stream, or None."""
+    flight = _flight_data(page)
+    decoder = json.JSONDecoder(strict=False)
+    for match in GH_EMBEDDED_JOB.finditer(flight):
+        try:
+            job, _ = decoder.raw_decode(flight, match.end())
+        except ValueError:
+            continue
+        if not isinstance(job, dict) or not job.get("title") or not job.get("content"):
+            continue
+        content = job["content"]
+        if isinstance(content, str) and re.fullmatch(r"\$[0-9a-fA-F]+", content):
+            job = {**job, "content": _flight_text(flight, content[1:]) or ""}
+        return _greenhouse_job(job, org="", url=url, today=today)
+    return None
 
 
 def _lever(org: str, job_id: str, url: str, get: Get, today: date) -> Posting:
@@ -284,4 +333,11 @@ def fetch_posting(url: str, *, get: Get = http.get, today: date) -> Posting:
         return _lever(seg[0], seg[1], url, get, today)
     if http.on_domain(host, "gupy.io"):
         return _gupy(url, get, today)
-    return _jsonld(url, get(url), today)
+    page = get(url)
+    try:
+        return _jsonld(url, page, today)
+    except IntakeError:
+        embedded = _greenhouse_embedded(url, page, today)
+        if embedded is None:
+            raise
+        return embedded

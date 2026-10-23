@@ -191,11 +191,15 @@ This renders and compiles the CV and the letter PDFs into `<app>` and runs the A
 .venv/bin/cvforge salary <slug>
 ```
 
-Show the suggestion, its monthly and annual conversions and its sources, and ask the candidate to confirm it or give another amount. Then record the answer:
+The ask is always the **market rate for the job's country**: the posted range first, else market data. Never the candidate's current pay, and never the pay floor as the ask (the floor is only the line below which the tool warns).
+
+If the suggestion's basis is `floor` (no posted range and no market row for the country), do not offer it. Research current market pay for the role, seniority, country and contract with web search (never LinkedIn), add a row to `data/salary/market.csv` (columns `role,seniority,country,currency,period,low,mid,high,source,year`; `role` words must all appear in the posting title, e.g. `desenvolvedor full stack`), and rerun.
+
+Show the suggestion, its monthly and annual conversions and its sources, with a recommendation. The candidate follows the recommendation, so confirm it unless they give another amount, and always save the reasoning with `--note` (range and sources, why this point in it, fit and gaps, the lowest amount worth accepting, contract caveats). It is kept in `salary.json` across reruns until replaced:
 
 ```
-.venv/bin/cvforge salary <slug> --confirm             # keep the suggested amount
-.venv/bin/cvforge salary <slug> --confirm <amount>    # their amount, same currency and period
+.venv/bin/cvforge salary <slug> --confirm --note "<why>"            # keep the suggested amount
+.venv/bin/cvforge salary <slug> --confirm <amount> --note "<why>"   # another amount, same currency and period
 ```
 
 If it warns that the amount is below the pay floor, say so and let the candidate decide.

@@ -4,6 +4,21 @@ from __future__ import annotations
 from cvforge.profile.model import localized
 
 PT = ("pt-BR", "pt-PT")
+ACRONYMS = {"eu": "EU", "uk": "UK", "us": "US", "usa": "USA", "cplp": "CPLP"}
+
+
+def _visa_name(key: str) -> str:
+    """A master key such as `eu_blue_card` as a name ("EU Blue Card"); keys with capitals stay as written."""
+    if key != key.lower():
+        return key
+    return " ".join(ACRONYMS.get(w, w.capitalize()) for w in key.replace("-", "_").split("_") if w)
+
+
+def visa_text(visa) -> str:
+    """x-preferences.visa as one readable line: "EU Blue Card: eligible; Portugal: CPLP mobility"."""
+    if isinstance(visa, dict):
+        return "; ".join(f"{_visa_name(str(k))}: {v}" for k, v in visa.items())
+    return str(visa or "")
 
 
 def _plural(n: int, one: str, many: str) -> str:
@@ -32,7 +47,7 @@ def knockout_facts(master: dict, months: int, lang: str) -> dict[str, str]:
         for x in master.get("languages", []) if x.get("fluency"))
     yes, no = ("sim", "não") if lang in PT else ("yes", "no")
     return {
-        "visa": "; ".join(f"{k}: {v}" for k, v in (prefs.get("visa") or {}).items()),
+        "visa": visa_text(prefs.get("visa")),
         "years": years_text(months, lang),
         "languages": languages,
         "relocation": yes if prefs.get("relocation") else no,

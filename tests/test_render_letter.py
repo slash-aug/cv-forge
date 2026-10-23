@@ -89,3 +89,45 @@ def test_dict_paragraph_renders():
     out = render_letter(t, M, today=TODAY)
     assert r"Grew sales by 40\%." in out
     assert "refs" not in out
+
+
+CV_FONTS = {"Lato-Reg.ttf", "Lato-Bol.ttf", "Lato-RegIta.ttf", "Lato-BolIta.ttf"}
+
+
+def test_cover_class_uses_only_the_cv_fonts():
+    import re
+
+    cls = (ASSETS_DIR / "cover.cls").read_text()
+    assert "Raleway" not in cls
+    used = set(re.findall(r"Lato-[A-Za-z]+", cls))
+    assert used and {f"{u}.ttf" for u in used} <= CV_FONTS, used
+
+
+def test_letter_paragraphs_are_justified_without_hyphenation():
+    cls = (ASSETS_DIR / "cover.cls").read_text()
+    body = next(line for line in cls.splitlines() if line.startswith(r"\newcommand{\lettercontent}"))
+    assert r"\justifying" in body and r"\raggedright" not in body
+    assert r"\hyphenpenalty=10000" in cls
+    assert r"\setlength{\JustifyingParindent}{0pt}" in cls  # no first-line indent, like the CV
+
+
+@pytest.mark.latex
+def test_compiled_letter_matches_cv_fonts_and_keeps_words_whole(cfg):
+    from pypdf import PdfReader
+
+    from cvforge.build import compile_tex
+
+    if not cfg.xelatex:
+        pytest.skip("no xelatex engine")
+    long = ("Integrated payment gateways, concurrency-safe wallets, webhooks and TypeORM transactions "
+            "across PostgreSQL databases with comprehensive automated testing infrastructure. ") * 6
+    t = {**T, "letter": {**T["letter"], "paragraphs": [long]}}
+    pdf = compile_tex(render_letter(t, M, today=TODAY), engine=cfg.xelatex,
+                      build_dir=cfg.build_dir / "test", jobname="letter_fonts", assets=ASSETS_DIR)
+    names = set()
+    for page in PdfReader(pdf).pages:
+        for font in (page["/Resources"].get("/Font") or {}).values():
+            names.add(str(font.get_object()["/BaseFont"]).split("+")[-1])
+    assert names and names <= {"Lato-Regular", "Lato-Bold", "Lato-Italic", "Lato-BoldItalic"}, names
+    text = PdfReader(pdf).pages[0].extract_text()
+    assert not any(line.rstrip().endswith("-") for line in text.splitlines()), text

@@ -32,6 +32,11 @@
     pdfpagemode=UseNone,
 }}
 \usepackage[scale=0.80]{geometry}
+% Keep every word whole: a hyphenated line break splits a keyword ("Type-" / "ORM")
+% in the text layer ATS parsers read. Extra stretch avoids overfull lines.
+\hyphenpenalty=10000
+\exhyphenpenalty=10000
+\emergencystretch=3em
 
 \name{\VAR{contact.first | tex}}{\VAR{contact.last | tex}}
 %% if contact.title

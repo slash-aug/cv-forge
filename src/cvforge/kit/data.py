@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re
 
+from cvforge.answers.facts import visa_text
 from cvforge.profile.model import index, localized
 from cvforge.render.cv import build_cv_view
 from cvforge.text import split_name
@@ -66,9 +67,7 @@ def _fields(master: dict) -> list[dict]:
     location = basics.get("location") or {}
     prefs = master.get("x-preferences") or {}
     first, last = split_name(basics["name"])
-    visa = prefs.get("visa")
-    if isinstance(visa, dict):
-        visa = "; ".join(f"{k}: {v}" for k, v in visa.items())
+    visa = visa_text(prefs.get("visa")) or None
     relocation = prefs.get("relocation")
     rows = [
         _field("basics.name", "Full name", basics["name"], "personal"),
