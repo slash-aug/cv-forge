@@ -12,6 +12,7 @@
       "Edit(.github/**)",
       "Bash(git push:*)",
       "Bash(gh:*)",
+      "Bash(gh api:*)",
       "Bash(git remote:*)",
       "Edit(src/cvforge/guard.py)",
       "Edit(.githooks/**)"
@@ -49,7 +50,6 @@
       "Bash(gh gist:*)",
       "Bash(gh release:*)",
       "Bash(gh repo create:*)",
-      "Bash(gh api:*)",
       "Bash(curl --json:*)",
       "Bash(curl -X post:*)",
       "Bash(curl -sd:*)",
