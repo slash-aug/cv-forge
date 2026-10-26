@@ -164,6 +164,12 @@ describe("never filled", () => {
     expect(s.needsYou).toHaveLength(1);
   });
 
+  test("an unplaced combobox says to pick from the list", async () => {
+    input("mystery").setAttribute("role", "combobox");
+    const s = await fill(map({ unplaced: [input("mystery")] }), kit, deps);
+    expect(s.needsYou[0]?.note).toBe("pick from the list by hand");
+  });
+
   test("unplaced elements are highlighted and reported", async () => {
     const s = await fill(map({ unplaced: [input("mystery")] }), kit, deps);
     expect(input("mystery").hasAttribute("data-cvforge-reason")).toBe(true);
@@ -202,6 +208,17 @@ describe("salary", () => {
     const s = await fill(map({ salary: slot("EUR", "month") }), kit, deps);
     expect(input("salary").value).toBe("");
     expect(s.needsYou[0]?.note).toBe("salary wants EUR/month");
+  });
+
+  test("salary select with no matching option: pick by hand", async () => {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      '<select id="salsel"><option value="">Choose</option><option>Up to 10000</option></select>',
+    );
+    const el = $<HTMLSelectElement>("salsel");
+    const s = await fill(map({ salary: { el, currency: null, period: null } }), kit, deps);
+    expect(el.value).toBe("");
+    expect(s.needsYou[0]?.note).toBe("salary: pick by hand");
   });
 
   test("confirmed matching salary filled as whole number", async () => {

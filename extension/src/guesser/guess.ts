@@ -1,5 +1,5 @@
 import { isConsent, isConsentText } from "../content/consent";
-import { labelText } from "../content/dom";
+import { isCombobox, labelText } from "../content/dom";
 import type { Control, FieldKey, FieldSlot, PageMap, QuestionSlot, SalarySlot, Target } from "../fill/pagemap";
 import { normaliseQuestion } from "../shared/normalise";
 
@@ -127,6 +127,14 @@ function signalsOf(el: Control): string[] {
 
 const legendOf = (el: Element): string => squash(el.closest("fieldset")?.querySelector("legend")?.textContent ?? "");
 
+/** The legend, else the label of the enclosing role=radiogroup. */
+function groupLabelOf(el: Element): string {
+  const legend = legendOf(el);
+  if (legend) return legend;
+  const group = el.closest("[role=radiogroup]");
+  return group ? squash(labelText(group)) : "";
+}
+
 /** Label text plus the closest legend or parent text, for currency and period hints. */
 function hintText(el: Control): string {
   const near = legendOf(el) || squash(el.parentElement?.textContent ?? "");
@@ -252,13 +260,24 @@ export function guessPage(doc: Document): PageMap {
           )
         : [el]
       ).filter(isRelevant) as HTMLInputElement[];
-      const legend = legendOf(el);
+      const legend = groupLabelOf(el);
+      // A consent group is never answered, not even "No".
+      if (legend && isConsentText(legend)) {
+        map.consent.push(...group);
+        continue;
+      }
       const signals = [legend, el.name.replace(/[_-]+/g, " ")];
       if (!place(bestKey(signals), group, el) && !question(legend, group, el)) map.unplaced.push(el);
       continue;
     }
 
     if (el instanceof HTMLInputElement && !TEXT_TYPES.has(el.type)) continue;
+
+    // Searchable dropdowns: typing does not choose an option.
+    if (isCombobox(el)) {
+      map.unplaced.push(el);
+      continue;
+    }
 
     const isArea = el instanceof HTMLTextAreaElement;
     const { key, tie } = isArea ? { key: null, tie: false } : rank(signalsOf(el), el, el.autocomplete);

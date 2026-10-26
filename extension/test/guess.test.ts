@@ -222,12 +222,6 @@ describe("review fixes", () => {
       <label for=c>Celular</label><input id=c><label for=d>WhatsApp</label><input id=d>`);
     expect(m.phone).toEqual([$("a"), $("b"), $("c"), $("d")]);
   });
-
-  test("a consent-looking radio group never goes to consent", () => {
-    const m = put(`<fieldset><legend>I agree to the privacy policy</legend>
-      <label><input type=radio name=ok value=yes> Yes</label><label><input type=radio name=ok value=no> No</label></fieldset>`);
-    expect(m.consent).toEqual([]);
-  });
 });
 
 describe("end to end", () => {
@@ -248,5 +242,64 @@ describe("end to end", () => {
     expect(($("cons") as HTMLInputElement).checked).toBe(false);
     expect(($("ph") as HTMLInputElement).value).toBe("");
     expect(clicks).toHaveBeenCalledTimes(0);
+  });
+});
+
+describe("comboboxes", () => {
+  test("searchable comboboxes are unplaced, never fields or questions", async () => {
+    document.body.innerHTML = `<form>
+      <label for="c1">City</label><input id="c1" role="combobox">
+      <label for="c2">Country</label><input id="c2" aria-autocomplete="list">
+      <label for="c3">Which team interests you?</label><input id="c3" aria-haspopup="listbox">
+      <label for="c4">Email</label><input id="c4" type="email" aria-autocomplete="both"></form>`;
+    const m = guessPage(document);
+    expect(m.fields).toEqual([]);
+    expect(m.questions).toEqual([]);
+    expect(m.unplaced).toEqual([$("c1"), $("c2"), $("c3"), $("c4")]);
+    const s = await fill(m, kitJson, {
+      pdf: async () => ({ ok: false, error: { kind: "down" } }),
+      bank: async () => null,
+      suggest: () => undefined,
+    });
+    expect(s.needsYou.map((n) => n.note)).toEqual(Array(4).fill("pick from the list by hand"));
+    expect(($("c1") as HTMLInputElement).value).toBe("");
+  });
+});
+
+describe("consent radio groups", () => {
+  const deps: FillDeps = {
+    pdf: async () => ({ ok: false, error: { kind: "down" } }),
+    bank: async () => ({ question: "I agree to the privacy policy", answer: "Yes" }),
+    suggest: () => undefined,
+  };
+  const kit = (): Kit => ({
+    ...kitJson,
+    answers: [{ question: "I agree to the privacy policy", answer: "Yes", limit: null }],
+  });
+
+  test("a legend that reads as consent sends every radio to consent", async () => {
+    document.body.innerHTML = `<form><fieldset><legend>I agree to the privacy policy</legend>
+      <label><input type="radio" name="pp" id="y" value="yes">Yes</label>
+      <label><input type="radio" name="pp" id="n" value="no">No</label></fieldset></form>`;
+    const m = guessPage(document);
+    expect(m.consent).toEqual([$("y"), $("n")]);
+    expect(m.fields).toEqual([]);
+    expect(m.questions).toEqual([]);
+    await fill(m, kit(), deps);
+    expect(($("y") as HTMLInputElement).checked).toBe(false);
+    expect(($("n") as HTMLInputElement).checked).toBe(false);
+  });
+
+  test("a radiogroup label that reads as consent does too", async () => {
+    document.body.innerHTML = `<form><div role="radiogroup" aria-labelledby="gl">
+      <span id="gl">I agree to the privacy policy</span>
+      <label><input type="radio" name="pp" id="y" value="yes">Yes</label>
+      <label><input type="radio" name="pp" id="n" value="no">No</label></div></form>`;
+    const m = guessPage(document);
+    expect(m.consent).toEqual([$("y"), $("n")]);
+    expect(m.questions).toEqual([]);
+    await fill(m, kit(), deps);
+    expect(($("y") as HTMLInputElement).checked).toBe(false);
+    expect(($("n") as HTMLInputElement).checked).toBe(false);
   });
 });

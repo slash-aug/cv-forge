@@ -155,10 +155,18 @@ describe("new form", () => {
     expect(val("#first_name")).toBe("Ana");
     expect(val("#last_name")).toBe("Exemplo");
     expect(val("#email")).toBe("ana.exemplo@example.com");
-    expect(val("#candidate-location")).toBe("Lisbon");
     expect(val("#question_19385420004")).toBe("https://github.com/ana-exemplo");
     expect(val("#question_19385421004")).toBe("https://ana.example.com");
     expect((($("#resume") as HTMLInputElement).files?.length)).toBe(1);
+  });
+
+  test("the location combobox is left to pick from the list", async () => {
+    const summary = await fill(map, kit, deps());
+    expect(val("#candidate-location")).toBe("");
+    expect(map.unplaced).toContain($("#candidate-location"));
+    expect(map.fields.map((f) => f.key)).not.toContain("basics.city");
+    const item = summary.needsYou.find((n) => n.el === $("#candidate-location"));
+    expect(item?.note).toBe("pick from the list by hand");
   });
 
   test("LinkedIn is placed when the kit has one", async () => {
@@ -224,6 +232,17 @@ describe("location", () => {
     const map = greenhouse.map(document);
     expect(map.fields.map((f) => [f.key, (f.el as HTMLElement).id])).toEqual([["basics.city", "home_city"]]);
     expect(map.unplaced).toContain($("#ethnicity"));
+  });
+
+  test("any searchable combobox is unplaced, whatever its role attribute", () => {
+    document.body.innerHTML = `<form id="application_form">
+      <label for="first_name">First name</label><input id="first_name" type="text" aria-autocomplete="both">
+      <label for="loc">Location</label><input id="job_application_location" name="job_application[location]" type="text" aria-haspopup="listbox">
+      <label for="question_1">Why us?</label><input id="question_1" type="text" aria-autocomplete="list"></form>`;
+    const map = greenhouse.map(document);
+    expect(map.fields).toEqual([]);
+    expect(map.questions).toEqual([]);
+    for (const id of ["first_name", "job_application_location", "question_1"]) expect(map.unplaced).toContain($(`#${id}`));
   });
 
   test("a location field whose id and name say neither city nor location is unplaced", () => {

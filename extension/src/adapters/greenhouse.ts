@@ -1,5 +1,5 @@
 import { isConsent, isConsentText } from "../content/consent";
-import { labelText } from "../content/dom";
+import { isCombobox, labelText } from "../content/dom";
 import type { Control, FieldKey, PageMap, Target } from "../fill/pagemap";
 import { isLinkedInHost } from "../shared/linkedin";
 import { normaliseQuestion } from "../shared/normalise";
@@ -45,8 +45,6 @@ function claims(loc: URL, doc: Document): boolean {
 function slug(el: Control): string {
   return /^job_application\[(\w+)\]$/.exec(el.name)?.[1] ?? el.id;
 }
-
-const isCombobox = (el: Control): boolean => el.getAttribute("role") === "combobox";
 
 function relevant(el: Element): el is Control {
   if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement)) {
@@ -144,6 +142,13 @@ function map(doc: Document): PageMap {
       m.phone.push(el);
       continue;
     }
+
+    // Searchable dropdowns (location, country, react-select questions): typing does not choose an option.
+    if (isCombobox(el)) {
+      const label = questionLabel(el);
+      (label !== "" && isConsentText(label) ? m.consent : m.unplaced).push(el as HTMLInputElement);
+      continue;
+    }
     if (simple) {
       field(simple, el);
       continue;
@@ -164,11 +169,6 @@ function map(doc: Document): PageMap {
     }
     if (isConsentText(label)) {
       (el instanceof HTMLInputElement ? m.consent : m.unplaced).push(el);
-      continue;
-    }
-    // react-select dropdowns are comboboxes backed by a text input; typing does not choose an option.
-    if (isCombobox(el)) {
-      m.unplaced.push(el);
       continue;
     }
     const link = linkKey(label);

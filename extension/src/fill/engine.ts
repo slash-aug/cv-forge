@@ -1,4 +1,4 @@
-import { attachFile, checkRadio, highlight, isEmpty, labelText, selectOption, setValue } from "../content/dom";
+import { attachFile, checkRadio, highlight, isCombobox, isEmpty, labelText, selectOption, setValue } from "../content/dom";
 import type { Kit } from "../shared/kit";
 import type { Result } from "../shared/messages";
 import { normaliseQuestion } from "../shared/normalise";
@@ -79,7 +79,9 @@ export async function fill(map: PageMap, kit: Kit, deps: FillDeps): Promise<Summ
   // Never-filled elements first, so they are flagged even if a later step fails.
   for (const el of map.phone) needs(nameOf(el), el, "phone: fill by hand");
   for (const el of map.consent) needs(nameOf(el), el, "consent: tick by hand");
-  for (const el of map.unplaced) needs(nameOf(el), el, "not recognised: fill by hand");
+  for (const el of map.unplaced) {
+    needs(nameOf(el), el, isCombobox(el) ? "pick from the list by hand" : "not recognised: fill by hand");
+  }
 
   const step = async (label: string, el: Element | null, run: () => void | Promise<void>): Promise<void> => {
     try {
@@ -167,7 +169,8 @@ function fillSalary(map: PageMap, kit: Kit, s: Summary, needs: Needs): void {
   const outcome = place(slot.el, String(Math.round(sal.amount)));
   if (outcome === "set") s.filled.push({ label, el: slot.el });
   else if (outcome === "same") s.filled.push({ label, el: slot.el, note: "already filled" });
-  else needs(label, slot.el, "already filled, kit says " + String(Math.round(sal.amount)));
+  else if (outcome === "differs") needs(label, slot.el, "already filled, kit says " + String(Math.round(sal.amount)));
+  else needs(label, slot.el, "salary: pick by hand");
 }
 
 async function fillFiles(map: PageMap, kit: Kit, deps: FillDeps, s: Summary, needs: Needs, step: Step): Promise<void> {

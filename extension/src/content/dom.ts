@@ -34,6 +34,17 @@ export function labelText(el: Element): string {
   return parts.join(" ").trim();
 }
 
+/**
+ * A text input that opens a list to choose from (react-select and the like). Typing into one
+ * does not choose an option, so both mappers leave it to the user.
+ */
+export function isCombobox(el: Element): boolean {
+  if (!(el instanceof HTMLInputElement)) return false;
+  const auto = el.getAttribute("aria-autocomplete");
+  return el.getAttribute("role") === "combobox" || auto === "list" || auto === "both" ||
+    el.getAttribute("aria-haspopup") === "listbox";
+}
+
 function plain(text: string): string {
   return text.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().trim().replace(/\s+/g, " ");
 }
