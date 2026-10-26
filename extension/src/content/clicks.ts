@@ -60,13 +60,37 @@ function labels(el: HTMLElement): string {
 // Only real buttons are ever clicked; labels, checkboxes, radios and children of
 // buttons, links, labels or inputs are refused because clicking them can submit.
 const CLICKABLE = "button, input[type=button], div[role=button], span[role=button], li[role=button]";
-const CONTAINERS = "button, a, label, [role=button], [role=link], input";
+const CONTAINERS =
+  "button, a, label, [role=button], [role=link], input, [role=checkbox], [role=radio], [role=switch], " +
+  "[role=option], [role=menuitemcheckbox], summary, details > summary";
+
+/** Shadow root of e, open or closed (closed roots via the extension-only APIs). */
+function shadowOf(e: Element): ShadowRoot | null {
+  if (e.shadowRoot) return e.shadowRoot;
+  try {
+    const dom = (globalThis as unknown as { chrome?: { dom?: { openOrClosedShadowRoot?: (x: Element) => unknown } } })
+      .chrome?.dom;
+    const viaChrome = dom?.openOrClosedShadowRoot?.(e) as ShadowRoot | null | undefined;
+    if (viaChrome) return viaChrome;
+  } catch {
+    // not available in this context
+  }
+  return (e as { openOrClosedShadowRoot?: ShadowRoot | null }).openOrClosedShadowRoot ?? null;
+}
+
+/** True only for an element that sits plainly in the main document's light DOM. */
+function inPlainLightDom(el: Element, ancestors: Element[]): boolean {
+  if (el.getRootNode() !== el.ownerDocument) return false;
+  if (el.assignedSlot !== null) return false;
+  return ![el, ...ancestors].some((e) => shadowOf(e) !== null);
+}
 
 export function safeClick(el: Element, allow: AllowList): boolean {
   if (!(el instanceof HTMLElement)) return false;
   if (!el.matches(CLICKABLE)) return false;
-  if (el.shadowRoot || el.localName.includes("-")) return false;
+  if (el.localName.includes("-")) return false;
   const ancestors = composedAncestors(el);
+  if (!inPlainLightDom(el, ancestors)) return false;
   if (ancestors.some((a) => a.matches(CONTAINERS))) return false;
   if (!allow.some((selector) => el.matches(selector))) return false;
   if ((el as { disabled?: boolean }).disabled || el.hasAttribute("disabled")) return false;

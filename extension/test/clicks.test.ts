@@ -231,4 +231,80 @@ describe("safeClick", () => {
     const custom = make(`<my-x role="button" data-t>Add experience</my-x>`);
     expect(safeClick(custom, ["my-x"])).toBe(false);
   });
+
+  function slotted(shadowHtml: string): HTMLElement {
+    document.body.innerHTML = `<div id="h"><span role="button" data-t>Add experience</span></div>`;
+    document.getElementById("h")!.attachShadow({ mode: "open" }).innerHTML = shadowHtml;
+    const el = document.querySelector<HTMLElement>("[data-t]")!;
+    el.click = vi.fn();
+    return el;
+  }
+
+  test("refuses a light-DOM span slotted into a shadow submit button", () => {
+    const el = slotted(`<form><button type="submit"><slot></slot></button></form>`);
+    expect(safeClick(el, ["span"])).toBe(false);
+    expect(el.click).not.toHaveBeenCalled();
+  });
+
+  test("refuses a slotted span in a shadow a[href]", () => {
+    const el = slotted(`<a href="/x"><slot></slot></a>`);
+    expect(safeClick(el, ["span"])).toBe(false);
+  });
+
+  test("refuses a slotted span in a shadow label with a checkbox", () => {
+    const el = slotted(`<label><input type="checkbox" id="c"><slot></slot></label>`);
+    expect(safeClick(el, ["span"])).toBe(false);
+    const box = document.getElementById("h")!.shadowRoot!.getElementById("c") as HTMLInputElement;
+    expect(box.checked).toBe(false);
+  });
+
+  test("refuses a div with a closed shadow root (chrome.dom)", () => {
+    document.body.innerHTML = `<div role="button" id="h">Add experience</div>`;
+    const host = document.getElementById("h")!;
+    const root = host.attachShadow({ mode: "closed" });
+    host.click = vi.fn();
+    vi.stubGlobal("chrome", { dom: { openOrClosedShadowRoot: (e: Element) => (e === host ? root : null) } });
+    try {
+      expect(safeClick(host, ["div"])).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(host.click).not.toHaveBeenCalled();
+  });
+
+  test("refuses a div with a closed shadow root (openOrClosedShadowRoot property)", () => {
+    document.body.innerHTML = `<div role="button" id="h">Add experience</div>`;
+    const host = document.getElementById("h")!;
+    const root = host.attachShadow({ mode: "closed" });
+    Object.defineProperty(host, "openOrClosedShadowRoot", { value: root });
+    host.click = vi.fn();
+    expect(safeClick(host, ["div"])).toBe(false);
+    expect(host.click).not.toHaveBeenCalled();
+  });
+
+  test("refuses a light-DOM child of a closed shadow host", () => {
+    document.body.innerHTML = `<div id="h"><button type="button" data-t>Add experience</button></div>`;
+    const host = document.getElementById("h")!;
+    const root = host.attachShadow({ mode: "closed" });
+    vi.stubGlobal("chrome", { dom: { openOrClosedShadowRoot: (e: Element) => (e === host ? root : null) } });
+    try {
+      expect(safeClick(document.querySelector<HTMLElement>("[data-t]")!, ["button"])).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  test("refuses a span inside role=checkbox, switch, option and summary", () => {
+    for (const outer of ['<div role="checkbox">', '<div role="switch">', '<div role="radio">', '<div role="option">',
+      '<div role="menuitemcheckbox">', "<details><summary>", "<summary>"]) {
+      const close = outer.startsWith("<details") ? "</summary></details>" : outer.replace("<", "</").replace(/ .*>/, ">");
+      const el = make(`${outer}<span role="button" data-t>Add experience</span>${close}`);
+      expect(safeClick(el, ["span"])).toBe(false);
+    }
+  });
+
+  test("a plain light-DOM button in a form is still clicked", () => {
+    const el = make(`<form><button type="button" data-t>Add experience</button></form>`);
+    expect(safeClick(el, ["button"])).toBe(true);
+  });
 });
