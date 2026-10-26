@@ -119,6 +119,7 @@ Settings come from environment variables first, then the `[cvforge]` table of `c
 | --- | --- | --- |
 | `data_dir` | `CVFORGE_DATA_DIR` | `data/` in the repository |
 | `build_dir` | `CVFORGE_BUILD_DIR` | `/mnt/d/cv-forge-build` if `/mnt/d` exists, else `build/` in the repository |
+| `serve_port` | `CVFORGE_SERVE_PORT` | `47321` |
 | `lualatex` | `CVFORGE_LUALATEX` | `/mnt/d/MiKTeX/miktex/bin/x64/lualatex.exe` if present, else `lualatex` on `PATH` |
 | `xelatex` | `CVFORGE_XELATEX` | `/mnt/d/MiKTeX/miktex/bin/x64/xelatex.exe` if present, else `xelatex` on `PATH` |
 
@@ -130,6 +131,16 @@ xelatex = "/mnt/c/Program Files/MiKTeX/miktex/bin/x64/xelatex.exe"
 ```
 
 LaTeX runs in `<build_dir>/.cvforge-jobs/<job>/`, which is wiped before each run; nothing else in the build directory is touched. The finished PDFs are copied to the output directory. The privacy denylist is read from `<data_dir>/profile/master.yaml`.
+
+## Browser extension
+
+A small extension fills application forms from a job's `kit.json`. It only fills after you click Fill, never ticks consent boxes, never fills the phone number, and never clicks Submit.
+
+1. Build it: `cd extension && npm install && npm run build`.
+2. Load it: in Chrome open `chrome://extensions`, turn on Developer mode and choose Load unpacked; in Firefox open `about:debugging` and choose Load Temporary Add-on.
+3. Start the server: `.venv/bin/cvforge serve`. It listens on `127.0.0.1` only (port 47321, or `serve_port` in `cvforge.toml`).
+4. Pair: copy the pairing token (`cvforge serve --show-token`) into the extension's options page.
+5. Use it: run `cvforge kit <slug>`, open the application form and click Fill.
 
 ## Privacy model
 

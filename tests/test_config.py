@@ -1,6 +1,8 @@
 from pathlib import Path
 
-from cvforge.config import Config, load_config
+import pytest
+
+from cvforge.config import Config, ConfigError, load_config
 
 
 def test_env_overrides(tmp_path):
@@ -54,3 +56,11 @@ def test_bad_toml_is_a_config_error(tmp_path):
     f.write_text("[cvforge\n")
     with pytest.raises(ConfigError, match="cvforge.toml"):
         load_config(env={}, file=f)
+
+
+def test_config_serve_port(tmp_path):
+    assert load_config(env={}, file=tmp_path / "missing.toml").serve_port == 47321
+    assert load_config(env={"CVFORGE_SERVE_PORT": "5000"}, file=None).serve_port == 5000
+    for bad in ("abc", "70000", "-1"):
+        with pytest.raises(ConfigError):
+            load_config(env={"CVFORGE_SERVE_PORT": bad}, file=None)

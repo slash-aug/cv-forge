@@ -377,6 +377,38 @@ def _show_application(path: Path, app_dir: Path, slug_: str, today: date) -> int
     return 0
 
 
+def cmd_serve(args) -> int:
+    from cvforge.serve import token as serve_token
+    from cvforge.serve.app import App
+    from cvforge.serve.server import PortInUse, make_server
+
+    cfg = load_config()
+    pairing = serve_token.load_or_create(cfg.data_dir)
+    if args.show_token:
+        print(pairing)
+        return 0
+    port = cfg.serve_port if args.port is None else args.port
+    if not 0 <= port <= 65535:
+        print(f"port must be between 0 and 65535, got {port}", file=sys.stderr)
+        return 1
+    app = App(cfg.data_dir, pairing, port)
+    try:
+        httpd = make_server(app, port)
+    except PortInUse:
+        print(f"cv-forge server already running on port {port}", file=sys.stderr)
+        return 1
+    app.port = port = httpd.server_address[1]
+    print(f"cv-forge server on http://127.0.0.1:{port} (Ctrl+C to stop)", flush=True)
+    print(f"pairing token: {pairing}", flush=True)
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        httpd.server_close()
+    return 0
+
+
 def cmd_due(args) -> int:
     cfg = load_config()
     report = due_report(tracker.load(cfg.data_dir / "tracker.csv"),
@@ -810,6 +842,10 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--lang", help="answer language (default: tailored.yaml lang, else en)")
     p.add_argument("--master", help="master profile (default: <data_dir>/profile/master.yaml)")
     p.set_defaults(func=cmd_answers)
+    p = sub.add_parser("serve", help="local server for the browser extension (127.0.0.1)")
+    p.add_argument("--port", type=int, help="port (default: serve_port in config, 47321)")
+    p.add_argument("--show-token", action="store_true", help="print the pairing token and exit")
+    p.set_defaults(func=cmd_serve)
     p = sub.add_parser("due", help="stages, follow-ups and stale applications")
     p.set_defaults(func=cmd_due)
     return parser

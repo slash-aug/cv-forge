@@ -101,6 +101,8 @@ def test_prose_flags_belong_to_the_preceding_call(path):
 @pytest.mark.parametrize("path", FILES, ids=lambda p: p.name)
 def test_no_fetch_tools_linkedin_or_personal_data(path):
     text = _text(path)
+    # the one allowed curl is the health check of the local extension server
+    text = text.replace("curl -s --max-time 2 -o /dev/null -w '%{http_code}' http://127.0.0.1:47321/health", "")
     for banned in ("curl", "wget", "linkedin.com/", EM_DASH):
         assert banned not in text, f"{path.name} contains {banned!r}"
     assert not EMAIL.search(text), EMAIL.search(text).group(0)

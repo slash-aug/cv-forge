@@ -28,6 +28,7 @@ Venv: `.venv/bin/cvforge`
 - `cvforge kit <slug>`: write kit.json and kit.html to copy into forms
 - `cvforge track add|status|stage|done|show`: record applications and stages
 - `cvforge due`: stages, follow-ups and stale applications
+- `cvforge serve`: local server for the browser extension (127.0.0.1, pairing token; `--show-token`)
 - `/apply` and `/outcome`: Claude commands that drive the apply flow
 - `cvforge guard staged` / `tree` / `msg`: privacy checks used by the git hooks and CI
 
