@@ -1,10 +1,13 @@
 import copy
+import os
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
 from pypdf import PdfReader
 
-from cvforge.build import JOBS_DIR, LatexError, compile_tex
+from cvforge.build import JOBS_DIR, STALE_JOB_SECONDS, LatexError, compile_tex
 from cvforge.profile.model import load_master
 from cvforge.render.cv import render_cv
 from cvforge.render.letter import ASSETS_DIR, render_letter
@@ -47,13 +50,36 @@ def test_missing_engine_binary_raises(tmp_path):
         compile_tex("x", engine="/nonexistent/lualatex", build_dir=tmp_path, jobname="t")
 
 
-def test_fresh_job_dir_is_wiped(tmp_path):
-    job = tmp_path / JOBS_DIR / "t"
-    job.mkdir(parents=True)
-    (job / "stale.txt").write_text("old")
-    with pytest.raises(LatexError):
-        compile_tex("x", engine="/nonexistent/lualatex", build_dir=tmp_path, jobname="t")
-    assert not (job / "stale.txt").exists()
+def _stub_engine(tmp_path, delay="0"):
+    """A fake LaTeX engine: waits, then copies the .tex source to the PDF path."""
+    stub = tmp_path / "fake-latex.sh"
+    stub.write_text(f'#!/bin/sh\nsleep {delay}\ncp "$3" "${{3%.tex}}.pdf"\n')
+    stub.chmod(0o755)
+    return str(stub)
+
+
+def test_parallel_builds_with_the_same_jobname_do_not_collide(tmp_path):
+    engine = _stub_engine(tmp_path, delay="0.5")
+    build = tmp_path / "b"
+    sources = [f"source {n}" for n in range(4)]
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        pdfs = list(pool.map(
+            lambda src: compile_tex(src, engine=engine, build_dir=build, jobname="cv"), sources))
+    assert [pdf.read_text() for pdf in pdfs] == sources
+    assert len({pdf.parent for pdf in pdfs}) == 4
+
+
+def test_stale_job_folders_are_swept(tmp_path):
+    jobs = tmp_path / JOBS_DIR
+    old, recent = jobs / "cv-old", jobs / "cv-recent"
+    for d in (old, recent):
+        d.mkdir(parents=True)
+        (d / "cv.pdf").write_text("x")
+    stale = time.time() - STALE_JOB_SECONDS - 60
+    os.utime(old, (stale, stale))
+    compile_tex("x", engine=_stub_engine(tmp_path), build_dir=tmp_path, jobname="cv")
+    assert not old.exists()
+    assert recent.exists()
 
 
 def test_user_folder_named_like_the_job_is_kept(tmp_path):

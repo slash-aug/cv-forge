@@ -6,12 +6,17 @@ import re
 import shutil
 import signal
 import subprocess
+import tempfile
+import time
 from pathlib import Path
 
 LOG_TAIL_LINES = 30
 # Jobs live in this tool-owned subfolder, so wiping a job never touches a user folder
 # that happens to share its name (for example build_dir=/mnt/d with a "cv" folder).
 JOBS_DIR = ".cvforge-jobs"
+# Each build gets its own job folder, so builds can run at the same time. Folders older
+# than this are swept on the next build; a build never runs this long (see timeout).
+STALE_JOB_SECONDS = 24 * 60 * 60
 
 
 class LatexError(RuntimeError):
@@ -28,6 +33,16 @@ def _log_tail(job_dir: Path, jobname: str, fallback: str = "") -> str:
     return "\n".join(text.splitlines()[-LOG_TAIL_LINES:])
 
 
+def _sweep_stale_jobs(jobs_dir: Path) -> None:
+    cutoff = time.time() - STALE_JOB_SECONDS
+    for job in jobs_dir.iterdir():
+        try:
+            if job.is_dir() and not job.is_symlink() and job.stat().st_mtime < cutoff:
+                shutil.rmtree(job, ignore_errors=True)
+        except FileNotFoundError:
+            pass  # another build swept it first
+
+
 def compile_tex(
     tex_source: str,
     *,
@@ -37,7 +52,10 @@ def compile_tex(
     assets: Path | None = None,
     timeout: int = 300,
 ) -> Path:
-    """Compile tex_source in a fresh build_dir/.cvforge-jobs/jobname and return the PDF path."""
+    """Compile tex_source in a new folder under build_dir/.cvforge-jobs and return the PDF path.
+
+    The folder is unique to this call, so builds with the same jobname can run in parallel.
+    """
     if not engine:
         raise LatexError("no LaTeX engine configured")
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", jobname) or ".." in jobname:
@@ -52,11 +70,11 @@ def compile_tex(
             ) from None
 
     jobs_dir = build_dir / JOBS_DIR
-    job_dir = jobs_dir / jobname
+    jobs_dir.mkdir(parents=True, exist_ok=True)
+    _sweep_stale_jobs(jobs_dir)
+    job_dir = Path(tempfile.mkdtemp(prefix=f"{jobname}-", dir=jobs_dir))
     if job_dir.resolve().parent != jobs_dir.resolve():
         raise LatexError(f"jobname escapes build dir: {jobname!r}")
-    shutil.rmtree(job_dir, ignore_errors=True)
-    job_dir.mkdir(parents=True)
     if assets is not None:
         shutil.copytree(assets, job_dir, dirs_exist_ok=True)
     (job_dir / f"{jobname}.tex").write_text(tex_source, encoding="utf-8")
