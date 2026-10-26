@@ -8,7 +8,7 @@ from cvforge.profile.model import index, localized
 from cvforge.render.cv import build_cv_view
 from cvforge.text import split_name
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 LIMITS = (200, 500, 1000, 2000)
 UNCONFIRMED = "unconfirmed: run cvforge salary {slug} --confirm"
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
@@ -117,11 +117,13 @@ def _salary(salary: dict | None, slug: str) -> dict | None:
     if salary is None:
         return None
     if not salary.get("confirmed"):
-        return {"confirmed": False, "text": UNCONFIRMED.format(slug=slug), "sources": []}
+        return {"confirmed": False, "text": UNCONFIRMED.format(slug=slug), "sources": [],
+                "amount": None, "currency": None, "period": None}
     text = (f"{salary['amount']:,.0f} {salary['currency']}/{salary['period']}"
             f" (BRL {salary['brl_month']:,.0f}/month, EUR {salary['eur_year']:,.0f}/year,"
             f" USD {salary['usd_year']:,.0f}/year)")
-    return {"confirmed": True, "text": text, "sources": list(salary.get("sources", []))}
+    return {"confirmed": True, "text": text, "sources": list(salary.get("sources", [])),
+            "amount": salary["amount"], "currency": salary["currency"], "period": salary["period"]}
 
 
 def _email(tailored: dict, master: dict, files: dict[str, str]) -> dict | None:
