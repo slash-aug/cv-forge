@@ -17,13 +17,29 @@ function attr(el: Element, name: string): string {
   return (el.getAttribute(name) ?? "").trim().toLowerCase();
 }
 
-function movesForward(el: Element): boolean {
+/** Ancestors of el, crossing shadow boundaries (closest() stops at a shadow root). */
+function composedAncestors(el: Element): Element[] {
+  const out: Element[] = [];
+  let node: Element | null = el;
+  while (node) {
+    let next: Element | null = node.parentElement;
+    if (!next) {
+      const root = node.getRootNode();
+      next = root instanceof ShadowRoot ? root.host : null;
+    }
+    if (next) out.push(next);
+    node = next;
+  }
+  return out;
+}
+
+function movesForward(el: Element, ancestors: Element[]): boolean {
   const type = attr(el, "type");
-  if (type === "submit" || type === "image") return true;
+  if (type === "submit" || type === "image" || type === "reset") return true;
   if (attr(el, "role") === "link") return true;
-  if (el.closest("a[href]")) return true;
+  if (ancestors.some((a) => a.matches("a[href], [role=link]"))) return true;
   if (el.hasAttribute("formaction")) return true;
-  const form = (el as { form?: HTMLFormElement | null }).form ?? el.closest("form");
+  const form = (el as { form?: HTMLFormElement | null }).form ?? ancestors.find((a) => a.matches("form"));
   const isButton = el instanceof HTMLButtonElement;
   // A <button> tied to a form (inside it, or via the form attribute) without type=button submits.
   if (isButton && (form || el.hasAttribute("form")) && type !== "button") return true;
@@ -43,17 +59,19 @@ function labels(el: HTMLElement): string {
 
 // Only real buttons are ever clicked; labels, checkboxes, radios and children of
 // buttons, links, labels or inputs are refused because clicking them can submit.
-const CLICKABLE = "button, input[type=button], [role=button]";
+const CLICKABLE = "button, input[type=button], div[role=button], span[role=button], li[role=button]";
 const CONTAINERS = "button, a, label, [role=button], [role=link], input";
 
 export function safeClick(el: Element, allow: AllowList): boolean {
   if (!(el instanceof HTMLElement)) return false;
   if (!el.matches(CLICKABLE)) return false;
-  if (el.parentElement?.closest(CONTAINERS)) return false;
+  if (el.shadowRoot || el.localName.includes("-")) return false;
+  const ancestors = composedAncestors(el);
+  if (ancestors.some((a) => a.matches(CONTAINERS))) return false;
   if (!allow.some((selector) => el.matches(selector))) return false;
   if ((el as { disabled?: boolean }).disabled || el.hasAttribute("disabled")) return false;
   if (attr(el, "aria-disabled") === "true") return false;
-  if (movesForward(el)) return false;
+  if (movesForward(el, ancestors)) return false;
   if (FORBIDDEN.test(labels(el))) return false;
   el.click();
   return true;

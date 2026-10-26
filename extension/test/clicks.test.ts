@@ -164,4 +164,71 @@ describe("safeClick", () => {
       expect(safeClick(el, ["button"])).toBe(false);
     },
   );
+
+  test("role=button does not make a non-button clickable", () => {
+    let el = make(`<form><button type="submit" id="s">x</button></form><label role="button" for="s" data-t>Add experience</label>`);
+    expect(safeClick(el, ["label"])).toBe(false);
+    el = make(`<input type="checkbox" role="button" data-t>`);
+    expect(safeClick(el, ["input"])).toBe(false);
+    expect((el as HTMLInputElement).checked).toBe(false);
+    el = make(`<input type="radio" role="button" data-t>`);
+    expect(safeClick(el, ["input"])).toBe(false);
+    expect((el as HTMLInputElement).checked).toBe(false);
+    el = make(`<form><input type="reset" role="button" value="Add experience" data-t></form>`);
+    expect(safeClick(el, ["input"])).toBe(false);
+    el = make(`<form><button type="reset" data-t>Add experience</button></form>`);
+    expect(safeClick(el, ["button"])).toBe(false);
+    document.body.innerHTML = `<label role="button" data-t><input type="checkbox" id="c"> Add experience</label>`;
+    el = document.querySelector<HTMLElement>("[data-t]")!;
+    expect(safeClick(el, ["label"])).toBe(false);
+    expect((document.getElementById("c") as HTMLInputElement).checked).toBe(false);
+  });
+
+  test("role=button on div, span and li is clickable", () => {
+    for (const tag of ["div", "span", "li"]) {
+      expect(safeClick(make(`<${tag} role="button" data-t>Add experience</${tag}>`), [tag])).toBe(true);
+    }
+  });
+
+  function shadowButton(hostHtml: string, hostSel: string): HTMLElement {
+    document.body.innerHTML = hostHtml;
+    const host = document.querySelector<HTMLElement>(hostSel)!;
+    const root = host.attachShadow({ mode: "open" });
+    root.innerHTML = `<button type="button" data-t>Add experience</button>`;
+    const el = root.querySelector<HTMLElement>("[data-t]")!;
+    el.click = vi.fn();
+    return el;
+  }
+
+  test("refuses a shadow button whose host sits in a submit button", () => {
+    const el = shadowButton(`<form><button type="submit"><span id="h"></span></button></form>`, "#h");
+    expect(safeClick(el, ["button"])).toBe(false);
+    expect(el.click).not.toHaveBeenCalled();
+  });
+
+  test("refuses a shadow button whose host sits in a[href]", () => {
+    const el = shadowButton(`<a href="/x"><span id="h"></span></a>`, "#h");
+    expect(safeClick(el, ["button"])).toBe(false);
+  });
+
+  test("refuses a shadow button whose host sits in a label for a submitter", () => {
+    const el = shadowButton(`<form><button type="submit" id="s">x</button></form><label for="s"><span id="h"></span></label>`, "#h");
+    expect(safeClick(el, ["button"])).toBe(false);
+  });
+
+  test("refuses a shadow button whose host sits in role=link", () => {
+    const el = shadowButton(`<div role="link"><span id="h"></span></div>`, "#h");
+    expect(safeClick(el, ["button"])).toBe(false);
+  });
+
+  test("refuses an element with a shadow root or a custom element tag", () => {
+    document.body.innerHTML = `<div role="button" id="h">Add experience</div>`;
+    const host = document.getElementById("h")!;
+    host.attachShadow({ mode: "open" }).innerHTML = "Submit application";
+    host.click = vi.fn();
+    expect(safeClick(host, ["div"])).toBe(false);
+    expect(host.click).not.toHaveBeenCalled();
+    const custom = make(`<my-x role="button" data-t>Add experience</my-x>`);
+    expect(safeClick(custom, ["my-x"])).toBe(false);
+  });
 });
