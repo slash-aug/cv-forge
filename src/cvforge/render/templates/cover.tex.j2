@@ -35,7 +35,7 @@
 
 %% endfor
 \begin{flushright}
-% No trailing \\ inside \closing{}: cover.cls appends its own.
+% cover.cls ends each block with \par and a fixed gap.
 \closing{\VAR{letter.closing | tex}}
 
 \signature{\VAR{name | tex}}

@@ -37,9 +37,11 @@
 \hyphenpenalty=10000
 \exhyphenpenalty=10000
 \emergencystretch=3em
-% No first-line indent, like the CV; paragraphs are already separated by a blank line.
+% No first-line indent, like the CV; each block adds its own fixed gap below.
 \setlength{\parindent}{0pt}
 \setlength{\JustifyingParindent}{0pt}% ragged2e's \justifying restores this one
+% One space after a period, like the CV (LaTeX's default widens sentence gaps).
+\frenchspacing
 
 % Date command
 \setlength{\TPHorizModule}{1mm}
@@ -93,15 +95,15 @@ Last Updated on \today
 {\end{itemize}\vspace{-\topsep}}
 
 % Cover Letter
-\newcommand{\companyname}[1]{\raggedright\fontspec[Path = OpenFonts/fonts/lato/]{Lato-Bol}\fontsize{12pt}{14pt}\selectfont {#1 \\} \normalfont}
+\newcommand{\companyname}[1]{\raggedright\fontspec[Path = OpenFonts/fonts/lato/]{Lato-Bol}\fontsize{12pt}{14pt}\selectfont #1\par\vspace{14pt}\normalfont}
 
 \newcommand{\companyaddress}[1]{\raggedright\fontspec[Path = OpenFonts/fonts/lato/]{Lato-Reg}\fontsize{11pt}{13pt}\selectfont {#1 \\}\mbox{}\\\mbox{}\\ \normalfont}
 
-\newcommand{\currentdate}[1]{\raggedleft\fontspec[Path = OpenFonts/fonts/lato/]{Lato-Reg}\fontsize{11pt}{13pt}\selectfont {#1 \\} \normalfont}
+\newcommand{\currentdate}[1]{\raggedleft\fontspec[Path = OpenFonts/fonts/lato/]{Lato-Reg}\fontsize{11pt}{13pt}\selectfont #1\par\vspace{4pt}\normalfont}
 
 % Letter content command
-\newcommand{\lettercontent}[1]{\justifying\fontspec[Path = OpenFonts/fonts/lato/]{Lato-Reg}\fontsize{11pt}{13pt}\selectfont {#1 \\}\mbox{}\\ \normalfont}
+\newcommand{\lettercontent}[1]{\justifying\fontspec[Path = OpenFonts/fonts/lato/]{Lato-Reg}\fontsize{11pt}{13pt}\selectfont #1\par\vspace{10pt}\normalfont}
 
-\newcommand{\closing}[1]{\raggedright\fontspec[Path = OpenFonts/fonts/lato/]{Lato-Reg}\fontsize{11pt}{13pt}\selectfont {#1 \\}\mbox{}\\\mbox{}\\ \normalfont}
+\newcommand{\closing}[1]{\raggedright\fontspec[Path = OpenFonts/fonts/lato/]{Lato-Reg}\fontsize{11pt}{13pt}\selectfont #1\par\vspace{20pt}\normalfont}
 
-\newcommand{\signature}[1]{\raggedright\fontspec[Path = OpenFonts/fonts/lato/]{Lato-Reg}\fontsize{11pt}{13pt}\selectfont {#1 \\} \normalfont}
+\newcommand{\signature}[1]{\raggedright\fontspec[Path = OpenFonts/fonts/lato/]{Lato-Reg}\fontsize{11pt}{13pt}\selectfont #1\par\normalfont}

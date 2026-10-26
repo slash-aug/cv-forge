@@ -131,3 +131,17 @@ def test_compiled_letter_matches_cv_fonts_and_keeps_words_whole(cfg):
     assert names and names <= {"Lato-Regular", "Lato-Bold", "Lato-Italic", "Lato-BoldItalic"}, names
     text = PdfReader(pdf).pages[0].extract_text()
     assert not any(line.rstrip().endswith("-") for line in text.splitlines()), text
+
+
+def test_letter_spacing_is_even_and_single_spaced_after_periods():
+    cls = (ASSETS_DIR / "cover.cls").read_text()
+
+    def command(name):
+        return next(line for line in cls.splitlines() if line.startswith(rf"\newcommand{{\{name}}}"))
+
+    # Blocks end with \par plus one fixed gap, never stacked empty lines.
+    for name in ("companyname", "lettercontent", "closing"):
+        body = command(name)
+        assert r"\mbox{}\\" not in body, name
+        assert r"\par\vspace{" in body, name
+    assert r"\frenchspacing" in cls  # one space after a period, like the CV
