@@ -201,3 +201,16 @@ def test_bank_hit_and_miss(app):
 
 def test_unsupported_method_is_405(app):
     assert app.handle(req("DELETE", "/health")).status == 405
+
+
+def test_bank_error_leaks_no_path_or_content(app, data):
+    (data / "answers" / "bank.yaml").write_text("- key: [unclosed\n  answer: SECRETLINE\n")
+    resp = app.handle(req("GET", "/bank", {"q": "x", "lang": "en"}))
+    assert resp.status == 500 and body(resp)["error"] == "bank"
+    assert str(data) not in resp.body.decode() and "SECRETLINE" not in resp.body.decode()
+
+
+@pytest.mark.parametrize("origin", ["moz-extension://[x", "://", "not a url", ""])
+def test_malformed_origin_is_403(app, origin):
+    resp = app.handle(req("GET", "/health", headers={"Origin": origin}))
+    assert resp.status == 403 and body(resp)["error"] == "origin"

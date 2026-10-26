@@ -80,7 +80,11 @@ class App:
         origin = req.headers.get("origin")
         cors: dict[str, str] = {}
         if origin is not None:
-            if urlsplit(origin).scheme not in EXTENSION_SCHEMES:
+            try:
+                scheme = urlsplit(origin).scheme
+            except ValueError:
+                scheme = ""
+            if scheme not in EXTENSION_SCHEMES:
                 return _error(403, "origin", "Origin not allowed.")
             cors = {"Access-Control-Allow-Origin": origin}
         if req.method == "OPTIONS" and origin is not None:
@@ -171,8 +175,8 @@ class App:
     def _bank(self, req: Request) -> Response:
         try:
             bank = load_bank(self.data_dir / "answers" / "bank.yaml")
-        except ProfileError as exc:
-            return _error(500, "bank", str(exc))
+        except ProfileError:
+            return _error(500, "bank", "Answer bank is unreadable. Run cvforge answers to check it.")
         hit = lookup(bank, req.query.get("q", ""), req.query.get("lang", "en"))
         return _json(200, {"entry": {"question": hit.get("question", ""), "answer": hit["answer"]}
                            if hit else None})
