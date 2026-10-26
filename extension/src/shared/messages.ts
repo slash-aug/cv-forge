@@ -42,6 +42,9 @@ export type Msg =
   | { type: "markApplied"; slug: string }
   | { type: "setToken"; token: string };
 
+/** Longer server messages are not shown: they would not fit the button. */
+const MAX_SERVER_MESSAGE = 200;
+
 export function errorText(e: ApiError): string {
   switch (e.kind) {
     case "down":
@@ -54,7 +57,11 @@ export function errorText(e: ApiError): string {
       return "cv-forge extension error: reload the extension";
     case "kit":
       return e.message;
-    case "http":
-      return `Server error ${e.status}`;
+    case "http": {
+      const message = typeof e.body === "object" && e.body !== null ? (e.body as { message?: unknown }).message : undefined;
+      return typeof message === "string" && message.trim() !== "" && message.length <= MAX_SERVER_MESSAGE
+        ? message
+        : `Server error ${e.status}`;
+    }
   }
 }

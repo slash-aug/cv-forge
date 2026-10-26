@@ -47,6 +47,13 @@ test("object-or-null keys are checked", () => {
   expect(() => parseKit(missing)).toThrow(KitShapeError);
 });
 
+test("errors name the slug when given", () => {
+  expect(() => parseKit({ ...raw(), schema_version: 1 }, "acme-dev")).toThrow(
+    "Kit is from an older cv-forge. Rerun: cvforge kit acme-dev",
+  );
+  expect(() => parseKit({ ...raw(), fields: 1 }, "acme-dev")).toThrow("Kit is malformed. Rerun: cvforge kit acme-dev");
+});
+
 test("shape error message", () => {
   expect(() => parseKit({ ...raw(), fields: 1 })).toThrow("Kit is malformed. Rerun: cvforge kit <slug>");
 });

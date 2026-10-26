@@ -3,6 +3,9 @@ import type { ApiError, BankEntry, Job, Result } from "../shared/messages";
 
 const fail = (error: ApiError): Result<never> => ({ ok: false, error });
 
+/** A server that accepts the connection but never answers counts as down. */
+export const REQUEST_TIMEOUT_MS = 15_000;
+
 export class Api {
   constructor(
     private readonly fetchFn: typeof fetch,
@@ -15,13 +18,28 @@ export class Api {
     const token = await this.getToken();
     if (!token) return fail({ kind: "token" });
     let res: Response;
+    const abort = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // Raced as well as aborted, so a fetch that ignores the signal still times out.
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        abort.abort();
+        reject(new Error("timeout"));
+      }, REQUEST_TIMEOUT_MS);
+    });
     try {
-      res = await this.fetchFn(`http://127.0.0.1:${this.port}${path}`, {
-        ...init,
-        headers: { ...(init.headers as Record<string, string> | undefined), "X-CVForge-Token": token },
-      });
+      res = await Promise.race([
+        this.fetchFn(`http://127.0.0.1:${this.port}${path}`, {
+          ...init,
+          signal: abort.signal,
+          headers: { ...(init.headers as Record<string, string> | undefined), "X-CVForge-Token": token },
+        }),
+        timeout,
+      ]);
     } catch {
       return fail({ kind: "down" });
+    } finally {
+      clearTimeout(timer);
     }
     if (res.ok) return { ok: true, value: res };
     if (res.status === 401) return fail({ kind: "token" });
@@ -75,7 +93,7 @@ export class Api {
     const r = await this.getJson<unknown>(`/kit/${encodeURIComponent(slug)}`);
     if (!r.ok) return r;
     try {
-      return { ok: true, value: parseKit(r.value) };
+      return { ok: true, value: parseKit(r.value, slug) };
     } catch (e) {
       if (e instanceof KitVersionError || e instanceof KitShapeError) return fail({ kind: "kit", message: e.message });
       throw e;

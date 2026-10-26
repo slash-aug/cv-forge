@@ -55,13 +55,29 @@ test("kit with schema 1 is an error, not a throw", async () => {
   const r = await api(vi.fn().mockResolvedValue(json({ ...kitRaw(), schema_version: 1 }))).kit("s");
   expect(r).toEqual({
     ok: false,
-    error: { kind: "kit", message: "Kit is from an older cv-forge. Rerun: cvforge kit <slug>" },
+    error: { kind: "kit", message: "Kit is from an older cv-forge. Rerun: cvforge kit s" },
   });
 });
 
-test("malformed kit is a kit error", async () => {
+test("malformed kit is a kit error naming the slug", async () => {
   const r = await api(vi.fn().mockResolvedValue(json({ ...kitRaw(), fields: 3 }))).kit("s");
-  expect(r.ok === false && r.error.kind).toBe("kit");
+  expect(r).toEqual({ ok: false, error: { kind: "kit", message: "Kit is malformed. Rerun: cvforge kit s" } });
+});
+
+test("a request that never answers times out after 15 s as down", async () => {
+  vi.useFakeTimers();
+  try {
+    const f = vi.fn().mockImplementation(() => new Promise(() => {}));
+    let settled = false;
+    const p = api(f).health().then((r) => ((settled = true), r));
+    await vi.advanceTimersByTimeAsync(14_999);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await p).toEqual({ ok: false, error: { kind: "down" } });
+    expect((f.mock.calls[0][1].signal as AbortSignal).aborted).toBe(true);
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 test("403 linkedin maps to linkedin, other 403 stays http", async () => {
@@ -101,6 +117,11 @@ test("errorText texts", () => {
   expect(errorText({ kind: "token" })).toBe("Pairing token rejected: paste the token from cvforge serve --show-token");
   expect(errorText({ kind: "linkedin" })).toBe("cv-forge does not run on LinkedIn");
   expect(errorText({ kind: "http", status: 500, body: null })).toBe("Server error 500");
+  expect(errorText({ kind: "http", status: 404, body: { error: "not-found", message: "No kit for s" } })).toBe("No kit for s");
+  expect(errorText({ kind: "http", status: 404, body: { message: "" } })).toBe("Server error 404");
+  expect(errorText({ kind: "http", status: 404, body: { message: 7 } })).toBe("Server error 404");
+  expect(errorText({ kind: "http", status: 500, body: { message: "x".repeat(200) } })).toBe("x".repeat(200));
+  expect(errorText({ kind: "http", status: 500, body: { message: "x".repeat(201) } })).toBe("Server error 500");
   expect(errorText({ kind: "internal" })).toBe("cv-forge extension error: reload the extension");
   expect(errorText({ kind: "kit", message: "boom" })).toBe("boom");
 });

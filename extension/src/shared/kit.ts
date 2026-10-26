@@ -84,15 +84,15 @@ export interface Kit {
 }
 
 export class KitVersionError extends Error {
-  constructor(message = "Kit is from an older cv-forge. Rerun: cvforge kit <slug>") {
-    super(message);
+  constructor(slug = "<slug>") {
+    super(`Kit is from an older cv-forge. Rerun: cvforge kit ${slug}`);
     this.name = "KitVersionError";
   }
 }
 
 export class KitShapeError extends Error {
-  constructor(message = "Kit is malformed. Rerun: cvforge kit <slug>") {
-    super(message);
+  constructor(slug = "<slug>") {
+    super(`Kit is malformed. Rerun: cvforge kit ${slug}`);
     this.name = "KitShapeError";
   }
 }
@@ -102,12 +102,13 @@ const OBJECT_OR_NULL_KEYS = ["salary", "recruiter_note", "email"];
 
 const isObject = (v: unknown): boolean => typeof v === "object" && v !== null && !Array.isArray(v);
 
-export function parseKit(raw: unknown): Kit {
+/** slug names the job in the error messages, so the rerun command can be copied as is. */
+export function parseKit(raw: unknown, slug?: string): Kit {
   const version = typeof raw === "object" && raw !== null ? (raw as { schema_version?: unknown }).schema_version : undefined;
-  if (version !== 2) throw new KitVersionError();
+  if (version !== 2) throw new KitVersionError(slug);
   const kit = raw as Record<string, unknown>;
-  for (const key of ARRAY_KEYS) if (!Array.isArray(kit[key])) throw new KitShapeError();
-  for (const key of OBJECT_OR_NULL_KEYS) if (kit[key] !== null && !isObject(kit[key])) throw new KitShapeError();
-  if (!isObject(kit.links)) throw new KitShapeError();
+  for (const key of ARRAY_KEYS) if (!Array.isArray(kit[key])) throw new KitShapeError(slug);
+  for (const key of OBJECT_OR_NULL_KEYS) if (kit[key] !== null && !isObject(kit[key])) throw new KitShapeError(slug);
+  if (!isObject(kit.links)) throw new KitShapeError(slug);
   return raw as Kit;
 }
