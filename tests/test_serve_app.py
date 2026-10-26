@@ -1,6 +1,9 @@
 import json
+from datetime import date
+from pathlib import Path
 
 import pytest
+import yaml
 
 from cvforge import __version__
 from cvforge.apply.posting import Posting
@@ -8,6 +11,8 @@ from cvforge.serve import token as token_mod
 from cvforge.serve.app import VERSION, App, Request
 from cvforge.track import tracker
 
+PERSONA = Path(__file__).resolve().parent.parent / "examples" / "persona"
+TODAY = date(2026, 10, 26)
 PORT = 47321
 TOKEN = "test-token"
 KIT = {"schema_version": 2, "links": {"cv_pdf": "cv.pdf", "letter_pdf": "letter.pdf"}}
@@ -50,7 +55,7 @@ def data(tmp_path):
 
 @pytest.fixture
 def app(data):
-    return App(data, TOKEN, PORT)
+    return App(data, TOKEN, PORT, today=lambda: TODAY, master_path=PERSONA / "master.yaml")
 
 
 def body(resp):
@@ -214,3 +219,72 @@ def test_bank_error_leaks_no_path_or_content(app, data):
 def test_malformed_origin_is_403(app, origin):
     resp = app.handle(req("GET", "/health", headers={"Origin": origin}))
     assert resp.status == 403 and body(resp)["error"] == "origin"
+
+
+def post(app, path, payload, raw=None):
+    data = raw if raw is not None else json.dumps(payload).encode()
+    return app.handle(req("POST", path, headers={"content-type": "application/json"}, body=data))
+
+
+GOOD = {"question": "What was your impact?", "answer": "I cut load time by 40%."}
+
+
+def sent(data):
+    path = data / "applications" / "acme" / "answers_sent.yaml"
+    return yaml.safe_load(path.read_text()) if path.exists() else None
+
+
+def test_save_answer_grounded(app, data):
+    resp = post(app, "/answers/acme", GOOD)
+    assert resp.status == 200 and body(resp) == {"saved": True}
+    bank = yaml.safe_load((data / "answers" / "bank.yaml").read_text())
+    assert any(e["answer"] == GOOD["answer"] and e["lang"] == "en" for e in bank)
+    assert sent(data) == [{"date": "2026-10-26", **GOOD}]
+
+
+def test_save_answer_audit_fails(app, data):
+    before = (data / "answers" / "bank.yaml").read_text()
+    resp = post(app, "/answers/acme", {**GOOD, "answer": "I cut load time by 45%."})
+    assert resp.status == 422 and body(resp)["error"] == "audit"
+    findings = body(resp)["findings"]
+    assert findings and set(findings[0]) == {"kind", "ref", "message"} and "45" in findings[0]["message"]
+    assert (data / "answers" / "bank.yaml").read_text() == before
+    assert sent(data) is None
+
+
+def test_save_answer_bad_body(app):
+    assert post(app, "/answers/acme", None, raw=b"not json").status == 400
+    assert post(app, "/answers/acme", {"question": "Q?"}).status == 400
+    assert post(app, "/answers/acme", {"question": "Q?", "answer": "  "}).status == 400
+    big = {"question": "Q?", "answer": "x" * (64 * 1024)}
+    assert post(app, "/answers/acme", big).status == 413
+
+
+def test_save_answer_unknown_slug(app):
+    assert post(app, "/answers/nope", GOOD).status == 404
+    assert post(app, "/answers/..%2Fx", GOOD).status == 404
+
+
+def test_save_answer_bad_salary_is_500_without_path(app, data):
+    (data / "applications" / "acme" / "salary.json").write_text("{broken")
+    resp = post(app, "/answers/acme", GOOD)
+    assert resp.status == 500 and str(data) not in resp.body.decode()
+
+
+def test_answers_sent_appends(app, data):
+    other = {"question": "Team size?", "answer": "I led a team of 5 engineers."}
+    assert post(app, "/answers/acme", GOOD).status == 200
+    assert post(app, "/answers/acme", other).status == 200
+    assert [r["question"] for r in sent(data)] == [GOOD["question"], other["question"]]
+
+
+def test_mark_applied(app, data):
+    resp = app.handle(req("POST", "/applied/acme"))
+    assert resp.status == 200 and body(resp) == {"status": "applied"}
+    row = next(r for r in tracker.load(data / "tracker.csv") if r["slug"] == "acme")
+    assert row["status"] == "applied" and row["date"] == "2026-10-26"
+
+
+def test_mark_applied_unknown_row(app):
+    resp = app.handle(req("POST", "/applied/ghost"))
+    assert resp.status == 404 and body(resp)["error"] == "no-row"

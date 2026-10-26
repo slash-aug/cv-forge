@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hmac
 import json
+import os
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -10,14 +11,20 @@ from datetime import date
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
+import yaml
+
 from cvforge import __version__
-from cvforge.answers.bank import load_bank, lookup
-from cvforge.profile.model import ProfileError
+from cvforge.answers.bank import load_bank, lookup, save_answers
+from cvforge.answers.grounding import DataError, answer_figures
+from cvforge.profile.model import ProfileError, load_master
 from cvforge.serve import matching
+from cvforge.tailor.audit import audit_answer
+from cvforge.track import tracker
 
 VERSION = "1"
 SLUG = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 EXTENSION_SCHEMES = ("chrome-extension", "moz-extension")
+MAX_BODY = 64 * 1024
 PDF_KEYS = {"cv.pdf": "cv_pdf", "letter.pdf": "letter_pdf"}
 
 
@@ -69,6 +76,8 @@ class App:
             ("GET", re.compile(r"/kit/([^/]+)"), self._kit),
             ("GET", re.compile(r"/kit/([^/]+)/(cv\.pdf|letter\.pdf)"), self._pdf),
             ("GET", re.compile(r"/bank"), self._bank),
+            ("POST", re.compile(r"/answers/([^/]+)"), self._save_answer),
+            ("POST", re.compile(r"/applied/([^/]+)"), self._mark_applied),
         ]
 
     # guards and dispatch
@@ -180,3 +189,73 @@ class App:
         hit = lookup(bank, req.query.get("q", ""), req.query.get("lang", "en"))
         return _json(200, {"entry": {"question": hit.get("question", ""), "answer": hit["answer"]}
                            if hit else None})
+
+    def _lang(self, app_dir: Path) -> str:
+        for name, read in (("kit.json", json.loads), ("tailored.yaml", yaml.safe_load)):
+            try:
+                lang = read((app_dir / name).read_text(encoding="utf-8")).get("lang")
+            except (OSError, ValueError, AttributeError, yaml.YAMLError):
+                continue
+            if isinstance(lang, str) and lang:
+                return lang
+            if name == "kit.json" and (app_dir / name).exists():
+                break
+        return "en"
+
+    def _save_answer(self, req: Request, slug: str) -> Response:
+        app_dir = self._app_dir(slug)
+        if app_dir is None:
+            return _error(404, "no-app", "No such application.")
+        if len(req.body) > MAX_BODY:
+            return _error(413, "too-large", "Body is larger than 64 KiB.")
+        try:
+            payload = json.loads(req.body)
+        except ValueError:
+            return _error(400, "bad-body", "Body must be JSON.")
+        question = payload.get("question") if isinstance(payload, dict) else None
+        answer = payload.get("answer") if isinstance(payload, dict) else None
+        if (not isinstance(question, str) or not isinstance(answer, str)
+                or not question.strip() or not answer.strip()):
+            return _error(400, "bad-body", "question and answer must be non-empty strings.")
+        lang = self._lang(app_dir)
+        today = self.today()
+        try:
+            master = load_master(self.master_path or self.data_dir / "profile" / "master.yaml")
+        except ProfileError:
+            return _error(500, "master", "Master profile is unreadable. Run cvforge validate.")
+        try:
+            allowed = answer_figures(master, lang, app_dir, today)
+        except DataError:
+            return _error(500, "salary", "salary.json is damaged. Rerun cvforge salary.")
+        findings = audit_answer(question, answer, master, extra_allowed=allowed)
+        if findings:
+            return _json(422, {"error": "audit", "findings": [
+                {"kind": f.kind, "ref": f.ref, "message": f.message} for f in findings]})
+        sent_path = app_dir / "answers_sent.yaml"
+        try:
+            sent = yaml.safe_load(sent_path.read_text(encoding="utf-8")) if sent_path.exists() else []
+            if sent is None:
+                sent = []
+            if not isinstance(sent, list):
+                raise TypeError
+            save_answers(self.data_dir / "answers" / "bank.yaml",
+                         [{"question": question, "answer": answer, "refs": []}], lang, today)
+            sent.append({"date": today.isoformat(), "question": question, "answer": answer})
+            tmp = sent_path.with_name(sent_path.name + ".tmp")
+            tmp.write_text(yaml.safe_dump(sent, sort_keys=False, allow_unicode=True,
+                                          default_flow_style=False), encoding="utf-8")
+            os.replace(tmp, sent_path)
+        except (OSError, TypeError, ValueError, yaml.YAMLError, ProfileError):
+            return _error(500, "save", "Could not save the answer. Run cvforge answers to check the bank.")
+        return _json(200, {"saved": True})
+
+    def _mark_applied(self, req: Request, slug: str) -> Response:
+        if not SLUG.fullmatch(slug):
+            return _error(404, "no-row", "No such application.")
+        try:
+            tracker.set_status(self.data_dir / "tracker.csv", slug, "applied", self.today())
+        except KeyError:
+            return _error(404, "no-row", "No such application.")
+        except (OSError, ValueError):
+            return _error(500, "tracker", "Tracker is unreadable. Run cvforge due to check it.")
+        return _json(200, {"status": "applied"})
