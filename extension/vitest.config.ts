@@ -6,5 +6,6 @@ export default defineConfig({
     environment: "jsdom",
     pool: "threads",
     maxWorkers: 4,
+    setupFiles: ["test/setup.ts"],
   },
 });
