@@ -172,6 +172,21 @@ describe("review fixes", () => {
     expect(m.fields).toEqual([]);
   });
 
+  test("a textarea whose signals tie between two keys is still a question", () => {
+    const m = put(`<label for=a>Visa and relocation</label><textarea id=a></textarea>
+      <label for=b>Notice period</label><textarea id=b name="city_notes"></textarea>`);
+    expect(m.questions.map((q) => q.el)).toEqual([$("a"), $("b")]);
+    expect(m.unplaced).toEqual([]);
+  });
+
+  test("file hints see through underscores and hyphens in name and id", () => {
+    const m = put(`<input type=file name="cv_file"><input type=file id="cover-letter-upload">
+      <input type=file name="resume_upload">`);
+    expect(m.files.cv).toBe(document.querySelector("[name=cv_file]"));
+    expect(m.files.letter).toBe($("cover-letter-upload"));
+    expect(m.unplaced).toEqual([document.querySelector("[name=resume_upload]")]);
+  });
+
   test("modifiers stop generic keywords", () => {
     const m = put(`<label for=a>Company name</label><input id=a>
       <label for=b>Company website</label><input id=b>

@@ -58,6 +58,7 @@ const MAX_SIGNAL_TOKENS = 6;
 const HINT_LIMIT = 200;
 
 const fold = (t: string): string => t.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase();
+const spaced = (t: string): string => t.replace(/[_-]+/g, " ");
 const squash = (t: string): string => t.replace(/\s+/g, " ").trim();
 
 function visible(el: Element): boolean {
@@ -160,7 +161,7 @@ function limitOf(el: Control, label: string): { maxLength: number | null; label:
 }
 
 function fileKind(el: HTMLInputElement): "cv" | "letter" | null {
-  const text = fold(`${labelText(el)} ${el.name} ${el.id} ${el.accept}`);
+  const text = fold(`${labelText(el)} ${spaced(el.name)} ${spaced(el.id)} ${el.accept}`);
   if (LETTER_HINT.test(text)) return "letter";
   return CV_HINT.test(text) ? "cv" : null;
 }
@@ -188,7 +189,7 @@ export function looksLikeApplication(doc: Document): boolean {
   let name = false;
   for (const el of controls) {
     if (el instanceof HTMLInputElement && el.type === "file") {
-      if (CV_HINT.test(fold(`${labelText(el)} ${el.name} ${el.accept}`))) return true;
+      if (CV_HINT.test(fold(`${labelText(el)} ${spaced(el.name)} ${spaced(el.id)} ${el.accept}`))) return true;
       continue;
     }
     const key = bestKey(signalsOf(el), el, el.autocomplete);
