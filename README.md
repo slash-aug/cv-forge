@@ -139,7 +139,7 @@ A small extension fills application forms from a job's `kit.json`. It only fills
 1. Build it: `cd extension && npm install && npm run build`.
 2. Load it: in Chrome open `chrome://extensions`, turn on Developer mode and choose Load unpacked; in Firefox open `about:debugging` and choose Load Temporary Add-on.
 3. Start the server: `.venv/bin/cvforge serve`. It listens on `127.0.0.1` only (port 47321, or `serve_port` in `cvforge.toml`).
-4. Pair: copy the pairing token (`cvforge serve --show-token`) into the extension's options page.
+4. Pair: copy the pairing token (`cvforge serve --show-token`) into the extension popup (token field, then Save).
 5. Use it: run `cvforge kit <slug>`, open the application form and click Fill.
 
 ## Privacy model

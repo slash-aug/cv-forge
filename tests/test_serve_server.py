@@ -1,5 +1,6 @@
 import json
 import threading
+import time
 import urllib.error
 import urllib.request
 
@@ -119,3 +120,69 @@ def test_request_parts_reach_the_app(tmp_path):
     got = seen["req"]
     assert (got.method, got.path, got.query, got.body) == ("POST", "/answers", {"a": "1", "b": ""}, b"hello")
     assert got.headers["x-cvforge-token"] == "t"
+
+
+def _raw(httpd, payload: bytes, shutdown_write=False) -> bytes:
+    import socket
+
+    with socket.create_connection(("127.0.0.1", httpd.server_address[1]), timeout=5) as sock:
+        sock.sendall(payload)
+        if shutdown_write:
+            sock.shutdown(socket.SHUT_WR)
+        chunks = []
+        try:
+            while chunk := sock.recv(65536):
+                chunks.append(chunk)
+        except OSError:
+            pass
+        return b"".join(chunks)
+
+
+def _status(reply: bytes) -> str:
+    return reply.split(b"\r\n", 1)[0].decode("latin-1")
+
+
+def test_error_paths_before_parsing_answer_cleanly(running, capsys):
+    httpd, _, _ = running
+    long_line = b"GET /" + b"a" * 70000 + b"?q=secret HTTP/1.1\r\nHost: x\r\n\r\n"
+    assert " 414 " in _status(_raw(httpd, long_line))
+    assert " 400 " in _status(_raw(httpd, b"GET / HTTP/1.1 extra\r\n\r\n"))
+    err = capsys.readouterr().err
+    assert "Traceback" not in err and "AttributeError" not in err
+    assert "secret" not in err
+
+
+def test_unparseable_path_is_400_without_echo(running, capsys):
+    httpd, token, _ = running
+    reply = _raw(httpd, b"GET http://[bad/x?q=secret HTTP/1.1\r\nHost: x\r\n\r\n")
+    assert " 400 " in _status(reply)
+    assert b'"bad-request"' in reply and b"secret" not in reply
+    err = capsys.readouterr().err
+    assert "Traceback" not in err and "secret" not in err
+    assert _get(httpd, "/health", token)[0] == 200
+
+
+@pytest.mark.parametrize("header", [b"Content-Length: abc", b"Content-Length: -5",
+                                    b"Transfer-Encoding: chunked"])
+def test_bad_framing_is_400_and_closes(running, header):
+    httpd, token, _ = running
+    req = b"POST /answers HTTP/1.1\r\nHost: x\r\n" + header + b"\r\n\r\n5\r\nhello\r\n0\r\n\r\n"
+    reply = _raw(httpd, req)  # returns only because the server closed the connection
+    assert " 400 " in _status(reply)
+    assert reply.lower().count(b"http/1.1 ") == 1  # the body was not parsed as a request
+    assert _get(httpd, "/health", token)[0] == 200
+
+
+def test_stalled_body_times_out(running, monkeypatch):
+    httpd, token, _ = running
+    monkeypatch.setattr(server._Handler, "timeout", 0.5)
+    started = time.monotonic()
+    reply = _raw(httpd, b"POST /answers HTTP/1.1\r\nHost: x\r\nContent-Length: 99999999\r\n\r\nabc")
+    assert reply == b""  # connection dropped by the server...
+    assert time.monotonic() - started < 3  # ...well before the client's own 5s timeout
+    assert _get(httpd, "/health", token)[0] == 200
+
+
+def test_handler_has_a_default_socket_timeout():
+    assert server.REQUEST_TIMEOUT > 0
+    assert server._Handler.timeout == server.REQUEST_TIMEOUT

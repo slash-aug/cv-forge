@@ -9,6 +9,8 @@ from urllib.parse import parse_qs, urlsplit
 from cvforge.serve.app import MAX_BODY, App, Request, Response
 
 HOST = "127.0.0.1"
+REQUEST_TIMEOUT = 10  # seconds a client may stall before the connection is dropped
+BAD_REQUEST = b'{"error": "bad-request", "message": "Bad request"}'
 INTERNAL_ERROR = (b'{"error": "internal", "message": "Internal error"}')
 
 
@@ -30,15 +32,32 @@ class _Server(ThreadingHTTPServer):
 class _Handler(BaseHTTPRequestHandler):
     server: _Server
     protocol_version = "HTTP/1.1"
+    timeout = REQUEST_TIMEOUT
+
+    def send_error(self, code, message=None, explain=None):
+        # a request line that failed to parse leaves HTTP/0.9, which has no status line
+        if self.request_version == "HTTP/0.9":
+            self.request_version = "HTTP/1.0"
+        super().send_error(code, message, explain)
+
+    def _reject(self) -> None:
+        # close, so a body we did not read is not parsed as the next request
+        self.close_connection = True
+        self._send(Response(400, BAD_REQUEST), drain=0)
 
     def _serve(self) -> None:
-        parts = urlsplit(self.path)
+        try:
+            parts = urlsplit(self.path)
+        except ValueError:
+            return self._reject()
+        if "transfer-encoding" in {k.lower() for k in self.headers}:
+            return self._reject()
+        raw_length = self.headers.get("Content-Length")
+        if raw_length is not None and not raw_length.strip().isdigit():
+            return self._reject()
         query = {k: v[0] for k, v in parse_qs(parts.query, keep_blank_values=True).items()}
         headers = {k.lower(): v for k, v in self.headers.items()}
-        try:
-            length = max(0, int(self.headers.get("Content-Length") or 0))
-        except ValueError:
-            length = 0
+        length = int(raw_length) if raw_length is not None else 0
         body = self.rfile.read(min(length, MAX_BODY + 1)) if length else b""
         request = Request(self.command, parts.path, query, headers, body)
         try:
@@ -54,8 +73,8 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(response.body)))
         for name, value in response.headers.items():
             self.send_header(name, value)
-        if drain:
-            # the unread rest of an oversized body would corrupt a kept-alive connection
+        if drain or self.close_connection:
+            # an unread body would corrupt a kept-alive connection
             self.send_header("Connection", "close")
             self.close_connection = True
         self.end_headers()
@@ -68,8 +87,12 @@ class _Handler(BaseHTTPRequestHandler):
         pass
 
     def log_request(self, code="-", size="-"):
-        path = urlsplit(self.path).path
-        print(f"{self.command} {path} {code}", file=sys.stderr)
+        # error paths can fire before the request line was parsed
+        try:
+            path = urlsplit(getattr(self, "path", "")).path
+        except ValueError:
+            path = "-"
+        print(f"{getattr(self, 'command', None) or '-'} {path} {code}", file=sys.stderr)
 
 
 def make_server(app: App, port: int) -> ThreadingHTTPServer:
