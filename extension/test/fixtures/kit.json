@@ -1,0 +1,123 @@
+{
+  "schema_version": 2,
+  "slug": "example-corp-fullstack",
+  "lang": "en",
+  "company": "Example Corp",
+  "role": "Full-stack Engineer",
+  "links": {
+    "apply": "https://jobs.example.com/apply/123",
+    "posting": "https://jobs.example.com/123",
+    "cv_pdf": "cv.pdf",
+    "letter_pdf": null
+  },
+  "fields": [
+    {
+      "key": "basics.name",
+      "label": "Full name",
+      "value": "Ana Exemplo",
+      "group": "personal"
+    },
+    {
+      "key": "basics.first_name",
+      "label": "First name",
+      "value": "Ana",
+      "group": "personal"
+    },
+    {
+      "key": "basics.last_name",
+      "label": "Last name",
+      "value": "Exemplo",
+      "group": "personal"
+    },
+    {
+      "key": "basics.email",
+      "label": "Email",
+      "value": "ana.exemplo@example.com",
+      "group": "personal"
+    },
+    {
+      "key": "basics.city",
+      "label": "City",
+      "value": "Lisbon",
+      "group": "personal"
+    },
+    {
+      "key": "basics.country",
+      "label": "Country",
+      "value": "PT",
+      "group": "personal"
+    },
+    {
+      "key": "basics.github",
+      "label": "GitHub",
+      "value": "https://github.com/ana-exemplo",
+      "group": "links"
+    },
+    {
+      "key": "prefs.notice",
+      "label": "Notice period",
+      "value": "30 days",
+      "group": "preferences"
+    }
+  ],
+  "work": [
+    {
+      "key": "work.0",
+      "title": "Tech Lead",
+      "company": "ExamplePay",
+      "start": "2022-03",
+      "end": "2024-05",
+      "description": {
+        "200": "- Led a team of 5 engineers through two product launches.",
+        "500": "- Led a team of 5 engineers through two product launches.\n- Mentored 3 junior engineers into mid-level roles.",
+        "1000": "- Led a team of 5 engineers through two product launches.\n- Mentored 3 junior engineers into mid-level roles.",
+        "2000": "- Led a team of 5 engineers through two product launches.\n- Mentored 3 junior engineers into mid-level roles."
+      }
+    }
+  ],
+  "education": [
+    {
+      "key": "education.0",
+      "dates": "2014 - 2018",
+      "degree": "BSc Computer Science",
+      "institution": "Example University"
+    }
+  ],
+  "languages": [
+    {
+      "key": "languages.0",
+      "name": "English",
+      "detail": "Fluent"
+    }
+  ],
+  "certificates": [
+    {
+      "key": "certificates.0",
+      "date": "2021",
+      "name": "Example Cloud Practitioner",
+      "issuer": "Example Academy"
+    }
+  ],
+  "salary": {
+    "confirmed": true,
+    "text": "60,000 EUR/year",
+    "sources": [
+      "https://example.com/salary-guide"
+    ],
+    "amount": 60000,
+    "currency": "EUR",
+    "period": "year"
+  },
+  "answers": [
+    {
+      "question": "Why do you want to work here?",
+      "answer": "I like the product.",
+      "limit": 500
+    }
+  ],
+  "recruiter_note": null,
+  "email": null,
+  "tracker": [
+    "cvforge track status example-corp-fullstack applied"
+  ]
+}
