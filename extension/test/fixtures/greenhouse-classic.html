@@ -1,0 +1,134 @@
+<form enctype="multipart/form-data" id="application_form" action="https://boards.greenhouse.io/examplecorp/jobs/4012345" accept-charset="UTF-8" method="post">
+  <div id="main_fields">
+    <div class="field">
+      <label for="first_name">First Name <span class="asterisk">*</span></label>
+      <input aria-required="true" autocomplete="off" id="first_name" maxlength="255" name="job_application[first_name]" type="text">
+    </div>
+    <div class="field">
+      <label for="last_name">Last Name <span class="asterisk">*</span></label>
+      <input aria-required="true" autocomplete="off" id="last_name" maxlength="255" name="job_application[last_name]" type="text">
+    </div>
+    <div class="field">
+      <label for="email">Email <span class="asterisk">*</span></label>
+      <input aria-required="true" autocomplete="off" id="email" maxlength="255" name="job_application[email]" type="text">
+    </div>
+    <div class="field">
+      <label for="phone">Phone <span class="asterisk">*</span></label>
+      <input aria-required="true" autocomplete="off" id="phone" maxlength="255" name="job_application[phone]" type="text">
+    </div>
+    <div class="field" id="location_field">
+      <label for="job_application_location">Location (City) <span class="asterisk">*</span></label>
+      <input aria-required="true" autocomplete="off" id="job_application_location" name="job_application[location]" type="text" class="location-autocomplete">
+      <input id="job_application_latitude" name="job_application[latitude]" type="hidden">
+      <input id="job_application_longitude" name="job_application[longitude]" type="hidden">
+    </div>
+  </div>
+  <div id="upload_fields">
+    <div class="field" data-field="resume">
+      <label>Resume/CV <span class="asterisk">*</span></label>
+      <input id="resume" name="job_application[resume]" type="file" accept=".pdf,.doc,.docx,.txt,.rtf" data-source="attach">
+      <textarea id="resume_text" name="job_application[resume_text]" class="hidden" hidden></textarea>
+    </div>
+    <div class="field" data-field="cover_letter">
+      <label>Cover Letter</label>
+      <input id="cover_letter" name="job_application[cover_letter]" type="file" accept=".pdf,.doc,.docx,.txt,.rtf" data-source="attach">
+      <textarea id="cover_letter_text" name="job_application[cover_letter_text]" class="hidden" hidden></textarea>
+    </div>
+  </div>
+  <div id="custom_fields">
+    <div class="field">
+      <label for="job_application_answers_attributes_0_text_value">LinkedIn Profile</label>
+      <input id="job_application_answers_attributes_0_text_value" name="job_application[answers_attributes][0][text_value]" type="text" maxlength="255">
+      <input name="job_application[answers_attributes][0][question_id]" type="hidden" value="9001">
+    </div>
+    <div class="field">
+      <label for="job_application_answers_attributes_1_text_value">Website</label>
+      <input id="job_application_answers_attributes_1_text_value" name="job_application[answers_attributes][1][text_value]" type="text" maxlength="255">
+      <input name="job_application[answers_attributes][1][question_id]" type="hidden" value="9002">
+    </div>
+    <div class="field">
+      <label for="job_application_answers_attributes_2_text_value">Github</label>
+      <input id="job_application_answers_attributes_2_text_value" name="job_application[answers_attributes][2][text_value]" type="text" maxlength="255">
+      <input name="job_application[answers_attributes][2][question_id]" type="hidden" value="9003">
+    </div>
+    <div class="field">
+      <label for="job_application_answers_attributes_3_text_value">Twitter</label>
+      <input id="job_application_answers_attributes_3_text_value" name="job_application[answers_attributes][3][text_value]" type="text" maxlength="255">
+      <input name="job_application[answers_attributes][3][question_id]" type="hidden" value="9004">
+    </div>
+    <div class="field">
+      <label for="job_application_answers_attributes_4_text_value">Why Example Corp? <span class="asterisk">*</span></label>
+      <textarea id="job_application_answers_attributes_4_text_value" name="job_application[answers_attributes][4][text_value]" maxlength="500" aria-required="true"></textarea>
+      <input name="job_application[answers_attributes][4][question_id]" type="hidden" value="9005">
+    </div>
+    <div class="field">
+      <label for="job_application_answers_attributes_5_answer_selected_options_attributes_5_question_option_id">Will you require visa sponsorship now or in the future? <span class="asterisk">*</span></label>
+      <select id="job_application_answers_attributes_5_answer_selected_options_attributes_5_question_option_id" name="job_application[answers_attributes][5][answer_selected_options_attributes][5][question_option_id]" aria-required="true">
+        <option value="">Please select</option>
+        <option value="70001">Yes</option>
+        <option value="70002">No</option>
+      </select>
+      <input name="job_application[answers_attributes][5][question_id]" type="hidden" value="9006">
+    </div>
+    <div class="field">
+      <fieldset>
+        <legend>Can you work from our Lisbon office two days a week?</legend>
+        <label><input type="radio" id="job_application_answers_attributes_6_boolean_value_1" name="job_application[answers_attributes][6][boolean_value]" value="1"> Yes</label>
+        <label><input type="radio" id="job_application_answers_attributes_6_boolean_value_0" name="job_application[answers_attributes][6][boolean_value]" value="0"> No</label>
+      </fieldset>
+      <input name="job_application[answers_attributes][6][question_id]" type="hidden" value="9007">
+    </div>
+    <div class="field">
+      <label for="job_application_answers_attributes_7_text_value">Which team are you applying to?</label>
+      <input id="job_application_answers_attributes_7_text_value" name="job_application[answers_attributes][7][text_value]" type="text" maxlength="255">
+      <input name="job_application[answers_attributes][7][question_id]" type="hidden" value="9008">
+    </div>
+  </div>
+  <div id="data_compliance">
+    <div class="field">
+      <label><input type="checkbox" id="gdpr_processing_consent_given" name="job_application[data_compliance][gdpr_processing_consent_given]" value="1"> I consent to Example Corp processing my personal data for this application.</label>
+    </div>
+  </div>
+  <div id="eeoc_fields">
+    <h3>Voluntary Self-Identification</h3>
+    <p>Example Corp invites you to voluntarily share this information. Responses are optional.</p>
+    <div class="field">
+      <label for="job_application_gender">Gender</label>
+      <select id="job_application_gender" name="job_application[gender]">
+        <option value="">Please select</option>
+        <option value="1">Female</option>
+        <option value="2">Male</option>
+        <option value="3">Decline To Self Identify</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="job_application_hispanic_ethnicity">Are you Hispanic/Latino?</label>
+      <select id="job_application_hispanic_ethnicity" name="job_application[hispanic_ethnicity]">
+        <option value="">Please select</option>
+        <option value="1">Yes</option>
+        <option value="2">No</option>
+        <option value="3">Decline To Self Identify</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="job_application_veteran_status">Veteran Status</label>
+      <select id="job_application_veteran_status" name="job_application[veteran_status]">
+        <option value="">Please select</option>
+        <option value="1">I am not a protected veteran</option>
+        <option value="3">I don't wish to answer</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="job_application_disability_status">Disability Status</label>
+      <select id="job_application_disability_status" name="job_application[disability_status]">
+        <option value="">Please select</option>
+        <option value="1">Yes, I have a disability</option>
+        <option value="2">No, I do not have a disability</option>
+        <option value="3">I do not want to answer</option>
+      </select>
+    </div>
+  </div>
+  <div id="submit_buttons">
+    <input type="submit" id="submit_app" value="Submit Application" class="button">
+  </div>
+</form>
