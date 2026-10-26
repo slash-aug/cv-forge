@@ -1,0 +1,78 @@
+[
+  {
+    "question": "Are you legally authorised to work in the EU?",
+    "key": "legally authorised work eu"
+  },
+  {
+    "question": "Do you have experience with Python?",
+    "key": "experience python"
+  },
+  {
+    "question": "Você tem experiência com Python?",
+    "key": "experiencia python"
+  },
+  {
+    "question": "Do you?",
+    "key": ""
+  },
+  {
+    "question": "5+ years of Go?",
+    "key": "5 years go"
+  },
+  {
+    "question": "Qual é a sua pretensão salarial?",
+    "key": "qual pretensao salarial"
+  },
+  {
+    "question": "Você é fluente em inglês e português?",
+    "key": "fluente ingles portugues"
+  },
+  {
+    "question": "Possuo formação em Engenharia de Software?",
+    "key": "possuo formacao engenharia software"
+  },
+  {
+    "question": "Ação e reação: é possível?",
+    "key": "acao reacao possivel"
+  },
+  {
+    "question": "Aceita trabalho híbrido em São Paulo?",
+    "key": "aceita trabalho hibrido paulo"
+  },
+  {
+    "question": "Você tem disponibilidade para começar já?",
+    "key": "disponibilidade comecar ja"
+  },
+  {
+    "question": "Ｐｙｔｈｏｎ",
+    "key": "python"
+  },
+  {
+    "question": "snake_case and kebab-case terms",
+    "key": "snake case kebab case terms"
+  },
+  {
+    "question": "Do you know node-js or React.js?",
+    "key": "know node js react js"
+  },
+  {
+    "question": "Line one\nLine two",
+    "key": "line one line two"
+  },
+  {
+    "question": "Too    many     spaces   here",
+    "key": "too many spaces here"
+  },
+  {
+    "question": "Would you relocate to Lisbon?",
+    "key": "relocate lisbon"
+  },
+  {
+    "question": "Are you willing to work on-site (3 days/week)?",
+    "key": "willing work site 3 days week"
+  },
+  {
+    "question": "Years of experience with C++ or C#?",
+    "key": "years experience c c"
+  }
+]
