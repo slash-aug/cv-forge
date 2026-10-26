@@ -55,7 +55,7 @@ UPSTREAM_DENY = [
 EXTRA_DENY = [
     "Bash(rsync:*)", "Bash(socat:*)", "Bash(telnet:*)", "Bash(ftp:*)",
     "Bash(openssl s_client:*)", "Bash(gh gist:*)", "Bash(gh release:*)",
-    "Bash(gh repo create:*)", "Bash(gh api:*)", "Bash(curl --json:*)",
+    "Bash(gh repo create:*)", "Bash(curl --json:*)",
     "Bash(curl -X post:*)", "Bash(curl -sd:*)", "Bash(curl -s -d:*)",
     "Bash(curl -s -F:*)", "Bash(curl -sF:*)", "Bash(curl -s -X POST:*)",
     "Bash(curl -sX POST:*)",
@@ -69,7 +69,8 @@ def test_deny_is_superset_of_upstream_plus_extras():
 
 def test_ask_has_gh_remote_and_guard_files():
     ask = _load()["permissions"]["ask"]
-    for e in ("Bash(gh:*)", "Bash(git remote:*)",
+    assert "Bash(gh api:*)" not in _load()["permissions"]["deny"]
+    for e in ("Bash(gh:*)", "Bash(gh api:*)", "Bash(git remote:*)",
               "Edit(src/cvforge/guard.py)", "Edit(.githooks/**)"):
         assert e in ask
 
