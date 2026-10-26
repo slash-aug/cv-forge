@@ -134,15 +134,15 @@ LaTeX runs in `<build_dir>/.cvforge-jobs/<job>/`, which is wiped before each run
 
 ## Browser extension
 
-A small extension fills application forms from a job's `kit.json`. It only fills after you click Fill. It never fills the phone number, never ticks consent boxes, fills salary only when confirmed, and never clicks Submit or Next.
+A small extension fills application forms from a job's `kit.json`. It only fills after you click Fill. It never fills the phone number, never ticks consent boxes or answers consent questions, and never clicks Submit or Next. Salary is filled only when it is confirmed and the form's currency and period, when the form states them, match the kit.
 
-Greenhouse has a dedicated adapter. Every other site, Gupy included for now, uses a label guesser. Greenhouse dropdowns built as searchable comboboxes are left for you.
+Greenhouse has a dedicated adapter. Every other site, Gupy included for now, uses a label guesser. On every site, searchable dropdowns (comboboxes, such as the Greenhouse location field) are left for you to pick from the list.
 
-1. Build it: `cd extension && npm install && npm run build`. Output goes to `extension/dist/chrome` and `extension/dist/firefox`.
-2. Start the server: `.venv/bin/cvforge serve`. It listens on `127.0.0.1` only (port 47321, or `serve_port` in `cvforge.toml`).
+1. Build it: `cd extension && npm install && npm run build`. Building needs Node 22.18 or newer (the build script imports TypeScript directly). Output goes to `extension/dist/chrome` and `extension/dist/firefox`.
+2. Start the server: `.venv/bin/cvforge serve`. It listens on `127.0.0.1` only, on port 47321. The extension connects to port 47321 only, so leave `serve_port` at its default; `cvforge serve` warns when it runs on another port. On start it prints how to show the pairing token, not the token itself.
 3. Load it:
    - Chrome: open `chrome://extensions`, turn on Developer mode, choose Load unpacked and pick `dist/chrome`.
-   - Firefox: open `about:debugging`, choose This Firefox, Load Temporary Add-on and pick `dist/firefox/manifest.json`. Firefox MV3 does not grant site access automatically: allow it in `about:addons` under the extension's Permissions, or from the toolbar.
+   - Firefox: open `about:debugging`, choose This Firefox, Load Temporary Add-on and pick `dist/firefox/manifest.json`. Firefox MV3 does not grant site access automatically: allow it in `about:addons` under the extension's Permissions, or from the toolbar. Firefox removes temporary add-ons when it restarts: load it again from `about:debugging` after each restart.
 4. Pair: copy the token from `.venv/bin/cvforge serve --show-token` into the extension popup (token field, then Save).
 5. Use it: run `cvforge kit <slug>`, open the application form and click Fill.
 
@@ -154,7 +154,8 @@ Troubleshooting, with the exact messages the extension shows:
 - `Pairing token rejected: paste the token from cvforge serve --show-token`
 - `cv-forge does not run on LinkedIn`
 - `cv-forge extension error: reload the extension`
-- `Server error <status>`
+- `Kit is from an older cv-forge. Rerun: cvforge kit <slug>` (or `Kit is malformed. ...`), with the job's slug filled in
+- the server's own message when it sends a short one, else `Server error <status>`
 
 ## Privacy model
 
