@@ -86,6 +86,10 @@ def _strings(tailored: dict):
             yield f"recruiter_note.{key}", note[key]
     for i, answer in enumerate(tailored.get("answers", [])):
         yield f"answers.{i}.answer", answer.get("answer", "")
+    email = tailored.get("email") or {}
+    for key in ("subject", "body"):
+        if key in email:
+            yield f"email.{key}", email[key]
 
 
 def _resolve(ids: dict, ref, kind: str, findings: list[Finding]):
@@ -212,6 +216,13 @@ def _audit_note_and_answers(tailored: dict, ids: dict, findings: list[Finding],
             findings.append(Finding("length", location, f"{len(text)} characters, limit {limit}"))
 
 
+def _audit_email(tailored: dict, ids: dict, findings: list[Finding]):
+    email = tailored.get("email")
+    if email:
+        for key in ("subject", "body"):
+            _check_prose(f"email.{key}", email.get(key, ""), email.get("refs"), ids, findings)
+
+
 def _audit_em_dash(tailored: dict, findings: list[Finding]):
     for location, text in _strings(tailored):
         if EM_DASH in text:
@@ -287,6 +298,7 @@ def audit(tailored: dict, master: dict, *,
     _audit_id_lists(tailored, ids, findings)
     _audit_letter(tailored, ids, findings)
     _audit_note_and_answers(tailored, ids, findings, extra_allowed)
+    _audit_email(tailored, ids, findings)
     _audit_em_dash(tailored, findings)
     _audit_confidential(tailored, master, findings)
     return findings

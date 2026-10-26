@@ -154,6 +154,16 @@ recruiter_note:
   connect: "..."
   message: "..."
   refs: [<id>, ...]
+email:                       # only when the candidate applies by email
+  to: "jobs@company.com"
+  subject: "..."
+  body: |
+    Hi <Company> team,
+
+    ...
+
+    Thank you for your time.
+  refs: [<id>, ...]
 ```
 
 - **Language:** English posting: `en`. Brazilian Portuguese posting: `pt-BR`. Portuguese posting from a company based in Portugal: `pt-PT`.
@@ -161,6 +171,7 @@ recruiter_note:
 - **Letter:** exactly one page. Every paragraph is `{text, refs}`, and `refs` lists the master ids behind each fact in it. Concrete, specific to this company and role, no generic praise.
 - **recruiter_note.connect:** for a LinkedIn connection request. At most **160 characters**. One or two natural, plain sentences: who the candidate is, the role, one hook. No list of skills, no pitch, no flattery.
 - **recruiter_note.message:** at most about 1,200 characters, for an InMail or email to the recruiter. Same tone, a little more detail.
+- **email:** only when the application goes by email (the posting says to email an address). `to` is that address, exactly as in the posting. `subject`: the role and the candidate's name. `body`: greeting, two or three short paragraphs from the same facts as the letter, mention the attached CV and letter, and a closing line; no signature, the kit adds name, phone and LinkedIn from the master.
 - **No em dash** anywhere in the file.
 
 ---
@@ -229,13 +240,13 @@ Usually for the `external` and `trainee` channels, whenever the candidate pastes
 .venv/bin/cvforge kit <slug>
 ```
 
-It writes `kit.json` and `kit.html` and prints the path of `kit.html` (a Windows path when available). Give the candidate that path: the page has copy buttons for the personal data, each work entry, the salary, the answers and the recruiter note.
+It writes `kit.json` and `kit.html` and prints the path of `kit.html` (a Windows path when available). Give the candidate that path: the page has copy buttons for the personal data, each work entry, the salary, the answers, the recruiter note and, when `tailored.yaml` has one, the email (to, subject, signed body and the files to attach).
 
 ---
 
 ## Step 10: Hand-off
 
-Summarise in a few lines: verdict, the two PDF file names, the confirmed salary, the kit path, and the `connect` note ready to paste.
+Summarise in a few lines: verdict, the two PDF file names, the confirmed salary, the kit path, and the `connect` note ready to paste. For an email application, point to the Email section of the kit instead of pasting the email.
 
 Then remind the candidate:
 

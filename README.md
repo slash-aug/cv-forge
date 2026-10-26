@@ -46,7 +46,7 @@ Phase 2 turns one job posting into everything you need to apply. Python does the
 - **Companies:** `cvforge company add | sponsor | show` keeps a registry with visa sponsor marks and their sources.
 - **Salary:** `cvforge salary <slug>` suggests an expected salary from the posting range, an optional market CSV (see `examples/salary/market.template.csv`) and your pay floor, converted with ECB rates cached per day. `--confirm [AMOUNT]` locks it in.
 - **Answers:** `cvforge answers <slug>` looks up screening answers in the answer bank and your knock-out facts; `--save` audits the tailored file and stores its answers.
-- **Kit:** `cvforge kit <slug>` writes `kit.json` and a copy-ready `kit.html` with your details, work history cut to common field limits, salary, answers and links to the PDFs.
+- **Kit:** `cvforge kit <slug>` writes `kit.json` and a copy-ready `kit.html` with your details, work history cut to common field limits, salary, answers, the email to send when you apply by email, and links to the PDFs.
 - **Tracker:** `cvforge track add | status | stage | done | show` records stages and follow-ups, and `cvforge due` lists what needs attention. `/outcome` records a result and what you learned.
 
 A full run on the example persona, with no network:

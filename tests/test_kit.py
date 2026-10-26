@@ -33,7 +33,7 @@ def test_kit_json_keys_stable():
     k = kit()
     assert list(k) == ["schema_version", "slug", "lang", "company", "role", "links", "fields",
                        "work", "education", "languages", "certificates", "salary", "answers",
-                       "recruiter_note", "tracker"]
+                       "recruiter_note", "email", "tracker"]
     assert k["schema_version"] == 1
     assert list(k["links"]) == ["apply", "posting", "cv_pdf", "letter_pdf"]
     assert k["links"]["letter_pdf"] is None and k["links"]["cv_pdf"] == FILES["cv_pdf"]
@@ -243,3 +243,34 @@ def test_kit_visa_field_uses_names():
     k = build_kit(master, TAILORED, POSTING, SALARY, slug="example-corp", files=FILES)
     visa = next(f["value"] for f in k["fields"] if f["key"] == "prefs.visa")
     assert visa == "EU Blue Card: eligible; Portugal: CPLP mobility"
+
+
+EMAIL = {"to": "jobs@example.com", "subject": "Full-stack role: Ana Exemplo",
+         "body": "Hi team,\n\nI cut load time by 40%.\n\nThank you.", "refs": ["h-load-time"]}
+
+
+def test_kit_email_is_null_without_an_email_block():
+    assert kit()["email"] is None
+
+
+def test_kit_email_adds_signature_and_attachments():
+    files = {"cv_pdf": "Ana_CV.pdf", "letter_pdf": "Ana_Letter.pdf"}
+    k = kit(tailored={**TAILORED, "email": EMAIL}, files=files)
+    assert k["email"] == {
+        "to": "jobs@example.com",
+        "subject": "Full-stack role: Ana Exemplo",
+        "body": ("Hi team,\n\nI cut load time by 40%.\n\nThank you.\n\n"
+                 "Ana Exemplo\n+351 900 000 000\nhttps://www.linkedin.com/in/ana-exemplo"),
+        "attachments": ["Ana_CV.pdf", "Ana_Letter.pdf"],
+    }
+    assert kit(tailored={**TAILORED, "email": EMAIL})["email"]["attachments"] == [FILES["cv_pdf"]]
+    assert schema_problems(k, load_schema("cvforge.kit", "kit.schema.json")) == []
+
+
+def test_kit_html_email_section_has_copy_buttons():
+    html = render_kit(kit(tailored={**TAILORED, "email": EMAIL}))
+    assert "<h2>Email</h2>" in html
+    for part in ("email-to", "email-subject", "email-body"):
+        assert f'data-copy="{part}"' in html and f'id="{part}"' in html
+    assert "Attach: Ana_Exemplo_CV_Example_Corp.pdf" in html
+    assert "<h2>Email</h2>" not in render_kit(kit())
