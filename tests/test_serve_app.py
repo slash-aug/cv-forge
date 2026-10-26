@@ -288,3 +288,13 @@ def test_mark_applied(app, data):
 def test_mark_applied_unknown_row(app):
     resp = app.handle(req("POST", "/applied/ghost"))
     assert resp.status == 404 and body(resp)["error"] == "no-row"
+
+
+def test_save_answer_deeply_nested_body_is_400(app):
+    assert post(app, "/answers/acme", None, raw=b"[" * 60000).status == 400
+
+
+def test_mark_applied_broken_tracker_is_500_without_path(app, data):
+    (data / "tracker.csv").write_bytes(b'slug,status\n"unterminated\x00\n')
+    resp = app.handle(req("POST", "/applied/acme"))
+    assert resp.status == 500 and str(data) not in resp.body.decode()

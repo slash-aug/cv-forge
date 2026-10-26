@@ -1,6 +1,7 @@
 """Request handling for `cvforge serve`. No sockets here, so it is unit-testable."""
 from __future__ import annotations
 
+import csv
 import hmac
 import json
 import os
@@ -210,7 +211,7 @@ class App:
             return _error(413, "too-large", "Body is larger than 64 KiB.")
         try:
             payload = json.loads(req.body)
-        except ValueError:
+        except (ValueError, RecursionError):
             return _error(400, "bad-body", "Body must be JSON.")
         question = payload.get("question") if isinstance(payload, dict) else None
         answer = payload.get("answer") if isinstance(payload, dict) else None
@@ -256,6 +257,6 @@ class App:
             tracker.set_status(self.data_dir / "tracker.csv", slug, "applied", self.today())
         except KeyError:
             return _error(404, "no-row", "No such application.")
-        except (OSError, ValueError):
+        except (OSError, ValueError, csv.Error):
             return _error(500, "tracker", "Tracker is unreadable. Run cvforge due to check it.")
         return _json(200, {"status": "applied"})
