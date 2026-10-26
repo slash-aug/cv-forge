@@ -297,4 +297,4 @@ def test_email_schema_requires_every_part():
     assert schema_problems(_variant(lambda d: d.update(email=EMAIL)), schema) == []
     for key in ("to", "subject", "body", "refs"):
         partial = {k: v for k, v in EMAIL.items() if k != key}
-        assert schema_problems(_variant(lambda d: d.update(email=partial)), schema), key
+        assert schema_problems(_variant(lambda d, p=partial: d.update(email=p)), schema), key

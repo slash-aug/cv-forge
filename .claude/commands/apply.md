@@ -155,7 +155,7 @@ recruiter_note:
   message: "..."
   refs: [<id>, ...]
 email:                       # only when the candidate applies by email
-  to: "jobs@company.com"
+  to: "<the address from the posting>"
   subject: "..."
   body: |
     Hi <Company> team,
