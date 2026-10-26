@@ -44,10 +44,16 @@ const AUTOCOMPLETE: Record<string, Key> = {
   url: "basics.portfolio",
 };
 
-const CV_HINT = /\b(cv|resume|curriculo|curriculum)\b|\.pdf/;
-const LETTER_HINT = /cover|carta|motivation|motivacao/;
+const CV_HINT = /\b(cv|resume|curriculo|curriculum)\b/;
+const LETTER_HINT = /\b(cover|carta|motivation|motivacao)\b/;
+// A generic keyword ("name", "site") does not count next to one of these.
+const MODIFIERS = new Set(
+  ["company", "employer", "empresa", "reference", "referencia", "school", "escola", "university",
+   "universidade", "manager", "gestor", "contact", "contato", "emergency", "emergencia"].map((w) => normaliseQuestion(w)),
+);
+const GENERIC_KEYS = new Set<Key>(["basics.name", "basics.portfolio", "prefs.notice", "basics.region"]);
 const TEXT_TYPES = new Set(["", "text", "email", "tel", "url", "search", "number"]);
-const SKIP_TYPES = new Set(["hidden", "submit", "button", "reset", "image"]);
+const SKIP_TYPES = new Set(["search", "hidden", "submit", "button", "reset", "image"]);
 const MAX_SIGNAL_TOKENS = 6;
 const HINT_LIMIT = 200;
 
@@ -56,7 +62,14 @@ const squash = (t: string): string => t.replace(/\s+/g, " ").trim();
 
 function visible(el: Element): boolean {
   if (el instanceof HTMLInputElement && el.type === "hidden") return false;
+  if (el.matches(":disabled") || el.closest("[inert], [role=search]")) return false;
+  if (el.getAttribute("autocomplete") === "one-time-code") return false;
+  if (el.checkVisibility?.() === false) return false;
   for (let n: Element | null = el; n; n = n.parentElement) {
+    if (n instanceof HTMLDetailsElement && !n.open) {
+      const summary = [...n.children].find((c) => c.localName === "summary");
+      if (!summary?.contains(el)) return false;
+    }
     if (n.hasAttribute("hidden") || n.getAttribute("aria-hidden") === "true") return false;
     if (n instanceof HTMLElement && (n.style.display === "none" || n.style.visibility === "hidden")) return false;
   }
@@ -71,7 +84,7 @@ function contains(tokens: string[], phrase: string[]): boolean {
 }
 
 /** Score each key from a set of signal texts; ties and zero scores yield null. */
-function bestKey(signals: string[], el?: Control, autocomplete = ""): Key | null {
+function rank(signals: string[], el?: Control, autocomplete = ""): { key: Key | null; tie: boolean } {
   const scores = new Map<Key, number>();
   const add = (key: Key, n: number): void => void scores.set(key, (scores.get(key) ?? 0) + n);
   for (const raw of signals) {
@@ -79,8 +92,10 @@ function bestKey(signals: string[], el?: Control, autocomplete = ""): Key | null
     if (tokens.length === 0 || tokens.length > MAX_SIGNAL_TOKENS) continue;
     for (const { key, words } of KEYWORDS) {
       let best = 0;
+      const modified = tokens.some((t) => MODIFIERS.has(t));
       for (const w of words) {
         if (!contains(tokens, w)) continue;
+        if (modified && w.length === 1 && GENERIC_KEYS.has(key)) continue;
         best = Math.max(best, w.length * 2 + (w.length === tokens.length ? 2 : 0));
       }
       if (best) add(key, best);
@@ -96,9 +111,13 @@ function bestKey(signals: string[], el?: Control, autocomplete = ""): Key | null
   }
   const ranked = [...scores].sort((a, b) => b[1] - a[1]);
   const top = ranked[0];
-  if (!top || ranked[1]?.[1] === top[1]) return null;
-  return top[0];
+  if (!top) return { key: null, tie: false };
+  if (ranked[1]?.[1] === top[1]) return { key: null, tie: true };
+  return { key: top[0], tie: false };
 }
+
+const bestKey = (signals: string[], el?: Control, autocomplete = ""): Key | null =>
+  rank(signals, el, autocomplete).key;
 
 function signalsOf(el: Control): string[] {
   const attr = [el.getAttribute("name") ?? "", el.id].map((s) => s.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " "));
@@ -247,12 +266,13 @@ export function guessPage(doc: Document): PageMap {
 
     if (el instanceof HTMLInputElement && !TEXT_TYPES.has(el.type)) continue;
 
-    const key = el instanceof HTMLTextAreaElement ? null : bestKey(signalsOf(el), el, el.autocomplete);
+    const isArea = el instanceof HTMLTextAreaElement;
+    const { key, tie } = isArea ? { key: null, tie: false } : rank(signalsOf(el), el, el.autocomplete);
     if (place(key, el, el)) continue;
     if (key === null && !(el instanceof HTMLSelectElement)) {
       const label = squash(labelText(el) || el.getAttribute("aria-label") || el.getAttribute("placeholder") || "");
-      const ambiguous = bestKey(signalsOf(el), el, el.autocomplete) === null && hasAnyScore(el);
-      if (!ambiguous && question(label, el, el)) continue;
+      // A text input whose keywords tied is ambiguous; a textarea is always a question.
+      if (!tie && question(label, el, el)) continue;
     }
     map.unplaced.push(el);
   }
@@ -262,12 +282,4 @@ export function guessPage(doc: Document): PageMap {
   if (bare && fieldAt("basics.last_name") && !fieldAt("basics.first_name")) bare.key = "basics.first_name";
 
   return map;
-}
-
-/** True when some keyword matched, so a null best key means a tie rather than no match. */
-function hasAnyScore(el: Control): boolean {
-  return signalsOf(el).some((s) => {
-    const tokens = normaliseQuestion(s).split(" ").filter(Boolean);
-    return KEYWORDS.some(({ words }) => words.some((w) => contains(tokens, w)));
-  });
 }

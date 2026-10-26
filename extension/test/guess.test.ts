@@ -145,9 +145,73 @@ describe("looksLikeApplication", () => {
     document.body.innerHTML = `<label for=f>Currículo</label><input id=f type=file>`;
     expect(looksLikeApplication(document)).toBe(true);
   });
+  test("a .pdf accept alone is not a CV hint", () => {
+    document.body.innerHTML = `<label for=f>Passport scan</label><input id=f type=file accept=".pdf">
+      <label for=e>Email</label><input id=e type=email>`;
+    expect(looksLikeApplication(document)).toBe(false);
+    expect(guessPage(document).files.cv).toBeUndefined();
+    expect(guessPage(document).unplaced).toContain($("f"));
+  });
   test("false for an unrelated file input", () => {
     document.body.innerHTML = `<label for=f>Profile photo</label><input id=f type=file accept="image/*">`;
     expect(looksLikeApplication(document)).toBe(false);
+  });
+});
+
+describe("review fixes", () => {
+  const put = (html: string): PageMap => {
+    document.body.innerHTML = html;
+    return guessPage(document);
+  };
+
+  test("textareas that mention keywords are still questions", () => {
+    const m = put(`<label for=a>Why would you relocate?</label><textarea id=a></textarea>
+      <label for=b>Describe your visa situation</label><textarea id=b></textarea>`);
+    expect(m.questions.map((q) => q.el)).toEqual([$("a"), $("b")]);
+    expect(m.unplaced).toEqual([]);
+    expect(m.fields).toEqual([]);
+  });
+
+  test("modifiers stop generic keywords", () => {
+    const m = put(`<label for=a>Company name</label><input id=a>
+      <label for=b>Company website</label><input id=b>
+      <label for=c>Nome da empresa</label><input id=c>
+      <label for=d>Reference name</label><input id=d>`);
+    expect(m.fields).toEqual([]);
+    expect(m.questions.map((q) => q.el)).toEqual([$("a"), $("b"), $("c"), $("d")]);
+  });
+
+  test("disabled fieldset, inert step, closed details are skipped", () => {
+    const m = put(`<fieldset disabled><label for=a>City</label><input id=a></fieldset>
+      <div inert><label for=b>Country</label><input id=b></div>
+      <details><summary>More</summary><label for=c>Cidade</label><input id=c></details>
+      <details open><summary>Open</summary><label for=d>State</label><input id=d></details>`);
+    expect(m.fields.map((f) => f.el)).toEqual([$("d")]);
+    expect(m.unplaced).toEqual([]);
+  });
+
+  test("search, one-time-code and password inputs are ignored", () => {
+    const m = put(`<input id=a type=search aria-label="Search jobs"><div role="search"><input id=b aria-label="City"></div>
+      <input id=c autocomplete="one-time-code" aria-label="Code"><input id=d type=password aria-label="Password">`);
+    expect([...m.fields, ...m.questions, ...m.unplaced]).toEqual([]);
+  });
+
+  test("letter hint uses word boundaries", () => {
+    const m = put(`<label for=a>Recover</label><input id=a type=file><label for=b>Cartão</label><input id=b type=file>`);
+    expect(m.files.letter).toBeUndefined();
+    expect(m.unplaced).toEqual([$("a"), $("b")]);
+  });
+
+  test("phone variants", () => {
+    const m = put(`<input id=a type=tel><input id=b autocomplete="section-x shipping tel">
+      <label for=c>Celular</label><input id=c><label for=d>WhatsApp</label><input id=d>`);
+    expect(m.phone).toEqual([$("a"), $("b"), $("c"), $("d")]);
+  });
+
+  test("a consent-looking radio group never goes to consent", () => {
+    const m = put(`<fieldset><legend>I agree to the privacy policy</legend>
+      <label><input type=radio name=ok value=yes> Yes</label><label><input type=radio name=ok value=no> No</label></fieldset>`);
+    expect(m.consent).toEqual([]);
   });
 });
 
@@ -167,6 +231,7 @@ describe("end to end", () => {
     expect(s.guessed.length).toBeGreaterThan(0);
     expect(s.needsYou.some((i) => i.el === $("cons"))).toBe(true);
     expect(($("cons") as HTMLInputElement).checked).toBe(false);
+    expect(($("ph") as HTMLInputElement).value).toBe("");
     expect(clicks).toHaveBeenCalledTimes(0);
   });
 });
