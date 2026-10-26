@@ -90,8 +90,24 @@ export class KitVersionError extends Error {
   }
 }
 
+export class KitShapeError extends Error {
+  constructor(message = "Kit is malformed. Rerun: cvforge kit <slug>") {
+    super(message);
+    this.name = "KitShapeError";
+  }
+}
+
+const ARRAY_KEYS = ["fields", "work", "education", "languages", "certificates", "answers", "tracker"];
+const OBJECT_OR_NULL_KEYS = ["salary", "recruiter_note", "email"];
+
+const isObject = (v: unknown): boolean => typeof v === "object" && v !== null && !Array.isArray(v);
+
 export function parseKit(raw: unknown): Kit {
   const version = typeof raw === "object" && raw !== null ? (raw as { schema_version?: unknown }).schema_version : undefined;
   if (version !== 2) throw new KitVersionError();
+  const kit = raw as Record<string, unknown>;
+  for (const key of ARRAY_KEYS) if (!Array.isArray(kit[key])) throw new KitShapeError();
+  for (const key of OBJECT_OR_NULL_KEYS) if (kit[key] !== null && !isObject(kit[key])) throw new KitShapeError();
+  if (!isObject(kit.links)) throw new KitShapeError();
   return raw as Kit;
 }

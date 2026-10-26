@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, test } from "vitest";
-import { KitVersionError, parseKit } from "../src/shared/kit";
+import { KitShapeError, KitVersionError, parseKit } from "../src/shared/kit";
 
 const raw = () => JSON.parse(readFileSync(resolve(__dirname, "fixtures/kit.json"), "utf8"));
 
@@ -26,4 +26,32 @@ test("non-object throws", () => {
 test("salary null is fine", () => {
   const kit = parseKit({ ...raw(), salary: null });
   expect(kit.salary).toBeNull();
+});
+
+test("array keys must be arrays", () => {
+  for (const key of ["fields", "work", "education", "languages", "certificates", "answers", "tracker"]) {
+    expect(() => parseKit({ ...raw(), [key]: {} }), key).toThrow(KitShapeError);
+    expect(() => parseKit({ ...raw(), [key]: null }), key).toThrow(KitShapeError);
+  }
+});
+
+test("object-or-null keys are checked", () => {
+  for (const key of ["salary", "recruiter_note", "email"]) {
+    expect(() => parseKit({ ...raw(), [key]: "x" }), key).toThrow(KitShapeError);
+    expect(() => parseKit({ ...raw(), [key]: [] }), key).toThrow(KitShapeError);
+  }
+  expect(() => parseKit({ ...raw(), links: null })).toThrow(KitShapeError);
+  expect(() => parseKit({ ...raw(), links: [] })).toThrow(KitShapeError);
+  const missing = raw();
+  delete missing.fields;
+  expect(() => parseKit(missing)).toThrow(KitShapeError);
+});
+
+test("shape error message", () => {
+  expect(() => parseKit({ ...raw(), fields: 1 })).toThrow("Kit is malformed. Rerun: cvforge kit <slug>");
+});
+
+test("null recruiter_note and email are fine", () => {
+  const kit = parseKit({ ...raw(), recruiter_note: null, email: null });
+  expect(kit.email).toBeNull();
 });
