@@ -159,8 +159,20 @@ def test_residence_elsewhere_skips(quote, kw):
     assert not v.passed and v.results[1].quote == quote
 
 
-def test_remote_empty_allowed_needs_sponsor_mark():
-    r = req(allowed=[])
+def test_remote_with_no_region_passes_without_sponsor_mark():
+    # No region stated usually means no work visa is needed, so it is always worth applying.
+    v = check(req(allowed=[]), posting(), MASTER, None, RATES, TODAY, clt_factor=1.4)
+    assert v.passed and v.results[1].message == "remote with no region stated"
+
+
+def test_remote_limited_elsewhere_still_skips():
+    v = check(req(allowed=["United States"]), posting(), MASTER, None, RATES, TODAY,
+              clt_factor=1.4)
+    assert not v.passed and v.results[1].message == "remote limited to United States"
+
+
+def test_onsite_abroad_still_needs_sponsor_mark():
+    r = req(workplace="onsite", countries=["DE"])
     assert not check(r, posting(), MASTER, None, RATES, TODAY, clt_factor=1.4).passed
     assert check(r, posting(), MASTER, SPONSOR, RATES, TODAY, clt_factor=1.4).passed
 

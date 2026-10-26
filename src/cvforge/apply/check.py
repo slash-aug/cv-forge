@@ -146,7 +146,10 @@ def _location(req: dict, company: dict | None) -> RuleResult:
         return result(True, "relocation or visa support offered", sponsorship.get("quote"))
     if remote and allowed:
         return result(False, f"remote limited to {', '.join(loc['allowed'])}")
-    where = "remote with no region stated" if remote else f"{workplace} abroad"
+    if remote:
+        # No region stated usually means no work visa is needed, so it is worth applying.
+        return result(True, "remote with no region stated")
+    where = f"{workplace} abroad"
     if company and company.get("sponsor"):
         types = ", ".join(s["type"] for s in company["sponsor"])
         return result(True, f"{where}; {company['name']} has a sponsor mark ({types})")
