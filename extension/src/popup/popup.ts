@@ -2,8 +2,13 @@ import { errorText, type Job, type Match, type Msg, type Result } from "../share
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
-function send<T>(msg: Msg): Promise<Result<T>> {
-  return chrome.runtime.sendMessage(msg) as Promise<Result<T>>;
+async function send<T>(msg: Msg): Promise<Result<T>> {
+  try {
+    const r = (await chrome.runtime.sendMessage(msg)) as Result<T> | undefined;
+    return r ?? { ok: false, error: { kind: "internal" } };
+  } catch {
+    return { ok: false, error: { kind: "internal" } };
+  }
 }
 
 function showError(r: Result<unknown>): boolean {
@@ -21,7 +26,11 @@ let slug: string | null = null;
 
 async function renderTab(): Promise<void> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab?.id || !tab.url) return;
+  if (!tab?.id) return;
+  if (!tab.url || !/^https?:\/\//i.test(tab.url)) {
+    $("error").textContent = "Open a job application page";
+    return;
+  }
   tabId = tab.id;
   const [match, jobs] = await Promise.all([
     send<Match>({ type: "matchTab", url: tab.url, tabId }),
@@ -62,12 +71,15 @@ $<HTMLSelectElement>("choose").addEventListener("change", async (e) => {
 
 $("applied").addEventListener("click", async () => {
   if (!slug || !window.confirm(`Mark ${slug} as applied?`)) return;
+  const button = $<HTMLButtonElement>("applied");
+  button.disabled = true;
   const r = await send({ type: "markApplied", slug });
+  button.disabled = false;
   if (!showError(r)) $("status").textContent = `Marked ${slug} as applied`;
 });
 
 // Initial token state: show the field when none is stored.
-void chrome.storage.local.get("token").then((s) => {
+chrome.storage.local.get("token").then((s) => {
   if (!s.token) $("pairing").hidden = false;
-});
-void init();
+}, () => undefined);
+init().catch(() => showError({ ok: false, error: { kind: "internal" } }));

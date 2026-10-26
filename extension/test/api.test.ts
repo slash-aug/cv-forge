@@ -101,5 +101,6 @@ test("errorText texts", () => {
   expect(errorText({ kind: "token" })).toBe("Pairing token rejected: paste the token from cvforge serve --show-token");
   expect(errorText({ kind: "linkedin" })).toBe("cv-forge does not run on LinkedIn");
   expect(errorText({ kind: "http", status: 500, body: null })).toBe("Server error 500");
+  expect(errorText({ kind: "internal" })).toBe("cv-forge extension error: reload the extension");
   expect(errorText({ kind: "kit", message: "boom" })).toBe("boom");
 });

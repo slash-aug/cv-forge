@@ -50,16 +50,25 @@ export class Api {
     return this.getJson<{ version: number; cvforge: string }>("/health");
   }
 
-  jobs() {
-    return this.getJson<Job[]>("/jobs");
+  async jobs(): Promise<Result<Job[]>> {
+    const r = await this.getJson<unknown>("/jobs");
+    if (!r.ok) return r;
+    const isJob = (j: unknown) =>
+      typeof j === "object" && j !== null &&
+      ["slug", "company", "role"].every((k) => typeof (j as Record<string, unknown>)[k] === "string");
+    if (!Array.isArray(r.value) || !r.value.every(isJob)) return fail({ kind: "http", status: 200, body: null });
+    return { ok: true, value: r.value as Job[] };
   }
 
   async match(url: string, site?: string, jobId?: string): Promise<Result<string[]>> {
     const q = new URLSearchParams({ url });
     if (site) q.set("site", site);
     if (jobId) q.set("job_id", jobId);
-    const r = await this.getJson<{ slugs: string[] }>(`/match?${q}`);
-    return r.ok ? { ok: true, value: r.value.slugs } : r;
+    const r = await this.getJson<{ slugs?: unknown } | null>(`/match?${q}`);
+    if (!r.ok) return r;
+    const slugs = r.value?.slugs;
+    if (!Array.isArray(slugs) || !slugs.every((x) => typeof x === "string")) return fail({ kind: "http", status: 200, body: null });
+    return { ok: true, value: slugs as string[] };
   }
 
   async kit(slug: string): Promise<Result<Kit>> {

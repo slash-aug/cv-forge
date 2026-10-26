@@ -3,6 +3,7 @@ export type ApiError =
   | { kind: "token" }
   | { kind: "linkedin" }
   | { kind: "kit"; message: string }
+  | { kind: "internal" }
   | { kind: "http"; status: number; body: unknown };
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: ApiError };
@@ -46,6 +47,8 @@ export function errorText(e: ApiError): string {
       return "Pairing token rejected: paste the token from cvforge serve --show-token";
     case "linkedin":
       return "cv-forge does not run on LinkedIn";
+    case "internal":
+      return "cv-forge extension error: reload the extension";
     case "kit":
       return e.message;
     case "http":

@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { beforeEach, expect, test, vi } from "vitest";
 import { Api } from "../src/background/api";
 import { createHandler } from "../src/background/main";
@@ -78,4 +80,50 @@ test("tab choice is cleared when the tab closes", async () => {
   removed?.(9);
   await Promise.resolve();
   expect(session.data["tab:9"]).toBeUndefined();
+});
+
+test("storage rejection becomes an internal error", async () => {
+  const h = setup(vi.fn());
+  session.get = async () => { throw new Error("boom"); };
+  const r = await h({ type: "matchTab", url: "https://x.example/1", tabId: 1 });
+  expect(r).toEqual({ ok: false, error: { kind: "internal" } });
+});
+
+test("unknown message type is an internal error", async () => {
+  const r = await setup(vi.fn())({ type: "nope" } as never);
+  expect(r).toEqual({ ok: false, error: { kind: "internal" } });
+});
+
+test("malformed /jobs body is an http error", async () => {
+  for (const body of [{ a: 1 }, [{ slug: 1, company: "c", role: "r" }], [null]]) {
+    const r = await setup(vi.fn().mockImplementation(async () => json(body)))({ type: "jobs" });
+    expect(r).toEqual({ ok: false, error: { kind: "http", status: 200, body: null } });
+  }
+});
+
+test("malformed /match body is an http error", async () => {
+  for (const body of [{}, { slugs: "a" }, { slugs: [1] }]) {
+    const r = await setup(vi.fn().mockImplementation(async () => json(body)))({ type: "matchTab", url: "https://x.example/1", tabId: 1 });
+    expect(r).toEqual({ ok: false, error: { kind: "http", status: 200, body: null } });
+  }
+});
+
+test("pdf message carries base64, not an ArrayBuffer", async () => {
+  const kit = { ...JSON.parse(readFileSync(resolve(__dirname, "fixtures/kit.json"), "utf8")) };
+  const f = vi.fn().mockImplementation(async (url: string) =>
+    String(url).endsWith("/kit/s") ? json(kit) : new Response(new Uint8Array([1, 2, 3])));
+  const r = await setup(f)({ type: "pdf", slug: "s", which: "cv" });
+  expect(r).toEqual({ ok: true, value: { name: "cv.pdf", base64: "AQID" } });
+});
+
+test("content-script sender cannot set or read another tab's choice", async () => {
+  const f = vi.fn().mockImplementation(async (url: string) =>
+    String(url).includes("/match") ? json({ slugs: [] }) : json([]));
+  const h = setup(f);
+  await h({ type: "chooseJob", tabId: 99, slug: "evil" }, 5);
+  expect(session.data["tab:99"]).toBeUndefined();
+  expect(session.data["tab:5"]).toBe("evil");
+  session.data["tab:99"] = "secret";
+  const r = await h({ type: "matchTab", url: "https://x.example/1", tabId: 99 }, 6);
+  expect(r.ok && (r.value as { slug: string | null }).slug).toBeNull();
 });
