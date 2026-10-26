@@ -47,26 +47,33 @@ function same(a: string, b: string): boolean {
   return plain(a) !== "" && plain(a) === plain(b);
 }
 
+function exact(a: string, b: string): boolean {
+  return plain(a) !== "" && plain(a) === plain(b);
+}
+
+/** First candidate whose texts match: exact folded pass over all, then the normalised pass. */
+function pick<T>(items: T[], texts: (item: T) => string[], value: string): T | undefined {
+  return (
+    items.find((i) => texts(i).some((t) => exact(t, value))) ??
+    items.find((i) => texts(i).some((t) => same(t, value)))
+  );
+}
+
 export function selectOption(el: HTMLSelectElement, value: string): boolean {
-  for (const opt of el.options) {
-    if (same(opt.value, value) || same(opt.text, value)) {
-      el.value = opt.value;
-      fire(el, "input", "change");
-      return true;
-    }
-  }
-  return false;
+  const opt = pick([...el.options], (o) => [o.value, o.text], value);
+  if (!opt) return false;
+  el.value = opt.value;
+  fire(el, "input", "change");
+  return true;
 }
 
 export function checkRadio(group: HTMLInputElement[], value: string): boolean {
-  for (const radio of group) {
-    if (same(labelText(radio), value) || same(radio.value, value)) {
-      radio.checked = true;
-      fire(radio, "input", "change");
-      return true;
-    }
-  }
-  return false;
+  const radio = pick(group, (r) => [labelText(r), r.value], value);
+  if (!radio) return false;
+  // Native setter, so frameworks that shadow `checked` still see the change.
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "checked")?.set?.call(radio, true);
+  fire(radio, "input", "change");
+  return true;
 }
 
 export function attachFile(input: HTMLInputElement, name: string, bytes: ArrayBuffer): boolean {
@@ -78,7 +85,10 @@ export function attachFile(input: HTMLInputElement, name: string, bytes: ArrayBu
 }
 
 export function isEmpty(el: Element): boolean {
-  if (el instanceof HTMLSelectElement) return el.selectedIndex <= 0 || el.value === "";
+  if (el instanceof HTMLSelectElement) {
+    const sel = el.selectedOptions[0];
+    return !sel || sel.value === "" || sel.disabled || Boolean(sel.hidden);
+  }
   if (el instanceof HTMLInputElement) {
     if (el.type === "checkbox" || el.type === "radio") return !el.checked;
     if (el.type === "file") return (el.files?.length ?? 0) === 0;

@@ -24,6 +24,6 @@ Object.defineProperty(HTMLInputElement.prototype, "files", {
     return assigned.get(this) ?? native?.get?.call(this) ?? null;
   },
   set(this: HTMLInputElement, value: FileList) {
-    assigned.set(this, value);
+    if (this.type === "file") assigned.set(this, value);
   },
 });

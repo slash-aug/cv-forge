@@ -105,4 +105,63 @@ describe("safeClick", () => {
     expect(safeClick(el, ALLOW)).toBe(false);
     expect(el.click).not.toHaveBeenCalled();
   });
+
+  test("refuses a child of a submit button, with a spying form", () => {
+    document.body.innerHTML = `<form id="f"><button type="submit"><span data-t>Add experience</span></button></form>`;
+    const el = document.querySelector<HTMLElement>("[data-t]")!;
+    const submit = vi.fn((e: Event) => e.preventDefault());
+    document.getElementById("f")!.addEventListener("submit", submit);
+    expect(safeClick(el, ["span"])).toBe(false);
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  test("refuses a span inside a typeless button in a form", () => {
+    const el = make(`<form><button><span data-t>Add experience</span></button></form>`);
+    expect(safeClick(el, ["span"])).toBe(false);
+    expect(el.click).not.toHaveBeenCalled();
+  });
+
+  test("refuses a label whose control is a submitter", () => {
+    const el = make(`<form><button type="submit" id="s">x</button></form><label for="s" data-t>Add experience</label>`);
+    expect(safeClick(el, ["label"])).toBe(false);
+    expect(el.click).not.toHaveBeenCalled();
+  });
+
+  test("refuses checkboxes and radios outright, consent stays unticked", () => {
+    const el = make(`<label><input type="checkbox" data-t> Add experience</label>`);
+    expect(safeClick(el, ["input"])).toBe(false);
+    expect((el as HTMLInputElement).checked).toBe(false);
+    const r = make(`<input type="radio" data-t>`);
+    expect(safeClick(r, ["input"])).toBe(false);
+  });
+
+  test("clicks an input type=button and a role=button element", () => {
+    expect(safeClick(make(`<input type="button" value="Add experience" data-t>`), ["input"])).toBe(true);
+    expect(safeClick(make(`<div role="button" data-t>Add experience</div>`), ["div"])).toBe(true);
+  });
+
+  test("reads text from aria-labelledby", () => {
+    const el = make(`<span id="l">Next</span><button type="button" aria-labelledby="l" data-t>+</button>`);
+    expect(safeClick(el, ["button"])).toBe(false);
+  });
+
+  test("reads descendant img alt, aria-label and title", () => {
+    for (const inner of ['<img alt="Next">', '<i aria-label="Continue"></i>', '<i title="Enviar"></i>']) {
+      const el = make(`<button type="button" data-t>${inner}</button>`);
+      expect(safeClick(el, ["button"])).toBe(false);
+    }
+  });
+
+  test("joins adjacent text nodes with spaces", () => {
+    const el = make(`<button type="button" data-t><span>Add</span><span>Submit</span><span>application</span></button>`);
+    expect(safeClick(el, ["button"])).toBe(false);
+  });
+
+  test.each(["Próxima etapa", "Prosseguir", "Seguinte", "Proceed", "Done", "Confirm", "Confirmar", "Avance"])(
+    "refuses %s",
+    (label) => {
+      const el = make(`<button type="button" data-t>${label}</button>`);
+      expect(safeClick(el, ["button"])).toBe(false);
+    },
+  );
 });

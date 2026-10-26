@@ -54,6 +54,12 @@ describe("selectOption", () => {
     expect(selectOption(s, "France")).toBe(false);
     expect(s.value).toBe("");
   });
+  test("prefers an exact option over a normalised one", () => {
+    const s = document.createElement("select");
+    s.innerHTML = '<option value="a">The office</option><option value="b">Office</option>';
+    expect(selectOption(s, "Office")).toBe(true);
+    expect(s.value).toBe("b");
+  });
   test("dispatches change on a match", () => {
     const s = select();
     let n = 0;
@@ -76,6 +82,27 @@ describe("checkRadio", () => {
     expect(g[1]!.checked).toBe(true);
     expect(g[0]!.checked).toBe(false);
   });
+  test("uses the native checked setter so React tracking sees it", () => {
+    const g = group();
+    let tracked = false;
+    Object.defineProperty(g[1]!, "checked", { configurable: true, get: () => tracked, set: (v: boolean) => { tracked = v; } });
+    const seen: string[] = [];
+    g[1]!.addEventListener("input", (e) => seen.push(`input:${e.bubbles}`));
+    g[1]!.addEventListener("change", (e) => seen.push(`change:${e.bubbles}`));
+    g[1]!.addEventListener("click", () => seen.push("click"));
+    expect(checkRadio(g, "no")).toBe(true);
+    expect(tracked).toBe(false);
+    expect(Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "checked")!.get!.call(g[1])).toBe(true);
+    expect(seen).toEqual(["input:true", "change:true"]);
+  });
+  test("prefers an exact label over a partial normalised match", () => {
+    document.body.innerHTML =
+      '<label><input type="radio" name="w"> In office</label><label><input type="radio" name="w"> Office</label>';
+    const g = [...document.querySelectorAll<HTMLInputElement>("input")];
+    expect(checkRadio(g, "Office")).toBe(true);
+    expect(g[1]!.checked).toBe(true);
+    expect(g[0]!.checked).toBe(false);
+  });
   test("returns false when nothing matches", () => {
     const g = group();
     expect(checkRadio(g, "maybe")).toBe(false);
@@ -94,6 +121,10 @@ describe("attachFile", () => {
     expect(input.files?.[0]?.name).toBe("cv.pdf");
     expect(changed).toBe(1);
   });
+  test("returns false on a non-file input", () => {
+    const input = document.createElement("input");
+    expect(attachFile(input, "cv.pdf", new Uint8Array([1]).buffer)).toBe(false);
+  });
 });
 
 describe("isEmpty", () => {
@@ -109,6 +140,12 @@ describe("isEmpty", () => {
     expect(isEmpty(s)).toBe(true);
     s.value = "a";
     expect(isEmpty(s)).toBe(false);
+    const real = document.createElement("select");
+    real.innerHTML = '<option value="x">First</option><option value="y">Second</option>';
+    expect(isEmpty(real)).toBe(false);
+    const dis = document.createElement("select");
+    dis.innerHTML = '<option value="p" disabled selected>Pick</option><option value="y">Second</option>';
+    expect(isEmpty(dis)).toBe(true);
     const c = document.createElement("input");
     c.type = "checkbox";
     expect(isEmpty(c)).toBe(true);
