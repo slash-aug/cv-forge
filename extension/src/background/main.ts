@@ -2,8 +2,27 @@ import { isLinkedInHost } from "../shared/linkedin";
 import type { Job, Match, Msg, Result } from "../shared/messages";
 import { toBase64 } from "../shared/bytes";
 import { Api } from "./api";
+import { siteOf } from "./site";
 
 const tabKey = (tabId: number) => `tab:${tabId}`;
+
+/** The job chosen in the popup, kept per tab and only for the site it was chosen on. */
+interface Remembered {
+  slug: string;
+  site: string;
+}
+
+const isRemembered = (v: unknown): v is Remembered =>
+  typeof v === "object" && v !== null &&
+  typeof (v as Remembered).slug === "string" && typeof (v as Remembered).site === "string";
+
+function siteOfUrl(url: string): string | null {
+  try {
+    return siteOf(new URL(url).hostname);
+  } catch {
+    return null;
+  }
+}
 
 async function getToken(): Promise<string | null> {
   const stored = (await chrome.storage.local.get("token")).token;
@@ -19,16 +38,28 @@ async function matchTab(api: Api, m: Extract<Msg, { type: "matchTab" }>, tabId?:
   }
   if (isLinkedInHost(host)) return { ok: false, error: { kind: "linkedin" } };
 
-  if (tabId !== undefined) {
-    const remembered = (await chrome.storage.session.get(tabKey(tabId)))[tabKey(tabId)];
-    if (typeof remembered === "string") return { ok: true, value: { slug: remembered, candidates: [] } };
-  }
   const slugs = await api.match(m.url, m.site, m.jobId);
   if (!slugs.ok) return slugs;
   const jobs = await api.jobs();
   if (!jobs.ok) return jobs;
   const candidates: Job[] = jobs.value.filter((j) => slugs.value.includes(j.slug));
-  return { ok: true, value: { slug: candidates.length === 1 ? candidates[0].slug : null, candidates } };
+  const unique = candidates.length === 1 ? candidates[0].slug : null;
+
+  if (tabId !== undefined) {
+    const key = tabKey(tabId);
+    const stored = (await chrome.storage.session.get(key))[key];
+    const remembered = isRemembered(stored) ? stored : null;
+    const site = siteOf(host);
+    if (remembered && !jobs.value.some((j) => j.slug === remembered.slug)) {
+      await chrome.storage.session.remove(key);
+    } else if (remembered && unique !== null && unique !== remembered.slug) {
+      // the server names one other job for this page: that beats the popup choice
+      await chrome.storage.session.set({ [key]: { slug: unique, site } satisfies Remembered });
+    } else if (remembered && remembered.site === site) {
+      return { ok: true, value: { slug: remembered.slug, candidates: jobs.value.filter((j) => j.slug === remembered.slug) } };
+    }
+  }
+  return { ok: true, value: { slug: unique, candidates } };
 }
 
 const internal: Result<never> = { ok: false, error: { kind: "internal" } };
@@ -47,7 +78,10 @@ export function createHandler(api: Api) {
       case "matchTab":
         return matchTab(api, msg, senderTabId ?? msg.tabId);
       case "chooseJob": {
-        await chrome.storage.session.set({ [tabKey(senderTabId ?? msg.tabId)]: msg.slug });
+        const site = siteOfUrl(msg.url);
+        if (site === null) return { ok: false, error: { kind: "http", status: 400, body: { error: "bad-url" } } };
+        const remembered: Remembered = { slug: msg.slug, site };
+        await chrome.storage.session.set({ [tabKey(senderTabId ?? msg.tabId)]: remembered });
         return { ok: true, value: null };
       }
       case "kit":

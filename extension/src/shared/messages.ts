@@ -26,12 +26,15 @@ export interface BankEntry {
   answer: string;
 }
 
-/** tabId is needed for the remembered choice; content scripts get it from the sender instead. */
+/**
+ * tabId is needed for the remembered choice; content scripts get it from the sender instead.
+ * chooseJob carries the tab's URL: the choice holds only on that site.
+ */
 export type Msg =
   | { type: "status" }
   | { type: "jobs" }
   | { type: "matchTab"; url: string; site?: string; jobId?: string; tabId?: number }
-  | { type: "chooseJob"; tabId: number; slug: string }
+  | { type: "chooseJob"; tabId: number; slug: string; url: string }
   | { type: "kit"; slug: string }
   | { type: "pdf"; slug: string; which: "cv" | "letter" }
   | { type: "bank"; q: string; lang: string }

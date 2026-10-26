@@ -22,6 +22,7 @@ function showError(r: Result<unknown>): boolean {
 }
 
 let tabId: number | undefined;
+let tabUrl = "";
 let slug: string | null = null;
 
 async function renderTab(): Promise<void> {
@@ -32,6 +33,7 @@ async function renderTab(): Promise<void> {
     return;
   }
   tabId = tab.id;
+  tabUrl = tab.url;
   const [match, jobs] = await Promise.all([
     send<Match>({ type: "matchTab", url: tab.url, tabId }),
     send<Job[]>({ type: "jobs" }),
@@ -66,7 +68,7 @@ $("save-token").addEventListener("click", async () => {
 $<HTMLSelectElement>("choose").addEventListener("change", async (e) => {
   const chosen = (e.target as HTMLSelectElement).value;
   if (!chosen || tabId === undefined) return;
-  if (!showError(await send({ type: "chooseJob", tabId, slug: chosen }))) await renderTab();
+  if (!showError(await send({ type: "chooseJob", tabId, slug: chosen, url: tabUrl }))) await renderTab();
 });
 
 $("applied").addEventListener("click", async () => {

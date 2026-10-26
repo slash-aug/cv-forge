@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { beforeEach, expect, test, vi } from "vitest";
 import { Api } from "../src/background/api";
 import { createHandler } from "../src/background/main";
+import { siteOf } from "../src/background/site";
 
 function area() {
   const data: Record<string, unknown> = {};
@@ -43,14 +44,69 @@ test("matchTab on linkedin never calls fetch", async () => {
   expect(f).not.toHaveBeenCalled();
 });
 
-test("remembered tab choice wins over server match", async () => {
-  const f = vi.fn().mockImplementation(async () => json({ slugs: ["a"] }));
-  const h = setup(f);
-  await h({ type: "chooseJob", tabId: 7, slug: "b" });
-  expect(session.data["tab:7"]).toBe("b");
-  const r = await h({ type: "matchTab", url: "https://x.example/1", tabId: 7 });
-  expect(r).toEqual({ ok: true, value: { slug: "b", candidates: [] } });
-  expect(f).not.toHaveBeenCalled();
+// /match answers `slugs`; /jobs lists every open job.
+const server = (slugs: string[], open = ["a", "b"]) =>
+  vi.fn().mockImplementation(async (url: string) =>
+    String(url).includes("/match") ? json({ slugs }) : json(open.map(job)));
+
+test("siteOf keeps the last two labels, three for a ccTLD second level", () => {
+  expect(siteOf("boards.example.com")).toBe("example.com");
+  expect(siteOf("example.com")).toBe("example.com");
+  expect(siteOf("vagas.example.com.br")).toBe("example.com.br");
+  expect(siteOf("jobs.example.co.uk")).toBe("example.co.uk");
+  expect(siteOf("empresa.gupy.io")).toBe("gupy.io");
+  expect(siteOf("Login.Gupy.IO.")).toBe("gupy.io");
+});
+
+test("chooseJob remembers the slug with the page's site", async () => {
+  const h = setup(server([]));
+  await h({ type: "chooseJob", tabId: 7, slug: "b", url: "https://jobs.example.com/1" });
+  expect(session.data["tab:7"]).toEqual({ slug: "b", site: "example.com" });
+});
+
+test("remembered choice is reused on the same site", async () => {
+  const h = setup(server([]));
+  await h({ type: "chooseJob", tabId: 7, slug: "b", url: "https://jobs.example.com/1" });
+  const r = await h({ type: "matchTab", url: "https://apply.example.com/form", tabId: 7 });
+  expect(r).toEqual({ ok: true, value: { slug: "b", candidates: [job("b")] } });
+});
+
+test("remembered choice is not reused on another site", async () => {
+  const h = setup(server([]));
+  await h({ type: "chooseJob", tabId: 7, slug: "b", url: "https://jobs.example.com/1" });
+  const r = await h({ type: "matchTab", url: "https://careers.other.test/form", tabId: 7 });
+  expect(r).toEqual({ ok: true, value: { slug: null, candidates: [] } });
+  expect(session.data["tab:7"]).toEqual({ slug: "b", site: "example.com" });
+});
+
+test("a unique server match for a different job wins and replaces the memory", async () => {
+  const h = setup(server(["a"]));
+  await h({ type: "chooseJob", tabId: 7, slug: "b", url: "https://jobs.example.com/1" });
+  const r = await h({ type: "matchTab", url: "https://jobs.example.com/2", tabId: 7 });
+  expect(r).toEqual({ ok: true, value: { slug: "a", candidates: [job("a")] } });
+  expect(session.data["tab:7"]).toEqual({ slug: "a", site: "example.com" });
+});
+
+test("several server matches do not override the memory on the same site", async () => {
+  const h = setup(server(["a", "b"]));
+  await h({ type: "chooseJob", tabId: 7, slug: "b", url: "https://jobs.example.com/1" });
+  const r = await h({ type: "matchTab", url: "https://jobs.example.com/2", tabId: 7 });
+  expect(r.ok && (r.value as { slug: string | null }).slug).toBe("b");
+});
+
+test("a remembered slug that is no longer open is dropped", async () => {
+  const h = setup(server([], ["a"]));
+  await h({ type: "chooseJob", tabId: 7, slug: "b", url: "https://jobs.example.com/1" });
+  const r = await h({ type: "matchTab", url: "https://jobs.example.com/1", tabId: 7 });
+  expect(r).toEqual({ ok: true, value: { slug: null, candidates: [] } });
+  expect(session.data["tab:7"]).toBeUndefined();
+});
+
+test("Gupy: a choice on the company host is reused on the login host", async () => {
+  const h = setup(server([]));
+  await h({ type: "chooseJob", tabId: 7, slug: "b", url: "https://empresa.gupy.io/jobs/1" });
+  const r = await h({ type: "matchTab", url: "https://login.gupy.io/candidates/apply", tabId: 7 });
+  expect(r.ok && (r.value as { slug: string | null }).slug).toBe("b");
 });
 
 test("server match with one candidate picks it", async () => {
@@ -83,7 +139,7 @@ test("tab choice is cleared when the tab closes", async () => {
 });
 
 test("storage rejection becomes an internal error", async () => {
-  const h = setup(vi.fn());
+  const h = setup(server([]));
   session.get = async () => { throw new Error("boom"); };
   const r = await h({ type: "matchTab", url: "https://x.example/1", tabId: 1 });
   expect(r).toEqual({ ok: false, error: { kind: "internal" } });
@@ -120,10 +176,10 @@ test("content-script sender cannot set or read another tab's choice", async () =
   const f = vi.fn().mockImplementation(async (url: string) =>
     String(url).includes("/match") ? json({ slugs: [] }) : json([]));
   const h = setup(f);
-  await h({ type: "chooseJob", tabId: 99, slug: "evil" }, 5);
+  await h({ type: "chooseJob", tabId: 99, slug: "evil", url: "https://x.example/1" }, 5);
   expect(session.data["tab:99"]).toBeUndefined();
-  expect(session.data["tab:5"]).toBe("evil");
-  session.data["tab:99"] = "secret";
+  expect(session.data["tab:5"]).toEqual({ slug: "evil", site: "x.example" });
+  session.data["tab:99"] = { slug: "secret", site: "x.example" };
   const r = await h({ type: "matchTab", url: "https://x.example/1", tabId: 99 }, 6);
   expect(r.ok && (r.value as { slug: string | null }).slug).toBeNull();
 });
