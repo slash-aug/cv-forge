@@ -1,6 +1,8 @@
-import { isConsent } from "../content/consent";
+import { isConsent, isConsentText } from "../content/consent";
 import { labelText } from "../content/dom";
 import type { Control, FieldKey, PageMap, Target } from "../fill/pagemap";
+import { isLinkedInHost } from "../shared/linkedin";
+import { normaliseQuestion } from "../shared/normalise";
 import type { Adapter } from "./types";
 
 const HOSTS = new Set(["boards.greenhouse.io", "job-boards.greenhouse.io"]);
@@ -19,8 +21,11 @@ function digits(value: string | null): string | null {
   return value !== null && DIGITS.test(value) ? value : null;
 }
 
+const hostOf = (loc: URL): string => loc.hostname.toLowerCase().replace(/\.+$/, "");
+
 function jobId(loc: URL): string | null {
-  if (HOSTS.has(loc.hostname.toLowerCase())) {
+  if (isLinkedInHost(loc.hostname)) return null;
+  if (HOSTS.has(hostOf(loc))) {
     const found = /^\/[^/]+\/jobs\/([^/]+)\/?$/.exec(loc.pathname);
     if (found && digits(found[1] ?? null)) return found[1] ?? null;
     if (loc.pathname.replace(/\/+$/, "") === "/embed/job_app" && digits(loc.searchParams.get("token"))) {
@@ -31,7 +36,8 @@ function jobId(loc: URL): string | null {
 }
 
 function claims(loc: URL, doc: Document): boolean {
-  const ours = HOSTS.has(loc.hostname.toLowerCase()) || digits(loc.searchParams.get("gh_jid")) !== null;
+  if (isLinkedInHost(loc.hostname)) return false;
+  const ours = HOSTS.has(hostOf(loc)) || digits(loc.searchParams.get("gh_jid")) !== null;
   return ours && doc.querySelector(FORM) !== null;
 }
 
@@ -59,21 +65,17 @@ const SIMPLE: Record<string, FieldKey | "phone"> = {
   phone: "phone",
 };
 
-/** Links asked as custom questions, recognised by their label. */
+const LINK_LABELS = new Set(["linkedin profile", "github", "website", "portfolio", "twitter"]);
+
+/** Links asked as custom questions, recognised by short field labels, never by a sentence that mentions them. */
 function linkKey(label: string): FieldKey | "skip" | null {
   const l = fold(label);
+  if (!LINK_LABELS.has(l) && (l.includes("?") || normaliseQuestion(label).split(" ").length > 4)) return null;
   if (/linkedin/.test(l)) return "basics.linkedin";
   if (/github/.test(l)) return "basics.github";
   if (/\b(website|portfolio|personal site)\b/.test(l)) return "basics.portfolio";
   if (/twitter|\bx\b|facebook|instagram/.test(l)) return "skip";
   return null;
-}
-
-function consentLabel(doc: Document, text: string): boolean {
-  const probe = doc.createElement("input");
-  probe.type = "checkbox";
-  probe.setAttribute("aria-label", text);
-  return isConsent(probe);
 }
 
 function questionLabel(el: Control): string {
@@ -132,7 +134,7 @@ function map(doc: Document): PageMap {
       ).filter(relevant) as HTMLInputElement[];
       const label = questionLabel(el);
       if (label === "") m.unplaced.push(el);
-      else if (consentLabel(doc, label)) m.consent.push(el);
+      else if (isConsentText(label)) m.consent.push(el);
       else m.questions.push({ label, el: group, maxLength: null });
       continue;
     }
@@ -148,7 +150,7 @@ function map(doc: Document): PageMap {
     }
 
     // Location autocomplete: the text input only, and only when its id or name says so.
-    if (/city|location/i.test(`${el.id} ${el.name}`) && !el.id.startsWith("question_")) {
+    if (/\b(city|location)\b/.test(`${el.id} ${el.name}`.toLowerCase().replace(/[_\-[\]]+/g, " ")) && !el.id.startsWith("question_")) {
       if (has("basics.city")) m.unplaced.push(el);
       else field("basics.city", el);
       continue;
@@ -160,7 +162,7 @@ function map(doc: Document): PageMap {
       m.unplaced.push(el);
       continue;
     }
-    if (consentLabel(doc, label)) {
+    if (isConsentText(label)) {
       (el instanceof HTMLInputElement ? m.consent : m.unplaced).push(el);
       continue;
     }

@@ -1,4 +1,4 @@
-import { isConsent } from "../content/consent";
+import { isConsent, isConsentText } from "../content/consent";
 import { labelText } from "../content/dom";
 import type { Control, FieldKey, FieldSlot, PageMap, QuestionSlot, SalarySlot, Target } from "../fill/pagemap";
 import { normaliseQuestion } from "../shared/normalise";
@@ -166,13 +166,6 @@ function fileKind(el: HTMLInputElement): "cv" | "letter" | null {
   return CV_HINT.test(text) ? "cv" : null;
 }
 
-function consentPhrase(doc: Document, text: string): boolean {
-  const probe = doc.createElement("input");
-  probe.type = "checkbox";
-  probe.setAttribute("aria-label", text);
-  return isConsent(probe);
-}
-
 function isRelevant(el: Element): el is Control {
   if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement)) {
     return false;
@@ -244,7 +237,7 @@ export function guessPage(doc: Document): PageMap {
 
     if (el instanceof HTMLInputElement && el.type === "checkbox") {
       const legend = legendOf(el);
-      if (isConsent(el) || (legend && consentPhrase(doc, legend))) map.consent.push(el);
+      if (isConsent(el) || (legend && isConsentText(legend))) map.consent.push(el);
       else map.unplaced.push(el);
       continue;
     }

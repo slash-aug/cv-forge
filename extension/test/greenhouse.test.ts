@@ -56,6 +56,9 @@ describe("jobId mirrors the Python site_job_id Greenhouse rows", () => {
     ["https://boards.greenhouse.io/embed/job_app?for=exampleco&token=abc", null],
     ["https://evil.example.com/exampleco/jobs/4012345", null],
     ["https://jobs.example.com/senior", null],
+    ["https://boards.greenhouse.io./x/jobs/1", "1"],
+    ["https://www.linkedin.com/jobs/view/4012345?gh_jid=4012345", null],
+    ["https://jobs.linkedin.com/x?gh_jid=4012345", null],
   ])("%s -> %s", (u, expected) => {
     expect(greenhouse.jobId(url(u), document)).toBe(expected);
   });
@@ -201,7 +204,28 @@ describe("new form", () => {
   });
 });
 
+describe("link questions", () => {
+  test("a question that merely mentions LinkedIn or a website is a question, not the URL field", () => {
+    document.body.innerHTML = `<form id="application_form">
+      <label for="question_1">Did you find this role on LinkedIn?</label><input id="question_1" type="text">
+      <label for="question_2">Is your personal website up to date with your recent projects?</label><input id="question_2" type="text">
+      <label for="question_3">LinkedIn Profile URL</label><input id="question_3" type="text"></form>`;
+    const map = greenhouse.map(document);
+    expect(map.fields.map((f) => [f.key, (f.el as HTMLElement).id])).toEqual([["basics.linkedin", "question_3"]]);
+    expect(map.questions.map((q) => (q.el as HTMLElement).id)).toEqual(["question_1", "question_2"]);
+  });
+});
+
 describe("location", () => {
+  test("city and location match as words, so ethnicity does not", () => {
+    document.body.innerHTML = `<form id="application_form"><label for="ethnicity">Ethnicity</label>
+      <input id="ethnicity" name="job_application[ethnicity]" type="text">
+      <label for="home_city">Home</label><input id="home_city" type="text"></form>`;
+    const map = greenhouse.map(document);
+    expect(map.fields.map((f) => [f.key, (f.el as HTMLElement).id])).toEqual([["basics.city", "home_city"]]);
+    expect(map.unplaced).toContain($("#ethnicity"));
+  });
+
   test("a location field whose id and name say neither city nor location is unplaced", () => {
     document.body.innerHTML = `<form id="application_form"><label for="where">Where are you?</label>
       <input id="where" name="job_application[x]" type="text"></form>`;
@@ -230,6 +254,11 @@ describe("adapterFor", () => {
     document.body.innerHTML = fixture("greenhouse-classic.html");
     expect(adapterFor(url("https://careers.example.com/apply"), document)).toBeNull();
     expect(adapterFor(url("https://boards.greenhouse.io.evil.example.com/x/jobs/1"), document)).toBeNull();
+  });
+
+  test("never claims a LinkedIn page", () => {
+    document.body.innerHTML = fixture("greenhouse-classic.html");
+    expect(adapterFor(url("https://www.linkedin.com/jobs/view/1?gh_jid=4012345"), document)).toBeNull();
   });
 
   test("exposes the confirmation selector", () => {

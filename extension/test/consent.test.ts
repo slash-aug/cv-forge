@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { isConsent } from "../src/content/consent";
+import { isConsent, isConsentText } from "../src/content/consent";
 
 function box(html: string): HTMLInputElement {
   document.body.innerHTML = html;
@@ -38,5 +38,13 @@ describe("isConsent", () => {
 
   test("false for a non-checkbox", () => {
     expect(isConsent(box('<label><input type="text"> I agree</label>'))).toBe(false);
+  });
+});
+
+describe("isConsentText", () => {
+  test("matches consent phrases, accent-folded, and rejects ordinary text", () => {
+    expect(isConsentText("Declaro que li a política de privacidade")).toBe(true);
+    expect(isConsentText("I accept the privacy notice")).toBe(true);
+    expect(isConsentText("Which team are you applying to?")).toBe(false);
   });
 });
