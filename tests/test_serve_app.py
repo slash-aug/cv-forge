@@ -70,6 +70,17 @@ def test_token_created_once_with_private_mode(tmp_path):
     assert path.stat().st_mode & 0o777 == 0o600
 
 
+def test_reused_token_file_and_directory_are_tightened(tmp_path):
+    first = token_mod.load_or_create(tmp_path)
+    path = tmp_path / "serve" / "token"
+    assert path.parent.stat().st_mode & 0o777 == 0o700
+    path.chmod(0o644)
+    path.parent.chmod(0o755)
+    assert token_mod.load_or_create(tmp_path) == first
+    assert path.stat().st_mode & 0o777 == 0o600
+    assert path.parent.stat().st_mode & 0o777 == 0o700
+
+
 def test_missing_or_wrong_token_is_401(app):
     for headers in ({"x-cvforge-token": None}, {"x-cvforge-token": "wrong"}):
         resp = app.handle(req("GET", "/health", headers=headers))

@@ -377,6 +377,9 @@ def _show_application(path: Path, app_dir: Path, slug_: str, today: date) -> int
     return 0
 
 
+EXTENSION_PORT = 47321  # the browser extension talks to this port only (version 1)
+
+
 def cmd_serve(args) -> int:
     from cvforge.serve import token as serve_token
     from cvforge.serve.app import App
@@ -388,9 +391,11 @@ def cmd_serve(args) -> int:
         print(pairing)
         return 0
     port = cfg.serve_port if args.port is None else args.port
-    if not 0 <= port <= 65535:
-        print(f"port must be between 0 and 65535, got {port}", file=sys.stderr)
+    if not 1 <= port <= 65535:
+        print(f"port must be between 1 and 65535, got {port}", file=sys.stderr)
         return 1
+    if port != EXTENSION_PORT:
+        print(f"the browser extension only connects to port {EXTENSION_PORT}", file=sys.stderr)
     app = App(cfg.data_dir, pairing, port)
     try:
         httpd = make_server(app, port)
@@ -399,7 +404,8 @@ def cmd_serve(args) -> int:
         return 1
     app.port = port = httpd.server_address[1]
     print(f"cv-forge server on http://127.0.0.1:{port} (Ctrl+C to stop)", flush=True)
-    print(f"pairing token: {pairing}", flush=True)
+    # never the token itself: this output lands in transcripts when /apply runs the server
+    print("pairing token: run cvforge serve --show-token", flush=True)
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
@@ -843,7 +849,8 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--master", help="master profile (default: <data_dir>/profile/master.yaml)")
     p.set_defaults(func=cmd_answers)
     p = sub.add_parser("serve", help="local server for the browser extension (127.0.0.1)")
-    p.add_argument("--port", type=int, help="port (default: serve_port in config, 47321)")
+    p.add_argument("--port", type=int,
+                   help="port, 1-65535 (default: serve_port in config, 47321; the extension uses 47321 only)")
     p.add_argument("--show-token", action="store_true", help="print the pairing token and exit")
     p.set_defaults(func=cmd_serve)
     p = sub.add_parser("due", help="stages, follow-ups and stale applications")

@@ -63,7 +63,54 @@ def test_serve_reports_port_taken(tmp_path, monkeypatch, capsys, running):
     monkeypatch.setenv("CVFORGE_DATA_DIR", str(tmp_path))
     port = httpd.server_address[1]
     assert main(["serve", "--port", str(port)]) == 1
-    assert capsys.readouterr().err.strip() == f"cv-forge server already running on port {port}"
+    err = capsys.readouterr().err.strip().splitlines()
+    assert err[-1] == f"cv-forge server already running on port {port}"
+
+
+class _FakeHttpd:
+    def __init__(self, port):
+        self.server_address = ("127.0.0.1", port)
+
+    def serve_forever(self):
+        raise KeyboardInterrupt
+
+    def server_close(self):
+        pass
+
+
+@pytest.fixture
+def fake_serve(tmp_path, monkeypatch):
+    """cmd_serve up to serve_forever, with no socket: the bind returns a fake that stops at once."""
+    monkeypatch.setenv("CVFORGE_DATA_DIR", str(tmp_path))
+    monkeypatch.delenv("CVFORGE_SERVE_PORT", raising=False)
+    monkeypatch.setattr(server, "make_server", lambda app, port: _FakeHttpd(port))
+    return tmp_path
+
+
+def test_serve_start_does_not_print_the_token(fake_serve, capsys):
+    assert main(["serve"]) == 0
+    out, err = capsys.readouterr()
+    assert "pairing token: run cvforge serve --show-token" in out.splitlines()
+    pairing = load_or_create(fake_serve)
+    assert pairing not in out and pairing not in err
+
+
+def test_serve_on_the_default_port_does_not_warn(fake_serve, capsys):
+    assert main(["serve"]) == 0
+    assert "only connects to port 47321" not in capsys.readouterr().err
+
+
+def test_serve_on_another_port_warns_about_the_extension(fake_serve, capsys):
+    assert main(["serve", "--port", "47400"]) == 0
+    out, err = capsys.readouterr()
+    assert "the browser extension only connects to port 47321" in err.splitlines()
+    assert "http://127.0.0.1:47400" in out
+
+
+@pytest.mark.parametrize("port", ["0", "65536", "-1"])
+def test_serve_rejects_ports_outside_1_to_65535(fake_serve, capsys, port):
+    assert main(["serve", "--port", port]) == 1
+    assert capsys.readouterr().err.strip() == f"port must be between 1 and 65535, got {port}"
 
 
 def test_log_omits_query(running, capsys):
