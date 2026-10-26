@@ -13,6 +13,7 @@ from pathlib import Path
 
 from cvforge.answers.bank import load_bank, lookup, save_answers
 from cvforge.answers.facts import knockout_facts
+from cvforge.answers.grounding import DataError, answer_figures, load_salary
 from cvforge.apply import http as apply_http
 from cvforge.apply.check import Verdict, check
 from cvforge.apply.companies import (
@@ -45,7 +46,7 @@ from cvforge.render.cv import build_cv_view, render_view
 from cvforge.render.letter import ASSETS_DIR, letter_context, render_letter_context
 from cvforge.salary.market import load_market, match_market
 from cvforge.salary.suggest import Suggestion, below_floor, displays, suggest
-from cvforge.tailor.audit import Finding, audit, audit_rendered, figures, load_tailored
+from cvforge.tailor.audit import Finding, audit, audit_rendered, load_tailored
 from cvforge.text import file_part, split_name
 from cvforge.track import stages as stages_mod
 from cvforge.track import tracker
@@ -138,53 +139,9 @@ def cmd_validate(args) -> int:
     return 0
 
 
-class DataError(Exception):
-    """A file under the data directory that cannot be used as it is."""
-
-
-SALARY_KEYS = ("amount", "currency", "period", "brl_month", "eur_year", "usd_year")
-
-
-def _load_salary(app_dir: Path) -> dict | None:
-    """salary.json as written by `cvforge salary`, or None; a damaged file is a DataError."""
-    path = app_dir / "salary.json"
-    if not path.exists():
-        return None
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except ValueError as exc:
-        raise DataError(f"{path}: unreadable ({exc}); rerun cvforge salary") from None
-    if not isinstance(data, dict):
-        raise DataError(f"{path}: expected an object; rerun cvforge salary")
-    if data.get("confirmed"):
-        missing = [k for k in SALARY_KEYS if k not in data]
-        if missing:
-            raise DataError(f"{path}: missing {', '.join(missing)}; rerun cvforge salary")
-        try:
-            for key in ("amount", "brl_month", "eur_year", "usd_year"):
-                data[key] = float(data[key])
-        except (TypeError, ValueError):
-            raise DataError(f"{path}: {key} is not a number; rerun cvforge salary") from None
-    return data
-
-
-def _answer_figures(master: dict, lang: str, app_dir: Path) -> set[str]:
-    """Numbers an honest screening answer may hold that no highlight has: the knock-out facts
-    (years from dates, notice) and, once confirmed, the salary as `cvforge salary` shows it."""
-    facts = knockout_facts(master, engineering_months(master, _today()), lang)
-    found = figures(*facts.values())
-    salary = _load_salary(app_dir)
-    if salary and salary.get("confirmed"):
-        amount = salary["amount"]
-        found |= figures(f"{amount:g}", f"{amount:.0f}", f"{amount:,.0f}", f"{amount:,.2f}")
-        for key in ("brl_month", "eur_year", "usd_year"):
-            found |= figures(f"{salary[key]:.0f}", f"{salary[key]:,.0f}")
-    return found
-
-
 def _audit_tailored(tailored: dict, master: dict, app_dir: Path) -> list[Finding]:
     return audit(tailored, master,
-                 extra_allowed=_answer_figures(master, tailored["lang"], app_dir))
+                 extra_allowed=answer_figures(master, tailored["lang"], app_dir, _today()))
 
 
 def cmd_audit(args) -> int:
@@ -690,7 +647,7 @@ def cmd_kit(args) -> int:
     master = load_master(Path(args.master) if args.master
                          else cfg.data_dir / "profile" / "master.yaml")
     tailored = load_tailored(app_dir / "tailored.yaml")
-    salary = _load_salary(app_dir)
+    salary = load_salary(app_dir)
     first, last = name_parts(master["basics"]["name"])
     company = file_part(tailored["target"]["company"])
     names = {"cv_pdf": f"{first}_{last}_CV_{company}.pdf",

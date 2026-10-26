@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from cvforge.profile.model import ProfileError, index, load_master
-from cvforge.tailor.audit import Finding, audit, load_tailored
+from cvforge.tailor.audit import EM_DASH, Finding, audit, audit_answer, load_tailored
 
 PERSONA = Path(__file__).resolve().parent.parent / "examples" / "persona"
 M = load_master(PERSONA / "master.yaml")
@@ -298,3 +298,27 @@ def test_email_schema_requires_every_part():
     for key in ("to", "subject", "body", "refs"):
         partial = {k: v for k, v in EMAIL.items() if k != key}
         assert schema_problems(_variant(lambda d, p=partial: d.update(email=p)), schema), key
+
+
+def test_audit_answer_grounded_number_passes():
+    assert audit_answer("Impact?", "I cut load time by 40%.", M) == []
+
+
+def test_audit_answer_invented_number_fails():
+    f = audit_answer("Impact?", "I cut load time by 45%.", M)
+    assert [x.kind for x in f] == ["number"] and "45" in f[0].message
+    assert f[0].ref == "answer"
+
+
+def test_audit_answer_extra_allowed():
+    assert audit_answer("Salary?", "60000 EUR", M, extra_allowed={"60000"}) == []
+
+
+def test_audit_answer_confidential_em_dash_and_limit():
+    f = audit_answer("About projectzebra?", f"Worked on projectzebra {EM_DASH} a lot.", M, limit=10)
+    assert [(x.kind, x.ref) for x in f] == [
+        ("em-dash", "answer"),
+        ("confidential", "question"),
+        ("confidential", "answer"),
+        ("length", "answer"),
+    ]
