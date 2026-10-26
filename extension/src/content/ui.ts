@@ -1,3 +1,4 @@
+import { errorText } from "../shared/messages";
 import type { Summary } from "../fill/engine";
 import type { QuestionSlot, SummaryItem, Target } from "../fill/pagemap";
 
@@ -42,6 +43,10 @@ function ensure(): Ui {
   if (ui?.host.isConnected) return ui;
   const host = document.createElement("div");
   host.setAttribute("data-cvforge-ui", "");
+  // Inline !important so page CSS cannot hide or restyle the host.
+  for (const [k, v] of [["all", "initial"], ["display", "block"], ["visibility", "visible"], ["opacity", "1"]]) {
+    host.style.setProperty(k, v, "important");
+  }
   const root = host.attachShadow({ mode: "closed" });
   const style = document.createElement("style");
   style.textContent = CSS;
@@ -102,65 +107,109 @@ export function showSummary(summary: Summary): void {
 }
 
 const chipFor = new Map<Element, HTMLElement>();
+const offers = new Map<Element, () => void>();
+
+function dropChip(field: Element): void {
+  chipFor.get(field)?.remove();
+  chipFor.delete(field);
+}
 
 function placeChip(field: Element, chip: HTMLElement): void {
   const r = field.getBoundingClientRect();
   chip.style.top = `${r.bottom + window.scrollY + 2}px`;
   chip.style.left = `${r.left + window.scrollX}px`;
-  chipFor.get(field)?.remove();
+  dropChip(field);
   chipFor.set(field, chip);
   ensure().chips.append(chip);
 }
 
 const first = (t: Target): Element => (Array.isArray(t) ? (t[0] as Element) : t);
 
-/** A "Use saved answer" chip next to the field; onUse runs only on click. */
+/** A "Use saved answer" chip next to the field; onUse runs only on click. Typing in the field removes it. */
 export function showSuggestion(slot: QuestionSlot, answer: string, onUse: () => void): void {
+  const field = first(slot.el);
   const chip = el("div", undefined, "chip");
   const use = el("button", "Use saved answer");
   use.title = answer;
+  const gone = (): void => {
+    field.removeEventListener("input", gone);
+    if (chipFor.get(field) === chip) dropChip(field);
+    else chip.remove();
+  };
   use.addEventListener("click", () => {
     onUse();
-    chip.remove();
+    gone();
   });
+  field.addEventListener("input", gone);
   chip.append(use);
-  placeChip(first(slot.el), chip);
+  placeChip(field, chip);
 }
 
-const watched = new WeakSet<Element>();
-
-/** On blur of a highlighted text question that now has text, offers to save the answer. */
+/**
+ * On blur of a highlighted text question that now has text, offers to save the answer.
+ * One offer per field: a new call replaces the previous listener, chip and closure.
+ */
 export function offerSave(slot: QuestionSlot, onSave: () => Promise<SaveResult>): void {
   const field = first(slot.el);
-  if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) || watched.has(field)) return;
-  watched.add(field);
-  field.addEventListener("blur", () => {
+  if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) return;
+  offers.get(field)?.();
+  const unbind = (): void => {
+    field.removeEventListener("blur", onBlur);
+    offers.delete(field);
+  };
+  const onBlur = (): void => {
     if (!field.hasAttribute("data-cvforge-reason") || field.value.trim() === "") return;
     const chip = el("div", undefined, "chip");
     const save = el("button", "Save answer");
+    const msgs = el("div");
     save.addEventListener("click", async () => {
       save.disabled = true;
-      const res = await onSave();
+      let res: SaveResult;
+      try {
+        res = await onSave();
+      } catch {
+        res = { saved: false, messages: [errorText({ kind: "internal" })] };
+      }
       if (res.saved) {
+        unbind();
         chip.replaceChildren(el("span", "Saved"));
+        setTimeout(() => (chipFor.get(field) === chip ? dropChip(field) : chip.remove()), 2000);
         return;
       }
-      chip.replaceChildren(...res.messages.map((m) => el("div", m)));
+      save.disabled = false;
+      msgs.replaceChildren(...res.messages.map((m) => el("div", m)));
     });
-    chip.append(save);
+    chip.append(save, msgs);
     placeChip(field, chip);
+  };
+  field.addEventListener("blur", onBlur);
+  offers.set(field, () => {
+    unbind();
+    dropChip(field);
   });
 }
 
-/** Prompt shown once the form was sent; onMark runs only on click and returns the text to show. */
-export function showApplied(onMark: () => Promise<string>): void {
+/** Prompt shown once the form was sent; onMark runs only on click and says what to show. */
+export function showApplied(onMark: () => Promise<{ ok: boolean; text: string }>): void {
   const panel = el("div", undefined, "panel");
   panel.append(el("div", "Looks like your application was sent."));
   const mark = el("button", "Mark as applied");
+  const note = el("div");
   mark.addEventListener("click", async () => {
     mark.disabled = true;
-    panel.replaceChildren(el("div", await onMark()));
+    let res: { ok: boolean; text: string };
+    try {
+      res = await onMark();
+    } catch {
+      res = { ok: false, text: errorText({ kind: "internal" }) };
+    }
+    if (res.ok) {
+      panel.replaceChildren(el("div", res.text));
+      return;
+    }
+    mark.disabled = false;
+    note.textContent = res.text;
   });
-  panel.append(mark);
+  panel.append(mark, note);
   ensure().applied.replaceChildren(panel);
 }

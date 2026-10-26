@@ -1,4 +1,5 @@
-import { adapterFor } from "../adapters/registry";
+import { ADAPTERS, adapterFor } from "../adapters/registry";
+import type { Adapter } from "../adapters/types";
 import { fill, type FillDeps, type Summary } from "../fill/engine";
 import type { PageMap, QuestionSlot, Target } from "../fill/pagemap";
 import { guessPage, looksLikeApplication } from "../guesser/guess";
@@ -6,13 +7,15 @@ import { fromBase64 } from "../shared/bytes";
 import { isLinkedInHost } from "../shared/linkedin";
 import { errorText, type ApiError, type Match, type Msg, type Result } from "../shared/messages";
 import type { Kit } from "../shared/kit";
-import { detectSent, watchSubmit } from "./applied";
-import { checkRadio, selectOption, setValue } from "./dom";
+import { clearSubmitted, detectSent, rememberAdapter, rememberedAdapterName, watchSubmit } from "./applied";
+import { checkRadio, isEmpty, selectOption, setValue } from "./dom";
 import { inUi, offerSave, showApplied, showButton, showSuggestion, showSummary, type SaveResult } from "./ui";
 
 type Send = (m: Msg) => Promise<Result<any>>;
 
 const RECHECK_MS = 500;
+const RECHECK_MAX_MS = 2000;
+const INTERNAL: Result<never> = { ok: false, error: { kind: "internal" } };
 const first = (t: Target): Element => (Array.isArray(t) ? (t[0] as Element) : t);
 
 let stop: (() => void) | null = null;
@@ -26,6 +29,8 @@ function fingerprint(doc: Document): string {
 }
 
 function useAnswer(target: Target, answer: string): void {
+  const empty = Array.isArray(target) ? target.every((r) => !r.checked) : isEmpty(target);
+  if (!empty) return;
   if (Array.isArray(target)) checkRadio(target, answer);
   else if (target instanceof HTMLSelectElement) selectOption(target, answer);
   else setValue(target, answer);
@@ -44,7 +49,26 @@ function findingMessages(error: ApiError): string[] {
   return [errorText(error)];
 }
 
-export async function start(win: Window, send: Send): Promise<void> {
+/** The form holding the mapped controls, if the page has one. */
+function mappedForm(map: PageMap): HTMLFormElement | null {
+  const probe = [...map.fields.map((f) => first(f.el)), map.files.cv, map.files.letter];
+  for (const c of probe) {
+    const form = (c as { form?: HTMLFormElement | null } | undefined)?.form;
+    if (form) return form;
+  }
+  return null;
+}
+
+export async function start(win: Window, rawSend: Send): Promise<void> {
+  // A reloaded extension rejects or answers nothing; both become the internal error.
+  const send: Send = async (m) => {
+    try {
+      const r = await rawSend(m);
+      return r && typeof r === "object" && "ok" in r ? r : INTERNAL;
+    } catch {
+      return INTERNAL;
+    }
+  };
   stop?.();
   stop = null;
   const doc = win.document;
@@ -54,11 +78,29 @@ export async function start(win: Window, send: Send): Promise<void> {
   const loc = (): URL => new URL(win.location.href);
   const adapter = () => adapterFor(loc(), doc);
   const isApplication = (): boolean => adapter() !== null || looksLikeApplication(doc);
-  const sent = (): boolean => detectSent(doc, loc(), adapter());
+  // The confirmation page lacks the form an adapter claims on, so remember who claimed the page.
+  let claimed: Adapter | null = ADAPTERS.find((a) => a.name === rememberedAdapterName(host)) ?? null;
+  const noteClaim = (): void => {
+    const a = adapter();
+    if (!a) return;
+    claimed = a;
+    rememberAdapter(host, a.name);
+  };
+  noteClaim();
+  const sent = (): boolean => detectSent(doc, loc(), adapter() ?? claimed);
 
   // A thank-you page loaded after a submit is not a form, but may still offer "Mark as applied".
   if (!isApplication() && !sent()) return;
-  if (isApplication()) watchSubmit(doc, host);
+  const watchForm = (): void => {
+    try {
+      const a = adapter();
+      const form = mappedForm(a ? a.map(doc) : guessPage(doc));
+      if (form) watchSubmit(form, host);
+    } catch {
+      /* no mapped form: no mark-applied offer */
+    }
+  };
+  if (isApplication()) watchForm();
 
   let slug: string | null = null;
   let busy = false;
@@ -68,10 +110,12 @@ export async function start(win: Window, send: Send): Promise<void> {
   const offerApplied = (): void => {
     if (appliedOffered || slug === null || !sent()) return;
     appliedOffered = true;
+    clearSubmitted();
     const s = slug;
     showApplied(async () => {
       const r = await send({ type: "markApplied", slug: s });
-      return r.ok ? "Marked as applied" : errorText(r.error);
+      if (r.ok) clearSubmitted();
+      return r.ok ? { ok: true, text: "Marked as applied" } : { ok: false, text: errorText(r.error) };
     });
   };
 
@@ -138,8 +182,12 @@ export async function start(win: Window, send: Send): Promise<void> {
     return job ? `Fill for ${job.company}, ${job.role}` : `Fill for ${slug}`;
   };
 
+  let seq = 0;
   const init = async (): Promise<void> => {
+    const mine = ++seq;
     known = fingerprint(doc);
+    noteClaim();
+    if (isApplication()) watchForm();
     offerApplied();
     const app = isApplication();
     if (!app && !sent()) return;
@@ -150,6 +198,7 @@ export async function start(win: Window, send: Send): Promise<void> {
       site: a?.name,
       jobId: a?.jobId(loc(), doc) ?? undefined,
     });
+    if (mine !== seq) return; // a newer check superseded this one
     if (!r.ok) {
       if (app) showButton(errorText(r.error), () => void init(), false);
       return;
@@ -159,7 +208,7 @@ export async function start(win: Window, send: Send): Promise<void> {
     if (!app) {
       // thank-you page only: no form to fill, just the mark-applied prompt
     } else if (slug === null) {
-      showButton("Choose job in the cv-forge popup", () => {}, true);
+      showButton("Choose job in the cv-forge popup", () => void init(), false);
     } else {
       showButton(buttonLabel(match), () => void runFill(match), false);
     }
@@ -168,7 +217,11 @@ export async function start(win: Window, send: Send): Promise<void> {
 
   // Mutations inside the UI are ignored; highlights only change attributes, which are not observed.
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let maxTimer: ReturnType<typeof setTimeout> | undefined;
   const recheck = (): void => {
+    clearTimeout(timer);
+    clearTimeout(maxTimer);
+    maxTimer = undefined;
     if (busy) return;
     offerApplied();
     if (isApplication() && fingerprint(doc) !== known) void init();
@@ -177,11 +230,23 @@ export async function start(win: Window, send: Send): Promise<void> {
     if (records.every((r) => inUi(r.target))) return;
     clearTimeout(timer);
     timer = setTimeout(recheck, RECHECK_MS);
+    // A page that mutates constantly must still get checked.
+    maxTimer ??= setTimeout(recheck, RECHECK_MAX_MS);
   });
   if (doc.body) observer.observe(doc.body, { childList: true, subtree: true });
+
+  // After choosing the job in the popup the tab regains focus: ask again while no job is known.
+  const reask = (): void => {
+    if (slug === null && !busy && isApplication()) void init();
+  };
+  win.addEventListener("focus", reask);
+  doc.addEventListener("visibilitychange", reask);
   stop = () => {
     observer.disconnect();
     clearTimeout(timer);
+    clearTimeout(maxTimer);
+    win.removeEventListener("focus", reask);
+    doc.removeEventListener("visibilitychange", reask);
   };
 
   await init();

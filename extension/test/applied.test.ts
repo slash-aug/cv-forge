@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from "vitest";
-import { detectSent, watchSubmit } from "../src/content/applied";
+import { clearSubmitted, detectSent, rememberAdapter, rememberedAdapterName, watchSubmit } from "../src/content/applied";
 import type { Adapter } from "../src/adapters/types";
 
 const loc = (url: string): URL => new URL(url);
@@ -10,18 +10,41 @@ beforeEach(() => {
   document.body.innerHTML = "<form><input></form>";
 });
 
+const formEl = (): HTMLFormElement => document.querySelector("form") as HTMLFormElement;
+
 describe("watchSubmit", () => {
   test("records the host on submit and never prevents or triggers anything", () => {
-    watchSubmit(document, "jobs.example.com");
+    watchSubmit(formEl(), "jobs.example.com");
     const ev = new Event("submit", { bubbles: true, cancelable: true });
-    document.querySelector("form")?.dispatchEvent(ev);
+    formEl().dispatchEvent(ev);
     expect(ev.defaultPrevented).toBe(false);
     expect(sessionStorage.getItem("cvforge:submitted")).toBe("jobs.example.com");
   });
 
   test("nothing is recorded without a submit", () => {
-    watchSubmit(document, "jobs.example.com");
+    watchSubmit(formEl(), "jobs.example.com");
     expect(sessionStorage.getItem("cvforge:submitted")).toBeNull();
+  });
+
+  test("a submit of some other form is not recorded", () => {
+    document.body.insertAdjacentHTML("beforeend", "<form id='other'></form>");
+    watchSubmit(formEl(), "jobs.example.com");
+    document.getElementById("other")?.dispatchEvent(new Event("submit", { bubbles: true }));
+    expect(sessionStorage.getItem("cvforge:submitted")).toBeNull();
+  });
+
+  test("clearSubmitted removes the mark", () => {
+    sessionStorage.setItem("cvforge:submitted", "jobs.example.com");
+    clearSubmitted();
+    expect(sessionStorage.getItem("cvforge:submitted")).toBeNull();
+  });
+});
+
+describe("remembered adapter", () => {
+  test("is kept per host", () => {
+    rememberAdapter("jobs.example.com", "greenhouse");
+    expect(rememberedAdapterName("jobs.example.com")).toBe("greenhouse");
+    expect(rememberedAdapterName("other.example.com")).toBeNull();
   });
 });
 
