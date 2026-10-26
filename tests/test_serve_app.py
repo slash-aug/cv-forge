@@ -306,6 +306,7 @@ def test_save_answer_deeply_nested_body_is_400(app):
 
 
 def test_mark_applied_broken_tracker_is_500_without_path(app, data):
-    (data / "tracker.csv").write_bytes(b'slug,status\n"unterminated\x00\n')
+    # Invalid UTF-8 fails on every Python; a NUL byte only fails before 3.11.
+    (data / "tracker.csv").write_bytes(b"slug,status\nacme,\xff\xfe\n")
     resp = app.handle(req("POST", "/applied/acme"))
     assert resp.status == 500 and str(data) not in resp.body.decode()
