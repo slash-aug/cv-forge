@@ -76,19 +76,30 @@ export async function fill(map: PageMap, kit: Kit, deps: FillDeps): Promise<Summ
     s.needsYou.push({ label, el, note });
   };
 
-  for (const slot of map.fields) fillField(slot, kit, s, needs);
-  await fillQuestions(map, kit, deps, s, needs);
-  fillSalary(map, kit, s, needs);
-  await fillFiles(map, kit, deps, s, needs);
-  await fillLists(map, kit, s, needs);
-
+  // Never-filled elements first, so they are flagged even if a later step fails.
   for (const el of map.phone) needs(nameOf(el), el, "phone: fill by hand");
   for (const el of map.consent) needs(nameOf(el), el, "consent: tick by hand");
   for (const el of map.unplaced) needs(nameOf(el), el, "not recognised: fill by hand");
+
+  const step = async (label: string, el: Element | null, run: () => void | Promise<void>): Promise<void> => {
+    try {
+      await run();
+    } catch {
+      needs(label, el, `could not fill: ${label}`);
+    }
+  };
+  for (const slot of map.fields) {
+    await step(slot.key, first(slot.el), () => fillField(slot, kit, s, needs));
+  }
+  await fillQuestions(map, kit, deps, s, needs, step);
+  await step("salary", map.salary?.el ?? null, () => fillSalary(map, kit, s, needs));
+  await fillFiles(map, kit, deps, s, needs, step);
+  await fillLists(map, kit, s, needs, step);
   return s;
 }
 
 type Needs = (label: string, el: Element | null, note: string) => void;
+type Step = (label: string, el: Element | null, run: () => void | Promise<void>) => Promise<void>;
 
 function fillField(slot: FieldSlot, kit: Kit, s: Summary, needs: Needs): void {
   const field = kit.fields.find((f) => f.key === slot.key);
@@ -101,24 +112,33 @@ function fillField(slot: FieldSlot, kit: Kit, s: Summary, needs: Needs): void {
   else needs(field.label, el, `no option matches ${field.value}`);
 }
 
-async function fillQuestions(map: PageMap, kit: Kit, deps: FillDeps, s: Summary, needs: Needs): Promise<void> {
+async function fillQuestions(map: PageMap, kit: Kit, deps: FillDeps, s: Summary, needs: Needs, step: Step): Promise<void> {
   for (const slot of map.questions) {
+    await step(slot.label, first(slot.el), () => fillQuestion(slot, kit, deps, s, needs));
+  }
+}
+
+async function fillQuestion(slot: QuestionSlot, kit: Kit, deps: FillDeps, s: Summary, needs: Needs): Promise<void> {
+  {
     const el = first(slot.el);
     const key = normaliseQuestion(slot.label);
     const hit = key === "" ? undefined : kit.answers.find((a) => normaliseQuestion(a.question) === key);
     if (hit) {
       if (slot.maxLength !== null && hit.answer.length > slot.maxLength) {
         needs(slot.label, el, "answer longer than limit");
-        continue;
+        return;
       }
       const outcome = place(slot.el, hit.answer);
       if (outcome === "set") s.filled.push({ label: slot.label, el });
       else if (outcome === "same") s.filled.push({ label: slot.label, el, note: "already filled" });
       else if (outcome === "differs") needs(slot.label, el, "already filled, kit answer differs");
       else needs(slot.label, el, "no option matches the answer");
-      continue;
+      return;
     }
-    if (!isTargetEmpty(slot.el)) continue;
+    if (!isTargetEmpty(slot.el)) {
+      s.filled.push({ label: slot.label, el, note: "already filled" });
+      return;
+    }
     const banked = await deps.bank(slot.label);
     if (banked) {
       deps.suggest(slot, banked.answer);
@@ -150,20 +170,29 @@ function fillSalary(map: PageMap, kit: Kit, s: Summary, needs: Needs): void {
   else needs(label, slot.el, "already filled, kit says " + String(Math.round(sal.amount)));
 }
 
-async function fillFiles(map: PageMap, kit: Kit, deps: FillDeps, s: Summary, needs: Needs): Promise<void> {
+async function fillFiles(map: PageMap, kit: Kit, deps: FillDeps, s: Summary, needs: Needs, step: Step): Promise<void> {
   const jobs = [
     { which: "cv" as const, el: map.files.cv, link: kit.links.cv_pdf, label: "CV" },
     { which: "letter" as const, el: map.files.letter, link: kit.links.letter_pdf, label: "Cover letter" },
   ];
   for (const { which, el, link, label } of jobs) {
     if (!el) continue;
+    await step(label, el, () => attachOne(which, el, link, label, deps, s, needs));
+  }
+}
+
+async function attachOne(
+  which: "cv" | "letter", el: HTMLInputElement, link: string | null, label: string,
+  deps: FillDeps, s: Summary, needs: Needs,
+): Promise<void> {
+  {
     if ((el.files?.length ?? 0) > 0) {
       s.attached.push({ label, el, note: "already attached" });
-      continue;
+      return;
     }
     if (link === null) {
       if (which === "cv") needs(label, el, "no CV PDF in kit");
-      continue;
+      return;
     }
     const res = await deps.pdf(which);
     if (res.ok && attachFile(el, res.value.name, res.value.bytes)) {
@@ -174,16 +203,28 @@ async function fillFiles(map: PageMap, kit: Kit, deps: FillDeps, s: Summary, nee
   }
 }
 
-async function fillLists(map: PageMap, kit: Kit, s: Summary, needs: Needs): Promise<void> {
+async function fillLists(map: PageMap, kit: Kit, s: Summary, needs: Needs, step: Step): Promise<void> {
   for (const list of map.lists) {
     const items: unknown[] = kit[list.kind];
+    let canOpen = true;
     for (let i = 0; i < items.length; i++) {
-      const entry = list.existing()[i] ?? (await open(list));
-      if (!entry) {
-        needs(`${list.kind} ${i + 1}`, null, `add ${list.kind} entry by hand`);
-        continue;
-      }
-      s.filled.push(...list.fillEntry(entry, items[i]));
+      const name = `${list.kind} ${i + 1}`;
+      await step(name, null, async () => {
+        let entry: HTMLElement | null | undefined = list.existing()[i];
+        if (!entry && canOpen) {
+          entry = await open(list);
+          if (!entry) canOpen = false;
+        }
+        if (!entry) {
+          needs(name, null, `add ${list.kind} entry by hand`);
+          return;
+        }
+        const res = list.fillEntry(entry, items[i]);
+        s.filled.push(...res.filled);
+        s.needsYou.push(...res.needsYou);
+      });
+      // an openEntry that threw must not be retried either
+      if (s.needsYou.at(-1)?.note === `could not fill: ${name}`) canOpen = false;
     }
   }
 }

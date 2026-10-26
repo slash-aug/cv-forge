@@ -16,3 +16,7 @@ test.each([
 test("skips empty variants", () => {
   expect(pickDescription({ "200": "", "500": "", "1000": "x", "2000": "" }, 5000)).toBe("x");
 });
+
+test("unlimited falls back to the longest non-empty variant", () => {
+  expect(pickDescription({ "200": "a", "500": "b", "1000": "", "2000": "" }, null)).toBe("b");
+});

@@ -35,7 +35,7 @@ export interface ListSlot {
   /** Adapter-only selectors; the guesser leaves this undefined. */
   add?: { button: string; save?: string };
   /** Fills empty controls only. */
-  fillEntry(entry: HTMLElement, item: unknown): SummaryItem[];
+  fillEntry(entry: HTMLElement, item: unknown): { filled: SummaryItem[]; needsYou: SummaryItem[] };
   /** Clicks add (through safeClick) and returns the new entry. */
   openEntry?(): Promise<HTMLElement | null>;
 }

@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fill, type FillDeps } from "../src/fill/engine";
 import type { PageMap, QuestionSlot } from "../src/fill/pagemap";
 import type { Kit } from "../src/shared/kit";
@@ -41,6 +41,10 @@ beforeEach(() => {
     bank: async () => null,
     suggest: (slot, answer) => void suggested.push([slot, answer]),
   };
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe("fields", () => {
@@ -225,7 +229,6 @@ describe("files", () => {
     vi.spyOn(input("cv"), "files", "set").mockImplementation(() => {});
     const s = await fill(map({ files: { cv: input("cv") } }), kit, deps);
     expect(s.needsYou[0]?.note).toBe("attach manually: cv.pdf");
-    vi.restoreAllMocks();
   });
 
   test("no CV pdf in kit", async () => {
@@ -260,7 +263,7 @@ describe("lists", () => {
       fillEntry: (entry: HTMLElement, item: unknown) => {
         const el = entry.querySelector<HTMLInputElement>(".lang")!;
         if (el.value === "") el.value = (item as { name: string }).name;
-        return [{ label: "Language", el }];
+        return { filled: [{ label: "Language", el }], needsYou: [] };
       },
     };
     return { host, slot, openSpy };
@@ -308,7 +311,7 @@ describe("second fill", () => {
       fillEntry: (entry: HTMLElement, item: unknown) => {
         const el = entry.querySelector<HTMLInputElement>(".lang")!;
         if (el.value === "") el.value = (item as { name: string }).name;
-        return [{ label: "Language", el }];
+        return { filled: [{ label: "Language", el }], needsYou: [] };
       },
     };
     const pdf = vi.fn(deps.pdf);
@@ -335,10 +338,19 @@ describe("second fill", () => {
 
 describe("clicks", () => {
   test("guesser-sourced fill clicks nothing", async () => {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<select id="country"><option value="">Choose</option><option value="PT">PT</option></select>
+       <label><input type="radio" name="n" value="a"> 30 days</label><label><input type="radio" name="n" value="b"> 90 days</label>`,
+    );
     const click = vi.spyOn(HTMLElement.prototype, "click");
     await fill(
       map({
-        fields: [{ key: "basics.name", el: input("name"), guessed: true }],
+        fields: [
+          { key: "basics.name", el: input("name"), guessed: true },
+          { key: "basics.country", el: $<HTMLSelectElement>("country"), guessed: false },
+          { key: "prefs.notice", el: [...document.querySelectorAll<HTMLInputElement>("input[name=n]")], guessed: false },
+        ],
         questions: [{ label: "Why do you want to work here?", el: area("q1"), maxLength: null }],
         files: { cv: input("cv") },
         salary: { el: input("salary"), currency: null, period: null },
@@ -350,6 +362,114 @@ describe("clicks", () => {
       deps,
     );
     expect(click).toHaveBeenCalledTimes(0);
-    click.mockRestore();
+  });
+});
+
+describe("review fixes", () => {
+  const q1 = (): QuestionSlot => ({ label: "Why do you want to work here?", el: area("q1"), maxLength: null });
+  const hl = (id: string): boolean => $(id).hasAttribute("data-cvforge-reason");
+
+  test("non-empty question with no kit answer is reported as already filled, bank not asked", async () => {
+    area("q4").value = "blue";
+    const bank = vi.fn(async () => null);
+    deps.bank = bank;
+    const s = await fill(map({ questions: [{ label: "Favourite colour?", el: area("q4"), maxLength: null }] }), kit, deps);
+    expect(bank).not.toHaveBeenCalled();
+    expect(s.filled).toEqual([{ label: "Favourite colour?", el: area("q4"), note: "already filled" }]);
+  });
+
+  const base = () => ({ phone: [input("phone")], consent: [input("consent")] });
+  const guarded = (s: Awaited<ReturnType<typeof fill>>): void => {
+    expect(hl("phone")).toBe(true);
+    expect(hl("consent")).toBe(true);
+    expect(s.needsYou.length).toBeGreaterThanOrEqual(3);
+  };
+
+  test("bank rejection does not abort the fill", async () => {
+    deps.bank = async () => { throw new Error("secret detail"); };
+    const q4: QuestionSlot = { label: "Favourite colour?", el: area("q4"), maxLength: null };
+    const s = await fill(map({ ...base(), questions: [q4] }), kit, deps);
+    guarded(s);
+    expect(s.needsYou.map((i) => i.note)).toContain("could not fill: Favourite colour?");
+    expect(JSON.stringify(s.needsYou)).not.toContain("secret");
+  });
+
+  test("pdf throwing does not abort the fill", async () => {
+    deps.pdf = async () => { throw new Error("boom"); };
+    const s = await fill(map({ ...base(), files: { cv: input("cv") } }), kit, deps);
+    guarded(s);
+    expect(s.needsYou.map((i) => i.note)).toContain("could not fill: CV");
+  });
+
+  test("fillEntry throwing does not abort the fill", async () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    host.innerHTML = "<div></div>";
+    const slot = {
+      kind: "languages" as const,
+      existing: () => [...host.children] as HTMLElement[],
+      fillEntry: () => { throw new Error("boom"); },
+    };
+    const s = await fill(map({ ...base(), lists: [slot] }), kit, deps);
+    guarded(s);
+    expect(s.needsYou.map((i) => i.note)).toContain("could not fill: languages 1");
+  });
+
+  test("openEntry throwing does not abort the fill", async () => {
+    const slot = {
+      kind: "languages" as const,
+      existing: () => [],
+      add: { button: "#add" },
+      openEntry: async () => { throw new Error("boom"); },
+      fillEntry: () => ({ filled: [], needsYou: [] }),
+    };
+    const s = await fill(map({ ...base(), lists: [slot] }), kit, deps);
+    guarded(s);
+  });
+
+  test("after openEntry returns null once, it is not called again for that list", async () => {
+    kit.languages.push({ key: "languages.1", name: "Spanish", detail: "Basic" });
+    kit.languages.push({ key: "languages.2", name: "French", detail: "Basic" });
+    const host = document.createElement("div");
+    document.body.append(host);
+    let calls = 0;
+    const slot = {
+      kind: "languages" as const,
+      existing: () => [...host.children] as HTMLElement[],
+      add: { button: "#add" },
+      openEntry: async () => {
+        calls++;
+        if (calls === 1) return null;
+        const e = document.createElement("div");
+        e.innerHTML = `<input class="lang">`;
+        host.append(e);
+        return e;
+      },
+      fillEntry: (entry: HTMLElement, item: unknown) => {
+        entry.querySelector<HTMLInputElement>(".lang")!.value = (item as { name: string }).name;
+        return { filled: [], needsYou: [] };
+      },
+    };
+    const s = await fill(map({ lists: [slot] }), kit, deps);
+    expect(calls).toBe(1);
+    expect(host.children).toHaveLength(0);
+    expect(s.needsYou.map((i) => i.note)).toEqual(Array(3).fill("add languages entry by hand"));
+  });
+
+  test("fillEntry result is routed into filled and needsYou", async () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    host.innerHTML = `<div></div>`;
+    const slot = {
+      kind: "languages" as const,
+      existing: () => [...host.children] as HTMLElement[],
+      fillEntry: () => ({
+        filled: [{ label: "a", el: null }],
+        needsYou: [{ label: "b", el: null, note: "n" }],
+      }),
+    };
+    const s = await fill(map({ lists: [slot] }), kit, deps);
+    expect(s.filled).toEqual([{ label: "a", el: null }]);
+    expect(s.needsYou).toEqual([{ label: "b", el: null, note: "n" }]);
   });
 });
