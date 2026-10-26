@@ -1,0 +1,19 @@
+<form>
+  <label for="fn">First name</label><input id="fn" name="fn" type="text">
+  <label for="ln">Last name</label><input id="ln" name="ln" type="text">
+  <label>Email address <input type="email" name="contact"></label>
+  <label for="c">City</label><input id="c" type="text">
+  <label for="li">LinkedIn profile</label><input id="li" type="text">
+  <label for="ph">Phone</label><input id="ph" type="tel">
+  <label for="cvf">Resume</label><input id="cvf" type="file" accept=".pdf">
+  <label for="clf">Cover letter</label><input id="clf" type="file">
+  <label for="why">Why Example Corp? (max 500 characters)</label><textarea id="why"></textarea>
+  <label for="amb">LinkedIn or GitHub</label><input id="amb" type="text">
+  <label for="sal">Expected salary</label><input id="sal" type="number">
+  <label><input id="cons" type="checkbox" name="gdpr"> I agree to the privacy policy</label>
+  <input type="hidden" name="csrf" value="x">
+  <div style="display:none"><label for="hid">Nickname</label><input id="hid" type="text"></div>
+  <label for="ro">Referral</label><input id="ro" type="text" readonly>
+  <label for="dis">Pronouns</label><input id="dis" type="text" disabled>
+  <button type="submit">Submit application</button>
+</form>
