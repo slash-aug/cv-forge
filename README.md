@@ -134,13 +134,27 @@ LaTeX runs in `<build_dir>/.cvforge-jobs/<job>/`, which is wiped before each run
 
 ## Browser extension
 
-A small extension fills application forms from a job's `kit.json`. It only fills after you click Fill, never ticks consent boxes, never fills the phone number, and never clicks Submit.
+A small extension fills application forms from a job's `kit.json`. It only fills after you click Fill. It never fills the phone number, never ticks consent boxes, fills salary only when confirmed, and never clicks Submit or Next.
 
-1. Build it: `cd extension && npm install && npm run build`.
-2. Load it: in Chrome open `chrome://extensions`, turn on Developer mode and choose Load unpacked; in Firefox open `about:debugging` and choose Load Temporary Add-on.
-3. Start the server: `.venv/bin/cvforge serve`. It listens on `127.0.0.1` only (port 47321, or `serve_port` in `cvforge.toml`).
-4. Pair: copy the pairing token (`cvforge serve --show-token`) into the extension popup (token field, then Save).
+Greenhouse has a dedicated adapter. Every other site, Gupy included for now, uses a label guesser. Greenhouse dropdowns built as searchable comboboxes are left for you.
+
+1. Build it: `cd extension && npm install && npm run build`. Output goes to `extension/dist/chrome` and `extension/dist/firefox`.
+2. Start the server: `.venv/bin/cvforge serve`. It listens on `127.0.0.1` only (port 47321, or `serve_port` in `cvforge.toml`).
+3. Load it:
+   - Chrome: open `chrome://extensions`, turn on Developer mode, choose Load unpacked and pick `dist/chrome`.
+   - Firefox: open `about:debugging`, choose This Firefox, Load Temporary Add-on and pick `dist/firefox/manifest.json`. Firefox MV3 does not grant site access automatically: allow it in `about:addons` under the extension's Permissions, or from the toolbar.
+4. Pair: copy the token from `.venv/bin/cvforge serve --show-token` into the extension popup (token field, then Save).
 5. Use it: run `cvforge kit <slug>`, open the application form and click Fill.
+
+With browsers on Windows and cv-forge in WSL2, copy `extension/dist` to a Windows path (for example `D:\cv-forge-build\extension`) before loading it. Windows reaches the WSL server at `127.0.0.1` through WSL2 localhost forwarding; this was checked (an unauthenticated request to `/health` from Windows returns 401, so the server is reachable). If it is not reachable on your machine, set `localhostForwarding=true` or `networkingMode=mirrored` under `[wsl2]` in `%UserProfile%\.wslconfig` and run `wsl --shutdown`.
+
+Troubleshooting, with the exact messages the extension shows:
+
+- `cv-forge server not running: run .venv/bin/cvforge serve`
+- `Pairing token rejected: paste the token from cvforge serve --show-token`
+- `cv-forge does not run on LinkedIn`
+- `cv-forge extension error: reload the extension`
+- `Server error <status>`
 
 ## Privacy model
 
