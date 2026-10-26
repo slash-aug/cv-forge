@@ -124,6 +124,19 @@ def _salary(salary: dict | None, slug: str) -> dict | None:
     return {"confirmed": True, "text": text, "sources": list(salary.get("sources", []))}
 
 
+def _email(tailored: dict, master: dict, files: dict[str, str]) -> dict | None:
+    """The email to send, signed with name, phone and LinkedIn from master."""
+    email = tailored.get("email")
+    if not email:
+        return None
+    basics = master["basics"]
+    signature = [basics["name"], basics.get("phone"), _profile_url(basics, "linkedin")]
+    body = email["body"].rstrip() + "\n\n" + "\n".join(line for line in signature if line)
+    attachments = [files[k] for k in ("cv_pdf", "letter_pdf") if files.get(k)]
+    return {"to": email["to"], "subject": email["subject"], "body": body,
+            "attachments": attachments}
+
+
 def build_kit(master: dict, tailored: dict, posting, salary: dict | None, *,
               slug: str, files: dict[str, str]) -> dict:
     """The kit.json document. `files` maps cv_pdf and letter_pdf to file names that exist."""
@@ -146,6 +159,7 @@ def build_kit(master: dict, tailored: dict, posting, salary: dict | None, *,
         "answers": [{"question": a["question"], "answer": a["answer"], "limit": a.get("limit")}
                     for a in tailored.get("answers", [])],
         "recruiter_note": {"connect": note["connect"], "message": note["message"]} if note else None,
+        "email": _email(tailored, master, files),
         "tracker": [f"cvforge track status {slug} applied",
                     f"cvforge track stage {slug} <name> --kind interview --due YYYY-MM-DD"],
     }

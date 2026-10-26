@@ -82,10 +82,19 @@
       "required": ["connect", "message"],
       "additionalProperties": false
     },
+    "email": {
+      "type": ["object", "null"],
+      "properties": {
+        "to": {"type": "string"}, "subject": {"type": "string"}, "body": {"type": "string"},
+        "attachments": {"type": "array", "items": {"type": "string"}}
+      },
+      "required": ["to", "subject", "body", "attachments"],
+      "additionalProperties": false
+    },
     "tracker": {"type": "array", "items": {"type": "string"}}
   },
   "required": ["schema_version", "slug", "lang", "company", "role", "links", "fields", "work",
                "education", "languages", "certificates", "salary", "answers", "recruiter_note",
-               "tracker"],
+               "email", "tracker"],
   "additionalProperties": false
 }

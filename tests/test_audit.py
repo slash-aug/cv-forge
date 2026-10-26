@@ -270,3 +270,31 @@ def test_extra_allowed_numbers_apply_to_answers():
 def test_extra_allowed_numbers_do_not_apply_to_letter():
     t = _variant(lambda d: d["letter"].update(closing="Available in 30 days."))
     assert [f.ref for f in audit(t, M, extra_allowed={"30"})] == ["letter.closing"]
+
+
+EMAIL = {"to": "jobs@example.com", "subject": "Full-stack role: Ana Exemplo",
+         "body": "Hi team,\n\nI cut load time by 40%.\n\nThank you.", "refs": ["h-load-time"]}
+
+
+def test_email_numbers_follow_refs():
+    assert audit(_variant(lambda d: d.update(email=EMAIL)), M) == []
+    bad = {**EMAIL, "body": "Hi team,\n\nI led 5 engineers."}
+    found = audit(_variant(lambda d: d.update(email=bad)), M)
+    assert [(f.kind, f.ref) for f in found] == [("number", "email.body")]
+
+
+def test_email_em_dash_and_confidential():
+    t = _variant(lambda d: d.update(email={**EMAIL, "subject": f"Role {EM} Ana"}))
+    assert [(f.kind, f.ref) for f in audit(t, M)] == [("em-dash", "email.subject")]
+    t = _variant(lambda d: d.update(email={**EMAIL, "body": "I did ProjectZebra."}))
+    assert [(f.kind, f.ref) for f in audit(t, M)] == [("confidential", "email.body")]
+
+
+def test_email_schema_requires_every_part():
+    from cvforge.profile.model import load_schema, schema_problems
+
+    schema = load_schema("cvforge.tailor", "tailored.schema.json")
+    assert schema_problems(_variant(lambda d: d.update(email=EMAIL)), schema) == []
+    for key in ("to", "subject", "body", "refs"):
+        partial = {k: v for k, v in EMAIL.items() if k != key}
+        assert schema_problems(_variant(lambda d, p=partial: d.update(email=p)), schema), key

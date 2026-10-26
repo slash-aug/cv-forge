@@ -159,6 +159,16 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
 {{ block("note-message", "Message", kit.recruiter_note.message) }}
 {% endif %}
 
+{% if kit.email %}
+<h2>Email</h2>
+{{ block("email-to", "To", kit.email.to) }}
+{{ block("email-subject", "Subject", kit.email.subject) }}
+{{ block("email-body", "Body", kit.email.body) }}
+{% if kit.email.attachments %}
+<p class="sub">Attach: {{ kit.email.attachments|join(", ") }}</p>
+{% endif %}
+{% endif %}
+
 <h2>After applying</h2>
 <ul class="cmds">
 {% for c in kit.tracker %}
