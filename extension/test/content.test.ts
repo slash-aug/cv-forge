@@ -36,6 +36,13 @@ function makeSend(over: Partial<Record<Msg["type"], Handler>> = {}) {
   const handlers = { ...base, ...over } as Record<string, Handler>;
   return vi.fn(async (m: Msg) => handlers[m.type](m) as Result<any>);
 }
+const greenhouseWin = (): Window =>
+  ({
+    document,
+    location: new URL("https://job-boards.greenhouse.io/examplecorp/jobs/4012345"),
+    addEventListener: window.addEventListener.bind(window),
+    removeEventListener: window.removeEventListener.bind(window),
+  }) as unknown as Window;
 const sent = (send: ReturnType<typeof makeSend>, type: string): Msg[] =>
   send.mock.calls.map((c) => c[0]).filter((m) => m.type === type);
 
@@ -165,11 +172,41 @@ describe("button", () => {
     expect(buttons()[0].textContent).toBe(errorText({ kind: "internal" }));
   });
 
-  test("server down: button shows the start command", async () => {
-    const send = makeSend({ matchTab: () => ({ ok: false, error: { kind: "down" } }) });
-    await start(window, send);
-    expect(buttons()[0].textContent).toBe(errorText({ kind: "down" }));
+  test("server down on a guesser-only page: no button", async () => {
+    for (const kind of ["down", "token"] as const) {
+      uiHost()?.remove();
+      const send = makeSend({ matchTab: () => ({ ok: false, error: { kind } }) });
+      await start(window, send);
+      expect(sent(send, "matchTab")).toHaveLength(1);
+      expect(uiHost()).toBeNull();
+    }
+  });
+
+  test("server down on an adapter page: button shows the start command", async () => {
+    for (const kind of ["down", "token"] as const) {
+      uiHost()?.remove();
+      document.body.innerHTML = `<form id="application_form">
+        <label for="a">First name</label><input id="a" name="job_application[first_name]">
+        <label for="c">Email</label><input id="c" name="job_application[email]"></form>`;
+      const send = makeSend({ matchTab: () => ({ ok: false, error: { kind } }) });
+      await start(greenhouseWin(), send);
+      expect(buttons()[0].textContent).toBe(errorText({ kind }));
+    }
     expect(buttons()[0].textContent).toContain("cvforge serve");
+  });
+
+  test("a form rendered after load gets the button", async () => {
+    document.body.innerHTML = "<div id=app></div>";
+    vi.useFakeTimers();
+    const send = makeSend();
+    await start(window, send);
+    expect(send).not.toHaveBeenCalled();
+    expect(uiHost()).toBeNull();
+    document.getElementById("app")!.innerHTML = fixture("guess-en.html");
+    await vi.advanceTimersByTimeAsync(600);
+    await flush();
+    expect(sent(send, "matchTab")).toHaveLength(1);
+    expect(buttons()[0].textContent).toBe("Fill for Example Corp, Full-stack Engineer");
   });
 
   test("no fill until click", async () => {

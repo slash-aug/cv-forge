@@ -89,8 +89,6 @@ export async function start(win: Window, rawSend: Send): Promise<void> {
   noteClaim();
   const sent = (): boolean => detectSent(doc, loc(), adapter() ?? claimed);
 
-  // A thank-you page loaded after a submit is not a form, but may still offer "Mark as applied".
-  if (!isApplication() && !sent()) return;
   const watchForm = (): void => {
     try {
       const a = adapter();
@@ -200,7 +198,9 @@ export async function start(win: Window, rawSend: Send): Promise<void> {
     });
     if (mine !== seq) return; // a newer check superseded this one
     if (!r.ok) {
-      if (app) showButton(errorText(r.error), () => void init(), false);
+      // A guesser-only page may not be a job form at all: stay quiet there; the popup still says why.
+      const quiet = a === null && (r.error.kind === "down" || r.error.kind === "token");
+      if (app && !quiet) showButton(errorText(r.error), () => void init(), false);
       return;
     }
     const match = r.value as Match;
@@ -215,6 +215,7 @@ export async function start(win: Window, rawSend: Send): Promise<void> {
     offerApplied();
   };
 
+  // Always observed, so a form rendered after document_idle still gets the button.
   // Mutations inside the UI are ignored; highlights only change attributes, which are not observed.
   let timer: ReturnType<typeof setTimeout> | undefined;
   let maxTimer: ReturnType<typeof setTimeout> | undefined;
@@ -224,7 +225,11 @@ export async function start(win: Window, rawSend: Send): Promise<void> {
     maxTimer = undefined;
     if (busy) return;
     offerApplied();
-    if (isApplication() && fingerprint(doc) !== known) void init();
+    // Runs on every page, so the cheap fingerprint gates the application check.
+    const now = fingerprint(doc);
+    if (now === known) return;
+    if (isApplication()) void init();
+    else known = now;
   };
   const observer = new MutationObserver((records) => {
     if (records.every((r) => inUi(r.target))) return;
