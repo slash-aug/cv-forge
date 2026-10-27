@@ -232,6 +232,11 @@ Usually for the `external` and `trainee` channels, whenever the candidate pastes
 4. Rerun the audit (Step 5) and fix every finding.
 5. Show the candidate the answers. After they approve, save them to the bank: `.venv/bin/cvforge answers <slug> --save`.
 
+**Gupy postings (`source: gupy`): always run this step, even with no pasted questions.** Every Gupy form has an optional "Apresente-se" step, and `cvforge answers` prints its two questions first. Always answer both, so the kit carries them:
+
+- **Intro** (`limit: 1500`): written fresh for this posting, never reused from the bank or another application. Open with the strongest match to the role, map it to the posting's own challenge, add a fair gap line when a listed differential is missing, and close on what the candidate brings to this team. Aim for 1,000 to 1,400 characters.
+- **Skills** (`limit: null`): the answer is up to 3 names, comma separated, taken exactly from the `Gupy skills` line (the chips on the candidate's Gupy profile, kept in `data/answers/gupy.yaml`). Pick the 3 the posting weighs most. If the form shows a chip that is not in the file, add it there.
+
 ---
 
 ## Step 9: Kit

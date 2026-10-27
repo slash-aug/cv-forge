@@ -8,6 +8,8 @@ import yaml
 from cvforge import cli
 from cvforge.answers.bank import load_bank, lookup, normalise_question, save_answers
 from cvforge.answers.facts import knockout_facts
+from cvforge.answers.gupy import GUPY_QUESTIONS
+from cvforge.apply.posting import Posting
 from cvforge.apply.experience import engineering_months
 from cvforge.profile.model import load_master
 
@@ -121,6 +123,44 @@ def test_save_refuses_when_audit_fails(app, tmp_path, capsys):
 
 def test_unknown_slug(app):
     assert cli.main(["answers", "nope"]) == 1
+
+
+def _posting(d, source):
+    Posting(company="Acme", title="Dev", location="", location_requirements=[], workplace=None,
+            salary=None, language="pt", url="https://acme.example/jobs/1", apply_url=None,
+            source=source, fetched="2026-10-27", description="").save(d)
+
+
+def test_gupy_posting_adds_the_standard_questions(app, capsys):
+    _posting(app, "gupy")
+    assert _run() == 0
+    out = capsys.readouterr().out
+    for question in GUPY_QUESTIONS:
+        assert f"Q: {question['question']}" in out
+    assert "limit 1500" in out
+
+
+def test_gupy_questions_are_not_repeated_from_questions_txt(app, capsys):
+    _posting(app, "gupy")
+    (app / "questions.txt").write_text(GUPY_QUESTIONS[0]["question"] + "\nWhy us?\n", encoding="utf-8")
+    assert _run() == 0
+    out = capsys.readouterr().out
+    assert out.count(f"Q: {GUPY_QUESTIONS[0]['question']}") == 1
+    assert "Q: Why us?" in out
+
+
+def test_gupy_skills_print_from_data(app, tmp_path, capsys):
+    _posting(app, "gupy")
+    (tmp_path / "answers").mkdir()
+    (tmp_path / "answers" / "gupy.yaml").write_text("skills: [Python, SQL]\n", encoding="utf-8")
+    assert _run() == 0
+    assert "Gupy skills: Python, SQL" in capsys.readouterr().out
+
+
+def test_other_sources_get_no_gupy_questions(app, capsys):
+    _posting(app, "greenhouse")
+    assert _run() == 0
+    assert GUPY_QUESTIONS[0]["question"] not in capsys.readouterr().out
 
 
 

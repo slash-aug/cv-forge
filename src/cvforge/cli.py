@@ -11,8 +11,9 @@ from dataclasses import asdict
 from datetime import date
 from pathlib import Path
 
-from cvforge.answers.bank import load_bank, lookup, save_answers
+from cvforge.answers.bank import load_bank, lookup, normalise_question, save_answers
 from cvforge.answers.facts import knockout_facts
+from cvforge.answers.gupy import GUPY_QUESTIONS, gupy_skills
 from cvforge.answers.grounding import DataError, answer_figures, load_salary
 from cvforge.apply import http as apply_http
 from cvforge.apply.check import Verdict, check
@@ -561,15 +562,29 @@ def cmd_answers(args) -> int:
         lang = load_tailored(app_dir / "tailored.yaml")["lang"]
     lang = lang or "en"
     q_path = app_dir / "questions.txt"
+    questions = []
     if q_path.exists():
+        questions = [line.strip() for line in q_path.read_text(encoding="utf-8").splitlines()
+                     if line.strip()]
+    gupy = (app_dir / "posting.json").exists() and Posting.load(app_dir).source == "gupy"
+    hints = {}
+    if gupy:
+        seen = {normalise_question(q) for q in questions}
+        for item in reversed(GUPY_QUESTIONS):
+            hints[item["question"]] = item["hint"]
+            if normalise_question(item["question"]) not in seen:
+                questions.insert(0, item["question"])
+    if questions:
         bank = load_bank(bank_path)
-        for line in q_path.read_text(encoding="utf-8").splitlines():
-            question = line.strip()
-            if not question:
-                continue
+        for question in questions:
             hit = lookup(bank, question, lang)
-            print(f"Q: {question}")
+            hint = hints.get(question)
+            print(f"Q: {question}" + (f" ({hint})" if hint else ""))
             print(f"A: {hit['answer']}" if hit else "NEW")
+    if gupy:
+        skills = gupy_skills(cfg.data_dir / "answers" / "gupy.yaml")
+        print(f"Gupy skills: {', '.join(skills)}" if skills
+              else "Gupy skills: none recorded in answers/gupy.yaml")
     facts = knockout_facts(master, engineering_months(master, _today()), lang)
     print("Knock-out facts:")
     for k, v in facts.items():
