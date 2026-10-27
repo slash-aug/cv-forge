@@ -3,7 +3,7 @@
   "title": "cv-forge application kit",
   "type": "object",
   "properties": {
-    "schema_version": {"const": 1},
+    "schema_version": {"const": 2},
     "slug": {"type": "string"},
     "lang": {"enum": ["en", "pt-BR", "pt-PT"]},
     "company": {"type": "string"},
@@ -59,9 +59,12 @@
       "type": ["object", "null"],
       "properties": {
         "confirmed": {"type": "boolean"}, "text": {"type": "string"},
-        "sources": {"type": "array", "items": {"type": "string"}}
+        "sources": {"type": "array", "items": {"type": "string"}},
+        "amount": {"type": ["number", "null"]},
+        "currency": {"type": ["string", "null"]},
+        "period": {"enum": ["year", "month", "hour", null]}
       },
-      "required": ["confirmed", "text", "sources"],
+      "required": ["confirmed", "text", "sources", "amount", "currency", "period"],
       "additionalProperties": false
     },
     "answers": {

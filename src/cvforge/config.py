@@ -29,6 +29,7 @@ class Config:
     xelatex: str
     daily_cap: int = 10
     clt_factor: float = 1.4
+    serve_port: int = 47321
 
 
 def _engine(name: str) -> str:
@@ -67,6 +68,13 @@ def load_config(env: Mapping[str, str] | None = None, file: Path | None = None) 
         daily_cap = int(raw_cap) if raw_cap is not None else 10
     except (TypeError, ValueError):
         raise ConfigError(f"daily_cap must be a whole number, got {raw_cap!r}") from None
+    raw_port = pick("serve_port")
+    try:
+        serve_port = int(raw_port) if raw_port is not None else 47321
+    except (TypeError, ValueError):
+        raise ConfigError(f"serve_port must be a whole number, got {raw_port!r}") from None
+    if not 0 <= serve_port <= 65535:
+        raise ConfigError(f"serve_port must be between 0 and 65535, got {serve_port}")
 
     default_build = WIN_BUILD_DIR if Path("/mnt/d").exists() else REPO_ROOT / "build"
     return Config(
@@ -76,4 +84,5 @@ def load_config(env: Mapping[str, str] | None = None, file: Path | None = None) 
         xelatex=pick("xelatex") or _engine("xelatex"),
         daily_cap=daily_cap,
         clt_factor=clt_factor,
+        serve_port=serve_port,
     )

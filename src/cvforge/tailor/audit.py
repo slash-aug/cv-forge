@@ -302,3 +302,24 @@ def audit(tailored: dict, master: dict, *,
     _audit_em_dash(tailored, findings)
     _audit_confidential(tailored, master, findings)
     return findings
+
+
+def audit_answer(question: str, answer: str, master: dict, *,
+                 extra_allowed: set[str] | frozenset[str] = frozenset(),
+                 limit: int | None = None) -> list[Finding]:
+    """Findings for one typed screening answer: numbers (broad rule, no refs), em dash,
+    confidential terms in question or answer, and length over limit."""
+    findings: list[Finding] = []
+    allowed = _broad_numbers(index(master)) | set(extra_allowed)
+    _check_numbers("answer", answer, allowed, findings)
+    if EM_DASH in answer:
+        findings.append(Finding("em-dash", "answer", "contains an em dash"))
+    for location, text in (("question", question), ("answer", answer)):
+        for term in (t for t in master.get("x-confidential", []) if t):
+            if contains_term(text, term):
+                findings.append(
+                    Finding("confidential", location, f"contains confidential term '{term}'")
+                )
+    if limit is not None and len(answer) > limit:
+        findings.append(Finding("length", "answer", f"{len(answer)} characters, limit {limit}"))
+    return findings

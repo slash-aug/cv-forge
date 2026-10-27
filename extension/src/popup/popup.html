@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>cv-forge</title>
+<style>
+  body { font: 13px system-ui, sans-serif; width: 320px; margin: 12px; }
+  .row { margin: 8px 0; }
+  .error { color: #b00020; }
+  select, input, button { font: inherit; }
+  select, input[type="password"] { width: 100%; box-sizing: border-box; }
+</style>
+</head>
+<body>
+<div id="status" class="row"></div>
+<div id="error" class="row error" role="alert"></div>
+<div id="pairing" class="row" hidden>
+  <input id="token" type="password" placeholder="Pairing token" autocomplete="off">
+  <button id="save-token" type="button">Save</button>
+</div>
+<div id="tab" class="row" hidden>
+  <div>Job: <strong id="current">none</strong></div>
+  <select id="choose" aria-label="Change job"></select>
+  <button id="applied" type="button" disabled>Mark applied</button>
+</div>
+<script src="popup.js"></script>
+</body>
+</html>

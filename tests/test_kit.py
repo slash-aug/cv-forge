@@ -34,7 +34,7 @@ def test_kit_json_keys_stable():
     assert list(k) == ["schema_version", "slug", "lang", "company", "role", "links", "fields",
                        "work", "education", "languages", "certificates", "salary", "answers",
                        "recruiter_note", "email", "tracker"]
-    assert k["schema_version"] == 1
+    assert k["schema_version"] == 2
     assert list(k["links"]) == ["apply", "posting", "cv_pdf", "letter_pdf"]
     assert k["links"]["letter_pdf"] is None and k["links"]["cv_pdf"] == FILES["cv_pdf"]
     keys = [f["key"] for f in k["fields"]]
@@ -45,7 +45,8 @@ def test_kit_json_keys_stable():
     work = k["work"][0]
     assert set(work) == {"key", "title", "company", "start", "end", "description"}
     assert list(work["description"]) == ["200", "500", "1000", "2000"]
-    assert set(k["salary"]) == {"confirmed", "text", "sources"}
+    assert set(k["salary"]) == {"confirmed", "text", "sources", "amount", "currency", "period"}
+    assert "email" in k
     assert schema_problems(k, load_schema("cvforge.kit", "kit.schema.json")) == []
 
 
@@ -274,3 +275,23 @@ def test_kit_html_email_section_has_copy_buttons():
         assert f'data-copy="{part}"' in html and f'id="{part}"' in html
     assert "Attach: Ana_Exemplo_CV_Example_Corp.pdf" in html
     assert "<h2>Email</h2>" not in render_kit(kit())
+
+
+def test_confirmed_salary_is_structured():
+    s = kit()["salary"]
+    assert (s["amount"], s["currency"], s["period"]) == (60000, "EUR", "year")
+    assert kit()["schema_version"] == 2
+
+
+def test_unconfirmed_salary_has_no_numbers():
+    s = kit({**SALARY, "confirmed": False})["salary"]
+    assert (s["amount"], s["currency"], s["period"]) == (None, None, None)
+    assert schema_problems(kit({**SALARY, "confirmed": False}),
+                           load_schema("cvforge.kit", "kit.schema.json")) == []
+
+
+def test_kit_html_ignores_structured_salary():
+    k = kit()
+    stripped = {**k, "salary": {kk: v for kk, v in k["salary"].items()
+                                if kk not in ("amount", "currency", "period")}}
+    assert render_kit(k) == render_kit(stripped)

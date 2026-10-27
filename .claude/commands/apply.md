@@ -242,6 +242,14 @@ Usually for the `external` and `trainee` channels, whenever the candidate pastes
 
 It writes `kit.json` and `kit.html` and prints the path of `kit.html` (a Windows path when available). Give the candidate that path: the page has copy buttons for the personal data, each work entry, the salary, the answers, the recruiter note and, when `tailored.yaml` has one, the email (to, subject, signed body and the files to attach).
 
+Then check whether the browser extension server is up:
+
+```
+curl -s --max-time 2 -o /dev/null -w '%{http_code}' http://127.0.0.1:47321/health
+```
+
+`401` means the server is already running (the call carries no token). `000` means it is down, so start it in the background with `.venv/bin/cvforge serve`. Then tell the candidate to click Fill on the form, with `kit.html` as the fallback.
+
 ---
 
 ## Step 10: Hand-off

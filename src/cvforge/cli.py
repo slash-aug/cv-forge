@@ -13,6 +13,7 @@ from pathlib import Path
 
 from cvforge.answers.bank import load_bank, lookup, save_answers
 from cvforge.answers.facts import knockout_facts
+from cvforge.answers.grounding import DataError, answer_figures, load_salary
 from cvforge.apply import http as apply_http
 from cvforge.apply.check import Verdict, check
 from cvforge.apply.companies import (
@@ -45,7 +46,7 @@ from cvforge.render.cv import build_cv_view, render_view
 from cvforge.render.letter import ASSETS_DIR, letter_context, render_letter_context
 from cvforge.salary.market import load_market, match_market
 from cvforge.salary.suggest import Suggestion, below_floor, displays, suggest
-from cvforge.tailor.audit import Finding, audit, audit_rendered, figures, load_tailored
+from cvforge.tailor.audit import Finding, audit, audit_rendered, load_tailored
 from cvforge.text import file_part, split_name
 from cvforge.track import stages as stages_mod
 from cvforge.track import tracker
@@ -138,53 +139,9 @@ def cmd_validate(args) -> int:
     return 0
 
 
-class DataError(Exception):
-    """A file under the data directory that cannot be used as it is."""
-
-
-SALARY_KEYS = ("amount", "currency", "period", "brl_month", "eur_year", "usd_year")
-
-
-def _load_salary(app_dir: Path) -> dict | None:
-    """salary.json as written by `cvforge salary`, or None; a damaged file is a DataError."""
-    path = app_dir / "salary.json"
-    if not path.exists():
-        return None
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except ValueError as exc:
-        raise DataError(f"{path}: unreadable ({exc}); rerun cvforge salary") from None
-    if not isinstance(data, dict):
-        raise DataError(f"{path}: expected an object; rerun cvforge salary")
-    if data.get("confirmed"):
-        missing = [k for k in SALARY_KEYS if k not in data]
-        if missing:
-            raise DataError(f"{path}: missing {', '.join(missing)}; rerun cvforge salary")
-        try:
-            for key in ("amount", "brl_month", "eur_year", "usd_year"):
-                data[key] = float(data[key])
-        except (TypeError, ValueError):
-            raise DataError(f"{path}: {key} is not a number; rerun cvforge salary") from None
-    return data
-
-
-def _answer_figures(master: dict, lang: str, app_dir: Path) -> set[str]:
-    """Numbers an honest screening answer may hold that no highlight has: the knock-out facts
-    (years from dates, notice) and, once confirmed, the salary as `cvforge salary` shows it."""
-    facts = knockout_facts(master, engineering_months(master, _today()), lang)
-    found = figures(*facts.values())
-    salary = _load_salary(app_dir)
-    if salary and salary.get("confirmed"):
-        amount = salary["amount"]
-        found |= figures(f"{amount:g}", f"{amount:.0f}", f"{amount:,.0f}", f"{amount:,.2f}")
-        for key in ("brl_month", "eur_year", "usd_year"):
-            found |= figures(f"{salary[key]:.0f}", f"{salary[key]:,.0f}")
-    return found
-
-
 def _audit_tailored(tailored: dict, master: dict, app_dir: Path) -> list[Finding]:
     return audit(tailored, master,
-                 extra_allowed=_answer_figures(master, tailored["lang"], app_dir))
+                 extra_allowed=answer_figures(master, tailored["lang"], app_dir, _today()))
 
 
 def cmd_audit(args) -> int:
@@ -417,6 +374,44 @@ def _show_application(path: Path, app_dir: Path, slug_: str, today: date) -> int
     print("stages:" + ("" if found else " -"))
     for st in found:
         print(f"  {st.name} ({st.kind}) due {st.due or '-'}, {'done' if st.done else 'open'}")
+    return 0
+
+
+EXTENSION_PORT = 47321  # the browser extension talks to this port only (version 1)
+
+
+def cmd_serve(args) -> int:
+    from cvforge.serve import token as serve_token
+    from cvforge.serve.app import App
+    from cvforge.serve.server import PortInUse, make_server
+
+    cfg = load_config()
+    pairing = serve_token.load_or_create(cfg.data_dir)
+    if args.show_token:
+        print(pairing)
+        return 0
+    port = cfg.serve_port if args.port is None else args.port
+    if not 1 <= port <= 65535:
+        print(f"port must be between 1 and 65535, got {port}", file=sys.stderr)
+        return 1
+    if port != EXTENSION_PORT:
+        print(f"the browser extension only connects to port {EXTENSION_PORT}", file=sys.stderr)
+    app = App(cfg.data_dir, pairing, port)
+    try:
+        httpd = make_server(app, port)
+    except PortInUse:
+        print(f"cv-forge server already running on port {port}", file=sys.stderr)
+        return 1
+    app.port = port = httpd.server_address[1]
+    print(f"cv-forge server on http://127.0.0.1:{port} (Ctrl+C to stop)", flush=True)
+    # never the token itself: this output lands in transcripts when /apply runs the server
+    print("pairing token: run cvforge serve --show-token", flush=True)
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        httpd.server_close()
     return 0
 
 
@@ -690,7 +685,7 @@ def cmd_kit(args) -> int:
     master = load_master(Path(args.master) if args.master
                          else cfg.data_dir / "profile" / "master.yaml")
     tailored = load_tailored(app_dir / "tailored.yaml")
-    salary = _load_salary(app_dir)
+    salary = load_salary(app_dir)
     first, last = name_parts(master["basics"]["name"])
     company = file_part(tailored["target"]["company"])
     names = {"cv_pdf": f"{first}_{last}_CV_{company}.pdf",
@@ -853,6 +848,11 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--lang", help="answer language (default: tailored.yaml lang, else en)")
     p.add_argument("--master", help="master profile (default: <data_dir>/profile/master.yaml)")
     p.set_defaults(func=cmd_answers)
+    p = sub.add_parser("serve", help="local server for the browser extension (127.0.0.1)")
+    p.add_argument("--port", type=int,
+                   help="port, 1-65535 (default: serve_port in config, 47321; the extension uses 47321 only)")
+    p.add_argument("--show-token", action="store_true", help="print the pairing token and exit")
+    p.set_defaults(func=cmd_serve)
     p = sub.add_parser("due", help="stages, follow-ups and stale applications")
     p.set_defaults(func=cmd_due)
     return parser

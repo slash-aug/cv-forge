@@ -198,3 +198,10 @@ def test_knockout_visa_uses_names():
     master = {**MASTER, "x-preferences": {**MASTER["x-preferences"],
                                           "visa": {"eu_blue_card": "eligible"}}}
     assert knockout_facts(master, 24, "en")["visa"] == "EU Blue Card: eligible"
+
+
+def test_normalise_matches_shared_table():
+    rows = json.loads((Path(__file__).parent / "fixtures" / "normalise_table.json").read_text("utf-8"))
+    assert len(rows) >= 15
+    for row in rows:
+        assert normalise_question(row["question"]) == row["key"], row["question"]
