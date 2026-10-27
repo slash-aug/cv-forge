@@ -83,7 +83,7 @@ cvforge due
 
 ## Quick start
 
-Requires Python 3.10 or newer and a LaTeX setup (see below).
+Requires Python 3.12 or newer and a LaTeX setup (see below). If your system `python3` is older (Ubuntu 22.04 ships 3.10), create the venv with [uv](https://docs.astral.sh/uv/) instead: `uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python -e '.[dev]'`.
 
 ```bash
 git clone <this repository> cv-forge && cd cv-forge

@@ -7,7 +7,7 @@ name = "cvforge"
 version = "0.1.0"
 description = "Job-search copilot: tailored, honest, ATS-safe LaTeX CVs and cover letters from one master profile."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 license = { text = "MIT" }
 dependencies = [
     "pyyaml>=6",
