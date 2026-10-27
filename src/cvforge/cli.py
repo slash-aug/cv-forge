@@ -34,6 +34,7 @@ from cvforge.apply.intake import (
 )
 from cvforge.apply.posting import Posting, canonical_url
 from cvforge.apply.requirements import load_requirements, posting_text, quote_problems
+from cvforge.apply.seed import seed_ie
 from cvforge.apply.workspace import create_app_dir
 from cvforge.build import LatexError, compile_tex
 from cvforge.checks.ats import AtsReport, ats_check
@@ -796,6 +797,10 @@ def cmd_company(args) -> int:
                                 aliases=args.alias)
         elif args.action == "import-ie":
             return _import_ie(args)
+        elif args.action == "seed-ie":
+            result = seed_ie(path, Path(args.file) if args.file else None)
+            print(f"seed-ie: {result.added} added, {result.kept} already known")
+            return 0
         elif args.action == "sponsor":
             day = date.fromisoformat(args.date) if args.date else _today()
             entry = add_sponsor(path, args.name, type=args.type, source=args.source, day=day)
@@ -887,6 +892,8 @@ def _parser() -> argparse.ArgumentParser:
     c = company.add_parser("import-ie", help="import DETE employment permit statistics")
     c.add_argument("--year", type=int, action="append")
     c.add_argument("--file", help="a downloaded companies xlsx instead of fetching")
+    c = company.add_parser("seed-ie", help="seed Irish employers from the bundled JobPilot list")
+    c.add_argument("--file", help="a seed JSON file instead of the bundled one")
     c = company.add_parser("show", help="show a company")
     c.add_argument("name")
     p.set_defaults(func=cmd_company)
