@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff>=0.6"]
+dev = ["pytest==9.1.1", "ruff==0.17.2"]  # exact, so local runs match CI
 
 [project.scripts]
 cvforge = "cvforge.cli:main"

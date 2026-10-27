@@ -37,3 +37,5 @@ Venv: `.venv/bin/cvforge`
 - `pytest -q -m "not latex"` runs the fast suite.
 - `pytest -q -m latex` runs the PDF tests; they need MiKTeX or TeX Live. `pytest -q` runs both.
 - Keep test workers at 4 or fewer.
+- `scripts/check.sh` runs the same checks as CI (ruff, fast tests, privacy guards, the extension when it changed; `--latex` adds the PDF tests). Run it before pushing; the pre-push hook runs it too.
+- Tool versions match CI: Python 3.12, Node 22, and ruff and pytest pinned in `pyproject.toml`. After a pin changes, rerun `uv pip install -e '.[dev]'` (the venv is uv-managed, no pip).

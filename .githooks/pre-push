@@ -1,0 +1,3 @@
+#!/bin/sh
+# Runs the same checks as CI before anything leaves the machine.
+exec "$(git rev-parse --show-toplevel)/scripts/check.sh"
