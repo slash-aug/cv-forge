@@ -42,13 +42,10 @@ OPENER = urllib.request.build_opener(NoLinkedInRedirect())
 
 
 def get(url: str, *, timeout: float = 20.0) -> str:
-    if is_linkedin(url):
-        raise FetchError(f"LinkedIn pages are never fetched: {url}")
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    data = get_bytes(url, timeout=timeout)
     try:
-        with OPENER.open(request, timeout=timeout) as response:
-            return decode_page(response.read())
-    except (urllib.error.URLError, OSError, ValueError) as exc:
+        return decode_page(data)
+    except ValueError as exc:
         raise FetchError(f"could not fetch {url}: {exc}") from exc
 
 

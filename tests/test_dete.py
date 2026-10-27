@@ -143,3 +143,35 @@ def test_cli_import_ie(tmp_path, monkeypatch, capsys):
     assert "ie 2026: 2 employers, 1 registry matches" in capsys.readouterr().out
     assert main(["company", "show", "Stripe"]) == 0
     assert "41 permits" in capsys.readouterr().out
+
+
+def _import_names(tmp_path, registry_name, names):
+    add_company(tmp_path / "companies.yaml", registry_name)
+    f = tmp_path / "c.xlsx"
+    f.write_bytes(make_xlsx([HEADER, *[[n, 1, 10] for n in names]]))
+    import_year(tmp_path, 2026, file=f)
+    return load_registry(tmp_path / "companies.yaml")[0]["sponsor"]
+
+
+def test_suffix_inside_a_name_is_kept(tmp_path):
+    assert dete_key("Bank of Ireland") == "bank of ireland"
+    marks = _import_names(tmp_path, "Bank of Ireland",
+                          ["Bank of America Europe DAC", "Bank of China (Europe) S.A."])
+    assert marks == []
+
+
+def test_generic_key_gets_no_prefix_match(tmp_path):
+    assert _import_names(tmp_path, "Kerry", ["Kerry Fish Trawlers"]) == []
+
+
+def test_prefix_match_records_matched_names(tmp_path):
+    marks = _import_names(tmp_path, "Stripe", ["Stripe Payments Europe Limited"])
+    assert marks[0]["matched"] == ["Stripe Payments Europe Limited"] and marks[0]["count"] == 10
+
+
+def test_reimport_removes_mark_when_no_longer_matching(tmp_path):
+    _import_names(tmp_path, "Stripe", ["Stripe Payments Europe Limited"])
+    f = tmp_path / "c.xlsx"
+    f.write_bytes(make_xlsx([HEADER, ["Other Co", 1, 2]]))
+    import_year(tmp_path, 2026, file=f)
+    assert load_registry(tmp_path / "companies.yaml")[0]["sponsor"] == []

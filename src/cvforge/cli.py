@@ -759,6 +759,8 @@ def _import_ie(args) -> int:
             failed = True
             continue
         print(f"ie {year}: {result.employers} employers, {len(result.matched)} registry matches")
+        for company, names in result.details.items():
+            print(f"  {company}: {', '.join(names)}")
     return 1 if failed else 0
 
 

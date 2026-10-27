@@ -18,6 +18,7 @@ LEGAL_SUFFIXES = frozenset(
     {"ltd", "lda", "inc", "llc", "gmbh", "sa", "s a", "bv", "plc", "ltda", "eireli", "me"}
 )
 FIELDS = ("name", "aliases", "careers_url", "ats", "sponsor", "notes")
+CONNECTORS = frozenset({"of", "for", "and", "the", "&"})
 NON_WORD = re.compile(r"[^\w]+")
 
 
@@ -31,11 +32,14 @@ def name_key(name: str, extra_suffixes: frozenset[str] = frozenset()) -> str:
     words = NON_WORD.sub(" ", fold_accents(name)).replace("_", " ").split()
     while len(words) > 1:
         if " ".join(words[-2:]) in suffixes and len(words) > 2:
-            words = words[:-2]
+            cut = 2
         elif words[-1] in suffixes:
-            words = words[:-1]
+            cut = 1
         else:
             break
+        if len(words) > cut and words[-cut - 1] in CONNECTORS:
+            break  # "Bank of Ireland": the suffix is part of the name
+        words = words[:-cut]
     return " ".join(words)
 
 

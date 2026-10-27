@@ -20,6 +20,11 @@ IE_SUFFIXES = frozenset({"limited", "unlimited company", "dac", "designated acti
 MARK_TYPE = "ie-permit"
 HREF = re.compile(r"""href\s*=\s*["']([^"']+)["']""", re.IGNORECASE)
 YEAR_PAGE = re.compile(r"employment-permit-statistics-(\d{4})", re.IGNORECASE)
+PREFIX_MIN = 4
+GENERIC = frozenset({
+    "irish", "dublin", "cork", "galway", "limerick", "kerry", "global", "international",
+    "national", "tech", "data", "cloud", "health", "care", "smart", "digital", "first", "new",
+    "the", "group", "services", "solutions", "systems"})
 SOURCE_YEAR = re.compile(r"\b(20\d{2})\b")
 
 
@@ -32,6 +37,7 @@ class ImportResult:
     year: int
     employers: int
     matched: list[str] = field(default_factory=list)
+    details: dict[str, list[str]] = field(default_factory=dict)  # company -> DETE names
 
 
 def dete_key(name: str) -> str:
@@ -90,18 +96,25 @@ def parse_company_xlsx(data: bytes) -> dict[str, int]:
     return out
 
 
-def _matches(key: str, employers: dict[str, int]) -> int | None:
-    """Permit total for a company key: exact DETE name, else DETE names starting with it."""
+def _matches(key: str, employers: dict[str, int]) -> tuple[int, list[str]] | None:
+    """(permit total, DETE names) for a company key.
+
+    An exact DETE name wins. Otherwise DETE names starting with the key plus a space, but only
+    for a distinctive key (4+ chars, not a generic word).
+    """
     if not key:
         return None
-    exact = prefix = None
-    for name, count in employers.items():
+    exact: list[str] = []
+    prefix: list[str] = []
+    allow_prefix = len(key) >= PREFIX_MIN and key not in GENERIC
+    for name in employers:
         ekey = dete_key(name)
         if ekey == key:
-            exact = (exact or 0) + count
-        elif ekey.startswith(key + " "):
-            prefix = (prefix or 0) + count
-    return exact if exact is not None else prefix
+            exact.append(name)
+        elif allow_prefix and ekey.startswith(key + " "):
+            prefix.append(name)
+    names = exact or prefix
+    return (sum(employers[n] for n in names), names) if names else None
 
 
 def _cache(data_dir: Path, year: int) -> Path:
@@ -140,27 +153,31 @@ def import_year(data_dir: Path, year: int, *, fetch=http.get_bytes, file: Path |
     cache.write_text(json.dumps({"year": year, "source": source,
                                  "fetched": date.today().isoformat(), "employers": employers},
                                 ensure_ascii=False), encoding="utf-8")
-    matched = _mark_registry(data_dir / "companies.yaml", year, employers)
-    return ImportResult(year, len(employers), matched)
+    details = _mark_registry(data_dir / "companies.yaml", year, employers)
+    return ImportResult(year, len(employers), list(details), details)
 
 
-def _mark_registry(path: Path, year: int, employers: dict[str, int]) -> list[str]:
+def _mark_registry(path: Path, year: int, employers: dict[str, int]) -> dict[str, list[str]]:
     registry = load_registry(path)
-    matched: list[str] = []
+    details: dict[str, list[str]] = {}
     today = date.today().isoformat()
+    source = _source(year)
+    changed = False
     for entry in registry:
-        counts = [c for n in [entry["name"], *entry.get("aliases", [])]
-                  if (c := _matches(dete_key(n), employers)) is not None]
-        if not counts:
-            continue
-        mark = {"type": MARK_TYPE, "source": _source(year), "date": today, "count": max(counts)}
-        entry["sponsor"] = [s for s in entry["sponsor"]
-                            if not (s["type"] == MARK_TYPE and s["source"] == mark["source"])]
-        entry["sponsor"].append(mark)
-        matched.append(entry["name"])
-    if matched:
+        hits = [h for n in [entry["name"], *entry.get("aliases", [])]
+                if (h := _matches(dete_key(n), employers)) is not None]
+        kept = [s for s in entry["sponsor"] if not (s["type"] == MARK_TYPE and s["source"] == source)]
+        if hits:
+            count, names = max(hits, key=lambda h: h[0])
+            kept.append({"type": MARK_TYPE, "source": source, "date": today, "count": count,
+                         "matched": sorted(names)})
+            details[entry["name"]] = sorted(names)
+        if kept != entry["sponsor"] or hits:
+            changed = True
+        entry["sponsor"] = kept
+    if changed:
         _save(path, registry)
-    return matched
+    return details
 
 
 def _cached_years(data_dir: Path) -> list[tuple[int, Path]]:
@@ -198,7 +215,7 @@ def permit_record(data_dir: Path, company_name: str, registry_entry: dict | None
         if best and year <= best[0]:
             break
         employers = _read_cache(path)
-        count = _matches(key, employers) if employers else None
-        if count is not None:
-            return year, count
+        hit = _matches(key, employers) if employers else None
+        if hit is not None:
+            return year, hit[0]
     return best
