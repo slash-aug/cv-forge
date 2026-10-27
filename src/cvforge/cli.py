@@ -16,13 +16,14 @@ from cvforge.answers.facts import knockout_facts
 from cvforge.answers.grounding import DataError, answer_figures, load_salary
 from cvforge.answers.gupy import GUPY_QUESTIONS, gupy_skills
 from cvforge.apply import http as apply_http
-from cvforge.apply.check import Verdict, check
+from cvforge.apply.check import Verdict, check, home_regions, is_irish_job
 from cvforge.apply.companies import (
     add_company,
     add_sponsor,
     find_company,
     load_registry,
 )
+from cvforge.apply.dete import dete_imported, permit_record
 from cvforge.apply.experience import engineering_months
 from cvforge.apply.intake import (
     IntakeError,
@@ -43,6 +44,7 @@ from cvforge.kit.render import render_kit
 from cvforge.money.normalise import Money
 from cvforge.money.rates import MoneyError, load_rates
 from cvforge.profile.model import ProfileError, load_master, localized
+from cvforge.profile.prefs import pay_floor
 from cvforge.render.cv import build_cv_view, render_view
 from cvforge.render.letter import ASSETS_DIR, letter_context, render_letter_context
 from cvforge.salary.market import load_market, match_market
@@ -437,11 +439,14 @@ def cmd_due(args) -> int:
 def _write_verdict(app_dir: Path, today: date, verdict: str, *, results: Verdict | None = None,
                    problems=(), override: str | None = None) -> None:
     data = {"verdict": verdict, "checked": today.isoformat(), "override": override,
-            "problems": list(problems), "results": [], "warnings": [], "caveats": {}}
+            "problems": list(problems), "results": [], "warnings": [], "caveats": {},
+            "risks": [], "ireland": None}
     if results is not None:
         data["results"] = [asdict(r) for r in results.results]
         data["warnings"] = results.warnings
         data["caveats"] = results.caveats
+        data["risks"] = results.risks
+        data["ireland"] = results.ireland
     (app_dir / "verdict.json").write_text(
         json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
@@ -449,6 +454,20 @@ def _write_verdict(app_dir: Path, today: date, verdict: str, *, results: Verdict
 def _salary_stated(req: dict) -> bool:
     salary = req.get("salary") or {}
     return salary.get("max") is not None or salary.get("min") is not None
+
+
+def _needs_rates(req: dict, master: dict, irish: bool) -> bool:
+    """An Irish EUR/year salary against no floor or a EUR/year floor needs no rates."""
+    if not _salary_stated(req):
+        return False
+    if not irish:
+        return True
+    salary = req["salary"]
+    floor = pay_floor(master, "IE")
+    eur_year = (salary["currency"] or "").upper() == "EUR" and salary["period"] == "year"
+    floor_eur_year = floor is None or (floor["currency"].upper() == "EUR"
+                                       and floor["period"] == "year")
+    return not (eur_year and floor_eur_year)
 
 
 def _print_caveats(caveats: dict) -> None:
@@ -486,10 +505,13 @@ def cmd_check(args) -> int:
     master = load_master(Path(args.master) if args.master
                          else cfg.data_dir / "profile" / "master.yaml")
     company = find_company(load_registry(cfg.data_dir / "companies.yaml"), posting.company)
+    irish = is_irish_job(req) and "ireland" not in home_regions(master)
+    record = permit_record(cfg.data_dir, posting.company, company) if irish else None
     try:
         rates = (load_rates(cfg.data_dir / "salary", today, apply_http.get)
-                 if _salary_stated(req) else None)
-        verdict = check(req, posting, master, company, rates, today, clt_factor=cfg.clt_factor)
+                 if _needs_rates(req, master, irish) else None)
+        verdict = check(req, posting, master, company, rates, today, clt_factor=cfg.clt_factor,
+                        record=record, dete_imported=dete_imported(cfg.data_dir))
     except MoneyError as exc:
         print(str(exc), file=sys.stderr)
         _write_verdict(app_dir, today, "invalid", problems=[str(exc)])
@@ -498,6 +520,8 @@ def cmd_check(args) -> int:
         print(f"{'PASS' if r.ok else 'SKIP'} {r.rule}: {r.message}")
         if r.quote:
             print(f'    "{r.quote}"')
+    for risk in verdict.risks:
+        print(f"RISK {risk}")
     for warning in verdict.warnings:
         print(f"warning: {warning}")
     _print_caveats(verdict.caveats)

@@ -6,12 +6,14 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from cvforge.apply.experience import engineering_months, years_limit
+from cvforge.apply.ie_permits import PermitTable, load_permit_table
+from cvforge.apply.ireland import permit_rule
 from cvforge.apply.posting import Posting
 from cvforge.apply.requirements import normalise_quote, posting_text
 from cvforge.apply.requirements import quotes as requirement_quotes
-from cvforge.money.normalise import Money, monthly, pj_equivalent
+from cvforge.money.normalise import Money, annual, monthly, pj_equivalent
 from cvforge.money.rates import MoneyError, NoRate, Rates
-from cvforge.profile.prefs import home_codes
+from cvforge.profile.prefs import home_codes, pay_floor
 from cvforge.text import fold_accents
 
 REGIONS = {
@@ -89,6 +91,8 @@ class Verdict:
     results: list[RuleResult]
     warnings: list[str] = field(default_factory=list)
     caveats: dict = field(default_factory=dict)
+    risks: list[str] = field(default_factory=list)
+    ireland: dict | None = None
 
 
 def _fold(text: str) -> str:
@@ -183,22 +187,37 @@ def _location(req: dict, company: dict | None, home: set[str]) -> RuleResult:
 # Rule 3: salary
 
 
+def _market(req: dict) -> str | None:
+    """Pay floor market of a job: IE for Irish jobs, else its first home-country code."""
+    if is_irish_job(req):
+        return "IE"
+    region_code = {region: code for code, region in CODE_REGION.items()}
+    regions = (region_class(t) for t in req["location"].get("job_countries") or [])
+    return next((region_code[r] for r in regions if r in region_code), None)
+
+
 def _salary(req: dict, master: dict, rates: Rates | None,
             clt_factor: float) -> tuple[RuleResult, list[str]]:
     salary = req.get("salary") or {}
     amount = salary.get("max") if salary.get("max") is not None else salary.get("min")
     if amount is None:
         return RuleResult("salary", True, "no salary stated", None), []
-    floor = (master.get("x-preferences") or {}).get("payFloor")
+    market = _market(req)
+    floor = pay_floor(master, market)
     if not floor:
+        if market == "IE":
+            return RuleResult("salary", True, "no personal floor for Ireland; permit floors "
+                                              "checked by the permit rule", salary.get("quote")), []
         return RuleResult("salary", True, "no pay floor set", salary.get("quote")), []
+    which = "max" if salary.get("max") is not None else "min"
+    stated = f"{which} {amount:g} {salary['currency'].upper()}/{salary['period']}"
+    if market == "IE" and floor["currency"].upper() == "EUR" and floor["period"] == "year":
+        return _salary_eur_year(salary, amount, stated, floor, rates)
     if rates is None:
         raise MoneyError("currency rates are needed for the salary rule")
     contract = (salary.get("contract") or "unknown").lower()
     if contract == "unknown":  # an Employer of Record in Brazil hires through CLT
         contract = HIRING_CONTRACT.get((req.get("hiring_model") or {}).get("type"), contract)
-    which = "max" if salary.get("max") is not None else "min"
-    stated = f"{which} {amount:g} {salary['currency'].upper()}/{salary['period']}"
     try:
         offered = pj_equivalent(
             monthly(Money(amount, salary["currency"].upper(), salary["period"]), "BRL", rates),
@@ -212,6 +231,26 @@ def _salary(req: dict, master: dict, rates: Rates | None,
     message = (f"{stated}{basis} is "
                f"{offered:,.0f} BRL/month against a floor of {floor_brl:,.0f} BRL/month")
     return RuleResult("salary", offered >= floor_brl, message, salary.get("quote")), []
+
+
+def _salary_eur_year(salary: dict, amount: float, stated: str, floor: dict,
+                     rates: Rates | None) -> tuple[RuleResult, list[str]]:
+    """An Irish job against a EUR/year floor: compared in EUR/year, no CLT basis."""
+    money = Money(amount, salary["currency"].upper(), salary["period"])
+    if money.currency == "EUR" and money.period == "year":
+        offered = float(amount)
+    else:
+        try:
+            if rates is None:
+                raise NoRate(money.currency)
+            offered = annual(money, "EUR", rates)
+        except NoRate as exc:
+            warning = (f"no exchange rate for {exc.currency}: "
+                       "salary not checked against the pay floor")
+            return RuleResult("salary", True, f"{stated}: {exc}", salary.get("quote")), [warning]
+    message = (f"{stated} is {offered:,.0f} EUR/year against a floor of "
+               f"{floor['amount']:,.0f} EUR/year")
+    return RuleResult("salary", offered >= floor["amount"], message, salary.get("quote")), []
 
 
 # Rule 4: languages
@@ -320,15 +359,29 @@ def _caveats(req: dict, text: str) -> dict:
 
 
 def check(req: dict, posting: Posting, master: dict, company: dict | None, rates: Rates | None,
-          today: date, *, clt_factor: float) -> Verdict:
-    """Apply the four rules in order. Languages only ever warn."""
+          today: date, *, clt_factor: float, record: tuple[int, int] | None = None,
+          table: PermitTable | None = None, dete_imported: bool = True) -> Verdict:
+    """Apply the four rules in order. Languages only ever warn.
+
+    An Irish job (not a home country for the candidate) gets the permit rule in place of
+    the location rule.
+    """
+    home = home_regions(master)
+    risks: list[str] = []
+    ireland = None
+    permit_warnings: list[str] = []
+    if is_irish_job(req) and "ireland" not in home:
+        table_warnings: list[str] = []
+        if table is None:
+            table, table_warnings = load_permit_table(today)
+        place, risks, permit_warnings, ireland = permit_rule(
+            req, master, record, rates, table, dete_imported=dete_imported)
+        permit_warnings = permit_warnings + table_warnings
+    else:
+        place = _location(req, company, home)
     salary, salary_warnings = _salary(req, master, rates, clt_factor)
     languages, warnings = _languages(req, master)
-    results = [
-        _years(req, master, today),
-        _location(req, company, home_regions(master)),
-        salary,
-        languages,
-    ]
-    return Verdict(all(r.ok for r in results), results, salary_warnings + warnings,
-                   _caveats(req, posting_text(posting)))
+    results = [_years(req, master, today), place, salary, languages]
+    return Verdict(all(r.ok for r in results), results,
+                   permit_warnings + salary_warnings + warnings,
+                   _caveats(req, posting_text(posting)), risks, ireland)
