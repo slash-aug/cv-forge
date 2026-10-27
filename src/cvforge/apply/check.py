@@ -11,16 +11,20 @@ from cvforge.apply.requirements import normalise_quote, posting_text
 from cvforge.apply.requirements import quotes as requirement_quotes
 from cvforge.money.normalise import Money, monthly, pj_equivalent
 from cvforge.money.rates import MoneyError, NoRate, Rates
+from cvforge.profile.prefs import home_codes
 from cvforge.text import fold_accents
 
 REGIONS = {
     "brazil": ("br", "brazil", "brasil"),
     "portugal": ("pt", "portugal"),
+    "ireland": ("ie", "ireland", "republic of ireland", "dublin", "cork", "galway", "limerick",
+                "waterford"),
+    "eu": ("eu", "eea", "european union", "emea"),
     "latam": ("latam", "latin america", "south america", "americas", "south and central america"),
     "worldwide": ("worldwide", "anywhere", "global", "remote (global)", "international"),
 }
 TOKEN_REGION = {token: region for region, tokens in REGIONS.items() for token in tokens}
-HOME = {"brazil", "portugal"}
+CODE_REGION = {"BR": "brazil", "PT": "portugal", "IE": "ireland"}
 OPEN = {"latam", "worldwide"}
 
 LANG_NAMES = {
@@ -94,12 +98,31 @@ def region_class(token: str) -> str:
     return TOKEN_REGION.get(_fold(token), "other")
 
 
-HOME_WORD = re.compile(r"\b(brasil|brazil|br|portugal|pt)\b")
+def home_regions(master: dict) -> set[str]:
+    """Regions of the countries where the candidate can work freely, from the profile."""
+    return {CODE_REGION[c] for c in home_codes(master) if c in CODE_REGION}
 
 
-def home_named(quote: str | None) -> set[str]:
-    """Brazil and Portugal as named in a quote ("must reside in Brazil" names his own country)."""
-    return {region_class(w) for w in HOME_WORD.findall(_fold(quote or ""))} & HOME
+def home_named(quote: str | None, home: set[str]) -> set[str]:
+    """Home regions named in a quote ("must reside in Brazil" names his own country)."""
+    tokens = sorted((t for r in home for t in REGIONS[r]), key=len, reverse=True)
+    if not tokens:
+        return set()
+    word = re.compile(r"\b(" + "|".join(map(re.escape, tokens)) + r")\b")
+    return {region_class(w) for w in word.findall(_fold(quote or ""))} & home
+
+
+def is_irish_job(req: dict) -> bool:
+    loc = req["location"]
+    if any(region_class(t) == "ireland" for t in loc.get("job_countries") or []):
+        return True
+    allowed = loc.get("allowed") or []
+    return (loc["workplace"] == "remote" and bool(allowed)
+            and all(region_class(t) == "ireland" for t in allowed))
+
+
+def _home_names(home: set[str]) -> str:
+    return " or ".join(sorted(h.title() for h in home))
 
 
 # Rule 1: years
@@ -119,7 +142,7 @@ def _years(req: dict, master: dict, today: date) -> RuleResult:
 # Rule 2: location, spec 7.3 order 1 to 7
 
 
-def _location(req: dict, company: dict | None) -> RuleResult:
+def _location(req: dict, company: dict | None, home: set[str]) -> RuleResult:
     loc, sponsorship = req["location"], req["sponsorship"]
     workplace = loc["workplace"]
     remote = workplace == "remote"
@@ -132,14 +155,14 @@ def _location(req: dict, company: dict | None) -> RuleResult:
     if sponsorship["status"] == "refused":
         # Rule 1 skips only a requirement for a country he is not in: a residence or work-right
         # requirement that names Brazil or Portugal limits the job to his own country.
-        home = home_named(sponsorship.get("quote"))
-        if not home:
+        named = home_named(sponsorship.get("quote"), home)
+        if not named:
             return result(False, "sponsorship or right to work refused", sponsorship.get("quote"))
         return result(True, f"{workplace} job requiring residence or work rights in "
-                            f"{' or '.join(sorted(h.title() for h in home))}",
+                            f"{_home_names(named)}",
                       sponsorship.get("quote"))
-    if countries & HOME or (remote and allowed & HOME):
-        return result(True, f"{workplace} job in Brazil or Portugal")
+    if countries & home or (remote and allowed & home):
+        return result(True, f"{workplace} job in {_home_names(home)}")
     if remote and allowed & OPEN:
         return result(True, "remote, open to Latin America or worldwide")
     if sponsorship["status"] == "offered":
@@ -302,7 +325,7 @@ def check(req: dict, posting: Posting, master: dict, company: dict | None, rates
     languages, warnings = _languages(req, master)
     results = [
         _years(req, master, today),
-        _location(req, company),
+        _location(req, company, home_regions(master)),
         salary,
         languages,
     ]
