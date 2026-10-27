@@ -13,7 +13,7 @@ from cvforge.text import fold_accents
 
 SCHEMA_FILE = "companies.schema.json"
 ATS = ("ashby", "greenhouse", "lever", "teamtailor", "gupy", "other")
-SPONSOR_TYPES = ("pt-tech-visa", "nl-ind", "uk-sponsor", "other")
+SPONSOR_TYPES = ("pt-tech-visa", "nl-ind", "uk-sponsor", "ie-permit", "other")
 LEGAL_SUFFIXES = frozenset(
     {"ltd", "lda", "inc", "llc", "gmbh", "sa", "s a", "bv", "plc", "ltda", "eireli", "me"}
 )
@@ -25,13 +25,14 @@ class CompanyError(ProfileError):
     pass
 
 
-def name_key(name: str) -> str:
+def name_key(name: str, extra_suffixes: frozenset[str] = frozenset()) -> str:
     """Case, accent and punctuation-insensitive name without trailing legal suffixes."""
+    suffixes = LEGAL_SUFFIXES | extra_suffixes
     words = NON_WORD.sub(" ", fold_accents(name)).replace("_", " ").split()
     while len(words) > 1:
-        if " ".join(words[-2:]) in LEGAL_SUFFIXES and len(words) > 2:
+        if " ".join(words[-2:]) in suffixes and len(words) > 2:
             words = words[:-2]
-        elif words[-1] in LEGAL_SUFFIXES:
+        elif words[-1] in suffixes:
             words = words[:-1]
         else:
             break
@@ -74,7 +75,8 @@ def _stringify(entry):
 
 def _for_yaml(entry: dict) -> dict:
     out = {k: entry[k] for k in FIELDS if k in entry}
-    out["sponsor"] = [{**s, "date": date.fromisoformat(s["date"])} for s in out.get("sponsor", [])]
+    out["sponsor"] = [{k: date.fromisoformat(v) if k == "date" else v for k, v in s.items()}
+                      for s in out.get("sponsor", [])]
     return out
 
 

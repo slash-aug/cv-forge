@@ -50,3 +50,15 @@ def get(url: str, *, timeout: float = 20.0) -> str:
             return decode_page(response.read())
     except (urllib.error.URLError, OSError, ValueError) as exc:
         raise FetchError(f"could not fetch {url}: {exc}") from exc
+
+
+def get_bytes(url: str, *, timeout: float = 20.0) -> bytes:
+    """Like get, without decoding (spreadsheets and other binary files)."""
+    if is_linkedin(url):
+        raise FetchError(f"LinkedIn pages are never fetched: {url}")
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    try:
+        with OPENER.open(request, timeout=timeout) as response:
+            return response.read()
+    except (urllib.error.URLError, OSError, ValueError) as exc:
+        raise FetchError(f"could not fetch {url}: {exc}") from exc

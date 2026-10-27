@@ -735,10 +735,31 @@ def _format_company(entry: dict) -> str:
     lines.append(f"ats: {entry.get('ats') or '-'}")
     lines.append("sponsor:" + ("" if entry["sponsor"] else " -"))
     for s in entry["sponsor"]:
-        lines.append(f"  {s['type']} ({s['source']}, {s['date']})")
+        count = f", {s['count']} permits" if "count" in s else ""
+        lines.append(f"  {s['type']} ({s['source']}, {s['date']}{count})")
     if entry.get("notes"):
         lines.append(f"notes: {entry['notes']}")
     return "\n".join(lines)
+
+
+def _import_ie(args) -> int:
+    from cvforge.apply import dete
+
+    data_dir = load_config().data_dir
+    years = args.year or [_today().year, _today().year - 1]
+    if args.file and len(years) != 1:
+        print("--file needs exactly one --year", file=sys.stderr)
+        return 1
+    failed = False
+    for year in years:
+        try:
+            result = dete.import_year(data_dir, year, file=Path(args.file) if args.file else None)
+        except (apply_http.FetchError, dete.DeteError, ValueError) as exc:
+            print(f"ie {year}: {exc}", file=sys.stderr)
+            failed = True
+            continue
+        print(f"ie {year}: {result.employers} employers, {len(result.matched)} registry matches")
+    return 1 if failed else 0
 
 
 def cmd_company(args) -> int:
@@ -747,6 +768,8 @@ def cmd_company(args) -> int:
         if args.action == "add":
             entry = add_company(path, args.name, careers_url=args.careers, ats=args.ats,
                                 aliases=args.alias)
+        elif args.action == "import-ie":
+            return _import_ie(args)
         elif args.action == "sponsor":
             day = date.fromisoformat(args.date) if args.date else _today()
             entry = add_sponsor(path, args.name, type=args.type, source=args.source, day=day)
@@ -835,6 +858,9 @@ def _parser() -> argparse.ArgumentParser:
     c.add_argument("--type", required=True)
     c.add_argument("--source", required=True)
     c.add_argument("--date")
+    c = company.add_parser("import-ie", help="import DETE employment permit statistics")
+    c.add_argument("--year", type=int, action="append")
+    c.add_argument("--file", help="a downloaded companies xlsx instead of fetching")
     c = company.add_parser("show", help="show a company")
     c.add_argument("name")
     p.set_defaults(func=cmd_company)
