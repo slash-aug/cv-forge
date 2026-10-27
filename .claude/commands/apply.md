@@ -36,7 +36,7 @@ Ireland is the primary market. When the job is in Ireland, or remote and limited
    ```
    .venv/bin/cvforge company import-ie
    ```
-   It reads the DETE employment permit statistics and marks the employers that hold permits, with the count and the matched names. Pass `--year <YYYY>` for a specific year. Without this data the check says "no permit record (DETE data not imported)".
+   It reads the DETE employment permit statistics and marks the employers that hold permits, with the count and the matched names. Pass `--year <YYYY>` for a specific year. Without this data the check says "no permit record (DETE data not imported)". Show the candidate the matched DETE names it prints under each company, and any `possible match` lines: a possible match is not marked until he confirms it, and then you add the DETE name as an alias (`cvforge company add` with `--alias`) and rerun the import.
 2. **Requirements fields** (Step 2). Besides the usual facts, fill `work_authorisation`, `contract`, `english_test` and `degree` when the posting says something, each with a quote, and `occupation_soc` with a one-line reason.
 3. **Check** (Step 3). The check prints `RISK` lines for the permit rule and stores them in `verdict.json`. Read every `RISK` line out to the candidate before tailoring, in plain words: the permit tier, the salary against it, the degree recognition and the sponsor record.
 4. **Salary** (Step 7). The salary sources are the 2026 Irish guides: Morgan McKinley, Collins McNicholas, Stelfox, HERO, Nicoll Curtin and Robert Half. Ask for the market rate, never the floor. The suggestion is lifted to the permit floor and prints the "Permit tier".
@@ -120,7 +120,8 @@ english_test:
   {tests: [IELTS], level: "6.5", quote: "IELTS 6.5 or equivalent"}
 degree:                      # required | or-equivalent | preferred | none
   {requirement: preferred, quote: "A degree is preferred"}
-occupation_soc: "2136"       # SOC code from the role title, no quote; say why in a YAML comment
+occupation_soc:              # SOC code from the role title, no quote; the reason in one line
+  {code: "2136", reason: "Software Engineer designs and builds software"}
 ```
 
 Rulings:
@@ -131,19 +132,18 @@ Rulings:
 - **Irish jobs:**
   - `work_authorisation`: use the screening phrases from "Ireland first". A requirement to already hold Irish or EU work rights, with no sponsorship, is `required-without-sponsorship`; "EU/EEA citizens only" is `eu-only`. A refused sponsorship with an Irish quote counts the same.
   - `contract`: `contractor` is a skip unless the posting names an Employer of Record. Give `months` for a fixed term.
-  - `occupation_soc`: classify from the role title, not from the company. The CSOL ICT codes are 1136, 2133, 2134, 2135, 2136, 2137 and 2139 (2423 and 2425 for big data only; 3131 and 3132 are not on the list). Add the one-line reason in a comment.
+  - `occupation_soc`: classify from the role title, not from the company. Write `{code: "<SOC>", reason: "<one line>"}`; the reason says why the title fits the code. The CSOL ICT codes are 1136, 2133, 2134, 2135, 2136, 2137 and 2139 (2423 and 2425 for big data only; 3131 and 3132 are not on the list).
   - Leave out a field the posting is silent on.
+- **sponsorship:** `offered` when the posting mentions relocation support or visa sponsorship, `silent` when it says nothing either way, `refused` when it requires work rights the candidate lacks in the job's country. Quote it. For Ireland he needs a permit, so Irish work-rights requirements follow the Irish rules above.
+- **hiring_model, timezone, travel:** optional, each with an exact quote. `eor` is CLT through an Employer of Record, `contractor` is PJ. The candidate is fully flexible on hours, so time zone and travel are information only and never cause a skip. Look for "reside", "eligible", "overlap" and "travel" in the posting.
+- **languages_required:** ISO code (`en`, `pt`, `es`, `de`, ...), level as written (`C1`, `fluent`, `native`) when stated.
 
 ### Brazil and Portugal
 
 - **sponsorship:**
-  - `offered`: the posting mentions relocation support or visa sponsorship. Quote it.
-  - `refused`: the posting says there is no visa sponsorship, **or** that the candidate must already have the right to work in, or reside in, a country **other than Brazil or Portugal**. Write these as `refused` with that quote. In general, "refused" means a requirement for work rights the candidate lacks in the job's country; for Ireland he needs a permit, so Irish work-rights requirements follow the Irish rules above.
+  - `refused`: the posting says there is no visa sponsorship, **or** that the candidate must already have the right to work in, or reside in, a country **other than Brazil or Portugal**. Write these as `refused` with that quote.
   - A residence or work-right requirement for **Brazil or Portugal** ("must reside in Brazil", "necessário residir no Brasil", "right to work in Portugal") is **not** `refused`: the check treats both as home countries. For a remote job put the country in `location.allowed`; for a hybrid or on-site job put it in `location.job_countries`. Leave `sponsorship.status` as `silent` unless the posting says something else about sponsorship.
-  - `silent`: nothing either way.
 - **salary.contract:** (Brazil) `clt` or `pj` only when the posting says so (Brazilian postings); otherwise `unknown`.
-- **hiring_model, timezone, travel:** optional, each with an exact quote. `eor` is CLT through an Employer of Record, `contractor` is PJ. The candidate is fully flexible on hours, so time zone and travel are information only and never cause a skip. Look for "reside", "eligible", "overlap" and "travel" in the posting.
-- **languages_required:** ISO code (`en`, `pt`, `es`, `de`, ...), level as written (`C1`, `fluent`, `native`) when stated.
 
 ---
 
