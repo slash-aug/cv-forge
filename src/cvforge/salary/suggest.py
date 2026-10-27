@@ -16,7 +16,7 @@ from cvforge.money.normalise import (
     monthly,
     pj_equivalent,
 )
-from cvforge.money.rates import Rates, convert
+from cvforge.money.rates import MoneyError, Rates, convert
 
 POSITION = 0.75
 ROUND_TO = {"hour": 1, "month": 100, "year": 1000}
@@ -48,7 +48,8 @@ def _num(value) -> float | None:
     return None if value in (None, "") else float(value)
 
 
-def _range(posted: dict | None, market: list[dict], floor: Money, rates: Rates):
+def _range(posted: dict | None, market: list[dict], floor: Money | None, rates: Rates,
+           market_period: str = "month"):
     """(low, high, currency, period, basis, sources, contract)"""
     if posted:
         lo, hi = _num(posted.get("min")), _num(posted.get("max"))
@@ -60,28 +61,39 @@ def _range(posted: dict | None, market: list[dict], floor: Money, rates: Rates):
     rows = [r for r in market if _num(r.get("low")) is not None and _num(r.get("high")) is not None]
     if rows:
         cur = rows[0]["currency"]
-        lows = [monthly(Money(float(r["low"]), r["currency"], r["period"]), cur, rates) for r in rows]
-        highs = [monthly(Money(float(r["high"]), r["currency"], r["period"]), cur, rates)
+        to_period = monthly if market_period == "month" else annual
+        lows = [to_period(Money(float(r["low"]), r["currency"], r["period"]), cur, rates)
+                for r in rows]
+        highs = [to_period(Money(float(r["high"]), r["currency"], r["period"]), cur, rates)
                  for r in rows]
         src = [f"{r['source']} {r['year']}".strip() for r in rows]
-        return min(lows), max(highs), cur, "month", "market", src, "unknown"
+        return min(lows), max(highs), cur, market_period, "market", src, "unknown"
+    if floor is None:
+        raise MoneyError("no posted salary, market rows or pay floor to suggest from")
     return (floor.amount, floor.amount, floor.currency, floor.period, "floor",
             ["payFloor (candidate minimum)"], "unknown")
 
 
-def suggest(posted: dict | None, market: list[dict], floor: Money, rates: Rates,
-            *, clt_factor: float) -> Suggestion:
-    low, high, cur, period, basis, sources, contract = _range(posted, market, floor, rates)
+def suggest(posted: dict | None, market: list[dict], floor: Money | None, rates: Rates,
+            *, clt_factor: float, min_eur_year: float | None = None) -> Suggestion:
+    low, high, cur, period, basis, sources, contract = _range(
+        posted, market, floor, rates, "year" if min_eur_year is not None else "month")
     amount = _round(low + POSITION * (high - low), period)
     factor = clt_factor if contract == "clt" else 1.0
-    floor_brl = monthly(floor, "BRL", rates)
-    brl = monthly(Money(amount, cur, period), "BRL", rates)
-    if pj_equivalent(brl, contract, clt_factor) < floor_brl:
-        # Lift to the floor on the contract's own basis, rounding up so it stays above.
-        per_month = convert(floor_brl / factor, "BRL", cur, rates)
-        raw = per_month if period == "month" else monthly_to_period(per_month, period)
+    if floor is not None:
+        floor_brl = monthly(floor, "BRL", rates)
+        brl = monthly(Money(amount, cur, period), "BRL", rates)
+        if pj_equivalent(brl, contract, clt_factor) < floor_brl:
+            # Lift to the floor on the contract's own basis, rounding up so it stays above.
+            per_month = convert(floor_brl / factor, "BRL", cur, rates)
+            raw = per_month if period == "month" else monthly_to_period(per_month, period)
+            amount = math.ceil(raw / ROUND_TO[period]) * ROUND_TO[period]
+            sources = [*sources, "lifted to payFloor"]
+    if min_eur_year is not None and annual(Money(amount, cur, period), "EUR", rates) < min_eur_year:
+        per_month = convert(min_eur_year / MONTHS_PER_YEAR, "EUR", cur, rates)
+        raw = monthly_to_period(per_month, period)
         amount = math.ceil(raw / ROUND_TO[period]) * ROUND_TO[period]
-        sources = [*sources, "lifted to payFloor"]
+        sources = [*sources, f"lifted to CSEP floor {min_eur_year:,.0f}"]
     brl_m, eur_y, usd_y = displays(amount, cur, period, rates)
     return Suggestion(basis, amount, cur, period, brl_m, eur_y, usd_y, sources)
 

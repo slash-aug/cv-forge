@@ -25,6 +25,7 @@ from cvforge.apply.companies import (
 )
 from cvforge.apply.dete import dete_imported, permit_record
 from cvforge.apply.experience import engineering_months
+from cvforge.apply.ie_permits import load_permit_table
 from cvforge.apply.intake import (
     IntakeError,
     fetch_posting,
@@ -32,6 +33,7 @@ from cvforge.apply.intake import (
     refuse_linkedin,
     resolve_shortlink,
 )
+from cvforge.apply.ireland import route_for
 from cvforge.apply.posting import Posting, canonical_url
 from cvforge.apply.requirements import load_requirements, posting_text, quote_problems
 from cvforge.apply.seed import seed_ie
@@ -45,7 +47,7 @@ from cvforge.kit.render import render_kit
 from cvforge.money.normalise import Money
 from cvforge.money.rates import MoneyError, load_rates
 from cvforge.profile.model import ProfileError, load_master, localized
-from cvforge.profile.prefs import pay_floor
+from cvforge.profile.prefs import degree_recognised, pay_floor
 from cvforge.render.cv import build_cv_view, render_view
 from cvforge.render.letter import ASSETS_DIR, letter_context, render_letter_context
 from cvforge.salary.market import load_market, match_market
@@ -633,13 +635,19 @@ def cmd_salary(args) -> int:
     req = load_requirements(req_path) if req_path.exists() else None
     master = load_master(Path(args.master) if args.master
                          else cfg.data_dir / "profile" / "master.yaml")
-    pay_floor = (master.get("x-preferences") or {}).get("payFloor")
-    if not pay_floor:
-        print("master has no x-preferences.payFloor", file=sys.stderr)
-        return 1
-    floor = Money(pay_floor["amount"], pay_floor["currency"], pay_floor["period"])
+    irish = bool(req) and is_irish_job(req)
+    if irish:
+        pf = pay_floor(master, "IE")
+        table, _ = load_permit_table(_today())
+    else:
+        pf = (master.get("x-preferences") or {}).get("payFloor")
+        if not pf:
+            print("master has no x-preferences.payFloor", file=sys.stderr)
+            return 1
+    floor = (Money(pf["amount"], pf["currency"], pf["period"])
+             if pf else None)
     countries = ((req or {}).get("location") or {}).get("job_countries") or []
-    country = countries[0] if countries else (
+    country = "IE" if irish else countries[0] if countries else (
         (master.get("basics") or {}).get("location") or {}).get("countryCode", "")
     market_path = Path(args.market) if args.market else cfg.data_dir / "salary" / "market.csv"
     rows = match_market(load_market(market_path), role=posting.title,
@@ -656,15 +664,16 @@ def cmd_salary(args) -> int:
     try:
         rates = load_rates(cfg.data_dir / "salary", _today(), apply_http.get)
         s = suggest((req or {}).get("salary") if req and _salary_stated(req) else None,
-                    rows, floor, rates, clt_factor=cfg.clt_factor)
+                    rows, floor, rates, clt_factor=cfg.clt_factor,
+                    min_eur_year=table.csep_csol_degree if irish else None)
         if confirm_amount is not None:
             amount = confirm_amount
             contract = ((req or {}).get("salary") or {}).get("contract") \
                 if s.basis == "posting" else "unknown"
-            if below_floor(amount, s.currency, s.period, contract or "unknown", floor, rates,
+            if floor is not None and below_floor(amount, s.currency, s.period, contract or "unknown", floor, rates,
                            clt_factor=cfg.clt_factor):
                 print(f"warning: {amount:,.0f} {s.currency}/{s.period} is below your pay floor "
-                      f"({pay_floor['amount']} {pay_floor['currency']}/{pay_floor['period']})"
+                      f"({pf['amount']} {pf['currency']}/{pf['period']})"
                       f"{' (CLT basis x' + str(cfg.clt_factor) + ')' if contract == 'clt' else ''}",
                       file=sys.stderr)
             brl, eur, usd = displays(amount, s.currency, s.period, rates)
@@ -686,6 +695,9 @@ def cmd_salary(args) -> int:
     print(f"  Rates: ECB {rates.day}")
     for src in s.sources:
         print(f"  Source: {src}")
+    if irish:
+        soc = ((req or {}).get("occupation_soc") or {}).get("code")
+        print(f"  Permit tier: {route_for(s.eur_year, soc, degree_recognised(master), table)}")
     if explanation:
         print(f"  Why: {explanation}")
     print("confirmed" if data["confirmed"] else "not confirmed: rerun with --confirm [AMOUNT]")

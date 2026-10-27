@@ -330,3 +330,69 @@ def test_new_note_replaces_the_old_one(env):
 def test_no_note_means_no_explanation(env):
     assert _run() == 0
     assert "explanation" not in json.loads((env / "salary.json").read_text(encoding="utf-8"))
+
+
+# Ireland
+
+
+def _ie_master(tmp_path, floor):
+    master = yaml.safe_load(PERSONA.read_text(encoding="utf-8"))
+    master["x-preferences"] = {**master.get("x-preferences", {}), "payFloor": floor}
+    path = tmp_path / "ie-master.yaml"
+    path.write_text(yaml.safe_dump(master), encoding="utf-8")
+    return path
+
+
+def _ie_req(app, **extra):
+    (app / "requirements.yaml").write_text(yaml.safe_dump({
+        "years": [], "location": {"workplace": "onsite", "job_countries": ["IE"], "allowed": []},
+        "sponsorship": {"status": "silent"},
+        "occupation_soc": {"code": "2136", "reason": "Software Engineer"}, **extra,
+    }), encoding="utf-8")
+
+
+def test_ie_suggestion_lifted_to_csep_floor():
+    market = [row(country="IE", currency="EUR", period="year", low="30000", high="40000")]
+    s = suggest(None, market, None, RATES, clt_factor=1.4, min_eur_year=40904)
+    assert s.currency == "EUR" and s.period == "year"
+    assert s.amount == 41000
+    assert "lifted to CSEP floor 40,904" in s.sources
+
+
+def test_ie_no_lift_when_already_above():
+    market = [row(country="IE", currency="EUR", period="year", low="60000", high="80000")]
+    s = suggest(None, market, None, RATES, clt_factor=1.4, min_eur_year=40904)
+    assert s.amount == 75000 and s.period == "year" and not any("CSEP" in x for x in s.sources)
+
+
+def test_ie_no_personal_floor_is_ok(env, tmp_path, capsys):
+    _ie_req(env)
+    market = tmp_path / "ie.csv"
+    market.write_text(
+        ",".join(MARKET_COLUMNS) + "\nfrontend engineer,senior,IE,EUR,year,30000,32000,40000,x,2026\n",
+        encoding="utf-8")
+    master = _ie_master(tmp_path, {"BR": {"amount": 3000, "currency": "BRL", "period": "month"}})
+    code = cli.main(["salary", "acme-frontend", "--master", str(master), "--market", str(market)])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "Permit tier: csep-if-degree" in out
+    assert "lifted to CSEP floor 40,904" in out
+    assert json.loads((env / "salary.json").read_text(encoding="utf-8"))["currency"] == "EUR"
+
+
+def test_ie_legacy_brl_floor_applies(env, tmp_path, capsys):
+    _ie_req(env)
+    market = tmp_path / "ie.csv"
+    market.write_text(
+        ",".join(MARKET_COLUMNS) + "\nfrontend engineer,senior,IE,EUR,year,30000,32000,40000,x,2026\n",
+        encoding="utf-8")
+    master = _ie_master(tmp_path, {"amount": 3000, "currency": "BRL", "period": "month"})
+    assert cli.main(["salary", "acme-frontend", "--master", str(master),
+                     "--market", str(market)]) == 0
+    assert "Permit tier:" in capsys.readouterr().out
+
+
+def test_br_salary_unchanged():
+    s = suggest(posted(4500, 7500), [], FLOOR, RATES, clt_factor=1.4)
+    assert (s.basis, s.amount, s.currency, s.period) == ("posting", 6800, "USD", "month")
+    assert not any("CSEP" in x for x in s.sources)
