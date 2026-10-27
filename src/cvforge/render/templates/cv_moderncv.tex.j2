@@ -63,7 +63,12 @@
 \patchcmd{\makehead}{\firstnamestyle{\@firstname\ }\lastnamestyle{\@lastname}}%
   {\cvfitname{\firstnamestyle{\@firstname\ }\lastnamestyle{\@lastname}}}{}%
   {\PackageError{cvforge}{cannot patch moderncv \string\makehead\space for the name}{}}
+%% if contact.permit_line is defined and contact.permit_line
+% The permit status goes on its own centred line under the title, before the contact items.
+\patchcmd{\makehead}{\titlestyle{~|~\@title}}{\\[0.15em]\titlestyle{\@title}\\[0.15em]{\addressfont\color{addresscolor}\VAR{contact.permit_line | tex}}}{}%
+%% else
 \patchcmd{\makehead}{\titlestyle{~|~\@title}}{\\[0.15em]\titlestyle{\@title}}{}%
+%% endif
   {\PackageError{cvforge}{cannot patch moderncv \string\makehead\space for the title line}{}}
 % Keep-with-next, like needspace's \Needspace: start a new page before a heading or an
 % entry unless #1 of space is left, so neither ends a page apart from what follows it.
@@ -147,6 +152,12 @@
 %% for item in languages
 \cvitem{\VAR{item.name | tex}}{\VAR{item.detail | tex}}
 %% endfor
+%% endif
+
+%% if references is defined and references
+\keepnext{3\baselineskip}
+\section{References}
+\cvitem{}{\VAR{references | tex}}
 %% endif
 
 \end{document}

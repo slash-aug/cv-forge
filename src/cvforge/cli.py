@@ -49,6 +49,7 @@ from cvforge.money.rates import MoneyError, load_rates
 from cvforge.profile.model import ProfileError, load_master, localized
 from cvforge.profile.prefs import degree_recognised, pay_floor
 from cvforge.render.cv import build_cv_view, render_view
+from cvforge.render.irish import Region, ireland_region, irish_city
 from cvforge.render.letter import ASSETS_DIR, letter_context, render_letter_context
 from cvforge.salary.market import load_market, match_market
 from cvforge.salary.suggest import Suggestion, below_floor, displays, suggest
@@ -158,6 +159,22 @@ def cmd_audit(args) -> int:
     return 1 if findings else 0
 
 
+def _region(choice: str | None, master: dict, app_dir: Path | None) -> Region | None:
+    """The CV region: IE or none as asked, else IE when the application's job is in Ireland."""
+    if choice == "none":
+        return None
+    req_path = app_dir / "requirements.yaml" if app_dir else None
+    req = load_requirements(req_path) if req_path and req_path.exists() else None
+    if choice is None and not (req and is_irish_job(req)):
+        return None
+    ireland = None
+    verdict_path = app_dir / "verdict.json" if app_dir else None
+    if verdict_path and verdict_path.exists():
+        ireland = json.loads(verdict_path.read_text(encoding="utf-8")).get("ireland")
+    return ireland_region(master, city=irish_city(req) if req else None, ireland=ireland,
+                          today=_today())
+
+
 def cmd_build(args) -> int:
     master = load_master(Path(args.master))
     tailored_path = Path(args.tailored)
@@ -166,8 +183,10 @@ def cmd_build(args) -> int:
     if findings:
         _print_findings(findings)
         return 1
-    view = build_cv_view(tailored, master)
-    letter = letter_context(tailored, master) if tailored.get("letter") and not args.no_letter else None
+    region = _region(args.region, master, tailored_path.resolve().parent)
+    view = build_cv_view(tailored, master, region)
+    letter = (letter_context(tailored, master, region=region)
+              if tailored.get("letter") and not args.no_letter else None)
     if _confidential_blocked(master, cv=view, letter=letter):
         return 1
     cfg = load_config()
@@ -201,7 +220,7 @@ def cmd_build(args) -> int:
 def cmd_master_cv(args) -> int:
     master = load_master(Path(args.master))
     tailored = untailored(master, args.lang, args.angle)
-    view = build_cv_view(tailored, master)
+    view = build_cv_view(tailored, master, _region(args.region, master, None))
     if _confidential_blocked(master, cv=view):
         return 1
     cfg = load_config()
@@ -845,12 +864,15 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--master", required=True)
     p.add_argument("--out")
     p.add_argument("--no-letter", action="store_true")
+    p.add_argument("--region", choices=["IE", "none"],
+                   help="market variant (default: IE when requirements.yaml names an Irish job)")
     p.set_defaults(func=cmd_build)
     p = sub.add_parser("master-cv", help="build an untailored full CV for review")
     p.add_argument("master")
     p.add_argument("--lang", required=True, choices=["en", "pt-BR", "pt-PT"])
     p.add_argument("--angle")
     p.add_argument("--out")
+    p.add_argument("--region", choices=["IE", "none"], default="none", help="market variant")
     p.set_defaults(func=cmd_master_cv)
     p = sub.add_parser("guard", help="privacy and attribution checks for git hooks")
     guard = p.add_subparsers(dest="what", required=True)
