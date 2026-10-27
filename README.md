@@ -89,7 +89,8 @@ Requires Python 3.12 or newer and a LaTeX setup (see below). If your system `pyt
 git clone <this repository> cv-forge && cd cv-forge
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e '.[dev]'
-git config core.hooksPath .githooks        # enable the privacy hooks
+git config core.hooksPath .githooks        # privacy hooks, and CI checks before each push
+scripts/check.sh                           # the CI checks, run by hand
 
 cvforge validate examples/persona/master.yaml
 cvforge build examples/persona/tailored.yaml \
