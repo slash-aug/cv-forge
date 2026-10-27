@@ -366,3 +366,109 @@ def test_cli_check_writes_risks_and_ireland(env, capsys):
     assert verdict["verdict"] == "pass"
     assert verdict["ireland"]["route"] == "csep-if-degree"
     assert verdict["risks"][0].startswith("CSEP only if")
+
+
+# Fixed term and salary ranges (final review)
+
+
+def test_fixed_term_unknown_length_forces_gep():
+    r = v(salary=75000, contract=("fixed-term", None))
+    assert r.passed and r.ireland["route"] == "gep"
+    assert "fixed term of unknown length; CSEP needs 2 years" in r.risks
+
+
+def test_range_straddling_csep_any_records_min_and_risk():
+    r = v(salary=75000, lo=55000)
+    assert r.passed and r.ireland["route"] == "csep"
+    assert r.ireland["salary_eur_year"] == 75000 and r.ireland["salary_eur_year_min"] == 55000
+    assert "CSEP only if the offer is at least 68,911" in r.risks
+
+
+def test_range_straddling_degree_floor_with_degree_yes():
+    r = v(master=_degree("yes"), salary=45000, lo=38000)
+    assert r.ireland["route"] == "csep"
+    assert "CSEP only if the offer is at least 40,904" in r.risks
+
+
+def test_range_above_floor_has_no_offer_risk():
+    r = v(salary=80000, lo=70000)
+    assert r.ireland["salary_eur_year_min"] == 70000
+    assert not any(x.startswith("CSEP only if the offer") for x in r.risks)
+
+
+def test_max_only_salary_has_null_min():
+    assert v(salary=55000).ireland["salary_eur_year_min"] is None
+
+
+def test_ie_home_bypasses_permit_rule():
+    m = copy.deepcopy(IE_MASTER)
+    m["x-preferences"]["workRights"]["IE"] = {"status": "stamp4"}
+    r = v(master=m)
+    assert [x.rule for x in r.results] == ["years", "location", "salary", "languages"]
+    assert r.ireland is None and r.risks == [] and r.passed
+
+
+def test_legacy_brl_floor_ignored_for_irish_job():
+    m = copy.deepcopy(IE_MASTER)
+    m["x-preferences"]["payFloor"] = {"amount": 900000, "currency": "BRL", "period": "month"}
+    r = v(master=m, rates=None, salary=55000)
+    salary = next(x for x in r.results if x.rule == "salary")
+    assert salary.ok and r.passed
+    assert salary.message == ("no personal floor for Ireland; "
+                              "permit floors checked by the permit rule")
+    m["x-preferences"]["payFloor"] = {"default": {"amount": 900000, "currency": "BRL",
+                                                  "period": "month"}}
+    assert v(master=m, rates=None, salary=55000).passed
+
+
+def test_ie_floor_in_other_currency_compared_in_eur_year():
+    m = copy.deepcopy(IE_MASTER)
+    m["x-preferences"]["payFloor"] = {"IE": {"amount": 5000, "currency": "EUR",
+                                             "period": "month"}}
+    salary = next(x for x in v(master=m, salary=55000).results if x.rule == "salary")
+    assert not salary.ok and "60,000 EUR/year" in salary.message
+
+
+def _cli_app(env, r, description=IE_DESCRIPTION):
+    app = env / "applications" / "acme-senior-engineer"
+    posting(description=description).save(app)
+    (app / "requirements.yaml").write_text(yaml.safe_dump(r), encoding="utf-8")
+    tracker.upsert(env / "tracker.csv",
+                   {"slug": "acme-senior-engineer", "company": "Acme", "role": "Senior Engineer",
+                    "date": "2026-10-21", "status": "drafted"})
+    return app
+
+
+def _cli_master(env, pay_floor=None):
+    data = yaml.safe_load(PERSONA.read_text(encoding="utf-8"))
+    data["x-preferences"]["workRights"] = IE_MASTER["x-preferences"]["workRights"]
+    if pay_floor is not None:
+        data["x-preferences"]["payFloor"] = pay_floor
+    master = env / "ie-master.yaml"
+    master.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    return master
+
+
+def test_cli_irish_skip_exit_2_with_ireland_block(env, capsys):
+    r = ie_req(work_authorisation=("eu-only", "Hybrid, Dublin."))
+    r["salary"]["quote"] = "We pay 55000 EUR per year."
+    app = _cli_app(env, r)
+    assert cli.main(["check", "acme-senior-engineer", "--master", str(_cli_master(env))]) == 2
+    assert "SKIP permit: needs Irish/EU work rights without sponsorship" in capsys.readouterr().out
+    verdict = json.loads((app / "verdict.json").read_text(encoding="utf-8"))
+    assert verdict["verdict"] == "skip" and verdict["ireland"]["soc"] == "2136"
+
+
+def test_cli_irish_eur_year_with_legacy_floor_loads_no_rates(env, capsys):
+    r = ie_req()
+    r["salary"]["quote"] = "We pay 55000 EUR per year."
+    _cli_app(env, r)
+    for f in (env / "salary").glob("ecb-*.json"):
+        f.unlink()  # no rate cache and no network: a rates load would fail
+    master = _cli_master(env, {"amount": 3000, "currency": "BRL", "period": "month"})
+    assert cli.main(["check", "acme-senior-engineer", "--master", str(master)]) == 0
+    assert "PASS salary: no personal floor for Ireland" in capsys.readouterr().out
+
+
+def test_min_only_salary_stores_min():
+    assert v(salary=None, lo=45000).ireland["salary_eur_year_min"] == 45000

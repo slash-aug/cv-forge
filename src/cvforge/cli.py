@@ -47,7 +47,7 @@ from cvforge.kit.render import render_kit
 from cvforge.money.normalise import Money
 from cvforge.money.rates import MoneyError, load_rates
 from cvforge.profile.model import ProfileError, load_master, localized
-from cvforge.profile.prefs import degree_recognised, pay_floor
+from cvforge.profile.prefs import degree_recognised, ireland_pay_floor
 from cvforge.render.cv import build_cv_view, render_view
 from cvforge.render.irish import Region, ireland_region, irish_city
 from cvforge.render.letter import ASSETS_DIR, letter_context, render_letter_context
@@ -488,7 +488,7 @@ def _needs_rates(req: dict, master: dict, irish: bool) -> bool:
     if not irish:
         return True
     salary = req["salary"]
-    floor = pay_floor(master, "IE")
+    floor = ireland_pay_floor(master)
     eur_year = (salary["currency"] or "").upper() == "EUR" and salary["period"] == "year"
     floor_eur_year = floor is None or (floor["currency"].upper() == "EUR"
                                        and floor["period"] == "year")
@@ -673,7 +673,7 @@ def cmd_salary(args) -> int:
                          else cfg.data_dir / "profile" / "master.yaml")
     irish = bool(req) and is_irish_job(req)
     if irish:
-        pf = pay_floor(master, "IE")
+        pf = ireland_pay_floor(master)
         table, _ = load_permit_table(_today())
     else:
         pf = (master.get("x-preferences") or {}).get("payFloor")
@@ -713,6 +713,11 @@ def cmd_salary(args) -> int:
                       f"{' (CLT basis x' + str(cfg.clt_factor) + ')' if contract == 'clt' else ''}",
                       file=sys.stderr)
             brl, eur, usd = displays(amount, s.currency, s.period, rates)
+            if irish and eur < table.csep_csol_degree:
+                shown = "" if (s.currency, s.period) == ("EUR", "year") \
+                    else f" ({eur:,.0f} EUR/year)"
+                print(f"warning: {amount:,.0f} {s.currency}/{s.period}{shown} is below the CSEP "
+                      f"floor ({table.csep_csol_degree:,} EUR/year)", file=sys.stderr)
             s = Suggestion(s.basis, amount, s.currency, s.period, brl, eur, usd,
                            [*s.sources, "amount set by candidate"])
     except MoneyError as exc:

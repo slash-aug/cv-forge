@@ -68,3 +68,17 @@ def test_schema_rejects_unknown_status(tmp_path):
 def test_primary_market_and_degree_default():
     m = {"x-preferences": {"markets": ["ie", "BR"], "workRights": {"IE": {"status": "needs-permit"}}}}
     assert primary_market(m) == "IE" and degree_recognised(m) == "unknown" and self_apply(m) is False
+
+
+def test_empty_work_rights_keeps_default_home():
+    assert home_codes({"x-preferences": {"workRights": {}}}) == {"BR", "PT"}
+
+
+def test_ireland_pay_floor_only_explicit_ie_entry():
+    from cvforge.profile.prefs import ireland_pay_floor
+
+    ie = {"amount": 60000, "currency": "EUR", "period": "year"}
+    assert ireland_pay_floor({"x-preferences": {"payFloor": FLOOR}}) is None
+    assert ireland_pay_floor({"x-preferences": {"payFloor": {"default": FLOOR}}}) is None
+    assert ireland_pay_floor({"x-preferences": {"payFloor": {"IE": ie, "default": FLOOR}}}) == ie
+    assert ireland_pay_floor({"x-preferences": {}}) is None

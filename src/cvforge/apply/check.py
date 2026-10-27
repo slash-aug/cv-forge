@@ -13,7 +13,7 @@ from cvforge.apply.requirements import normalise_quote, posting_text
 from cvforge.apply.requirements import quotes as requirement_quotes
 from cvforge.money.normalise import Money, annual, monthly, pj_equivalent
 from cvforge.money.rates import MoneyError, NoRate, Rates
-from cvforge.profile.prefs import home_codes, pay_floor
+from cvforge.profile.prefs import home_codes, ireland_pay_floor, pay_floor
 from cvforge.text import fold_accents
 
 REGIONS = {
@@ -203,7 +203,7 @@ def _salary(req: dict, master: dict, rates: Rates | None,
     if amount is None:
         return RuleResult("salary", True, "no salary stated", None), []
     market = _market(req)
-    floor = pay_floor(master, market)
+    floor = ireland_pay_floor(master) if market == "IE" else pay_floor(master, market)
     if not floor:
         if market == "IE":
             return RuleResult("salary", True, "no personal floor for Ireland; permit floors "
@@ -211,7 +211,7 @@ def _salary(req: dict, master: dict, rates: Rates | None,
         return RuleResult("salary", True, "no pay floor set", salary.get("quote")), []
     which = "max" if salary.get("max") is not None else "min"
     stated = f"{which} {amount:g} {salary['currency'].upper()}/{salary['period']}"
-    if market == "IE" and floor["currency"].upper() == "EUR" and floor["period"] == "year":
+    if market == "IE":
         return _salary_eur_year(salary, amount, stated, floor, rates)
     if rates is None:
         raise MoneyError("currency rates are needed for the salary rule")
@@ -235,22 +235,24 @@ def _salary(req: dict, master: dict, rates: Rates | None,
 
 def _salary_eur_year(salary: dict, amount: float, stated: str, floor: dict,
                      rates: Rates | None) -> tuple[RuleResult, list[str]]:
-    """An Irish job against a EUR/year floor: compared in EUR/year, no CLT basis."""
-    money = Money(amount, salary["currency"].upper(), salary["period"])
+    """An Irish job against its payFloor.IE: compared in EUR/year, no CLT basis."""
+    try:
+        offered = _to_eur_year(Money(amount, salary["currency"].upper(), salary["period"]), rates)
+        floor_eur = _to_eur_year(
+            Money(floor["amount"], floor["currency"].upper(), floor["period"]), rates)
+    except NoRate as exc:
+        warning = f"no exchange rate for {exc.currency}: salary not checked against the pay floor"
+        return RuleResult("salary", True, f"{stated}: {exc}", salary.get("quote")), [warning]
+    message = f"{stated} is {offered:,.0f} EUR/year against a floor of {floor_eur:,.0f} EUR/year"
+    return RuleResult("salary", offered >= floor_eur, message, salary.get("quote")), []
+
+
+def _to_eur_year(money: Money, rates: Rates | None) -> float:
     if money.currency == "EUR" and money.period == "year":
-        offered = float(amount)
-    else:
-        try:
-            if rates is None:
-                raise NoRate(money.currency)
-            offered = annual(money, "EUR", rates)
-        except NoRate as exc:
-            warning = (f"no exchange rate for {exc.currency}: "
-                       "salary not checked against the pay floor")
-            return RuleResult("salary", True, f"{stated}: {exc}", salary.get("quote")), [warning]
-    message = (f"{stated} is {offered:,.0f} EUR/year against a floor of "
-               f"{floor['amount']:,.0f} EUR/year")
-    return RuleResult("salary", offered >= floor["amount"], message, salary.get("quote")), []
+        return float(money.amount)
+    if rates is None:
+        raise NoRate(money.currency)
+    return annual(money, "EUR", rates)
 
 
 # Rule 4: languages

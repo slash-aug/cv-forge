@@ -380,16 +380,36 @@ def test_ie_no_personal_floor_is_ok(env, tmp_path, capsys):
     assert json.loads((env / "salary.json").read_text(encoding="utf-8"))["currency"] == "EUR"
 
 
-def test_ie_legacy_brl_floor_applies(env, tmp_path, capsys):
-    _ie_req(env)
+def _ie_market(tmp_path):
     market = tmp_path / "ie.csv"
     market.write_text(
         ",".join(MARKET_COLUMNS) + "\nfrontend engineer,senior,IE,EUR,year,30000,32000,40000,x,2026\n",
         encoding="utf-8")
-    master = _ie_master(tmp_path, {"amount": 3000, "currency": "BRL", "period": "month"})
+    return market
+
+
+def test_ie_legacy_brl_floor_not_applied(env, tmp_path, capsys):
+    # a legacy single floor is far above the market here; Ireland uses only payFloor.IE
+    _ie_req(env)
+    master = _ie_master(tmp_path, {"amount": 900000, "currency": "BRL", "period": "month"})
     assert cli.main(["salary", "acme-frontend", "--master", str(master),
-                     "--market", str(market)]) == 0
+                     "--market", str(_ie_market(tmp_path))]) == 0
     assert "Permit tier:" in capsys.readouterr().out
+    data = json.loads((env / "salary.json").read_text(encoding="utf-8"))
+    assert data["amount"] == 41000 and "lifted to payFloor" not in data["sources"]
+
+
+def test_ie_confirm_below_csep_floor_warns(env, tmp_path, capsys):
+    _ie_req(env)
+    master = _ie_master(tmp_path, {"BR": {"amount": 3000, "currency": "BRL", "period": "month"}})
+    assert cli.main(["salary", "acme-frontend", "--master", str(master),
+                     "--market", str(_ie_market(tmp_path)), "--confirm", "38000"]) == 0
+    err = capsys.readouterr().err
+    assert err.count("\n") == 1
+    assert "38,000 EUR/year is below the CSEP floor (40,904 EUR/year)" in err
+    assert cli.main(["salary", "acme-frontend", "--master", str(master),
+                     "--market", str(_ie_market(tmp_path)), "--confirm", "45000"]) == 0
+    assert capsys.readouterr().err == ""
 
 
 def test_br_salary_unchanged():

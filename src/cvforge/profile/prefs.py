@@ -23,7 +23,7 @@ def work_rights(master: dict, code: str) -> dict | None:
 
 def home_codes(master: dict) -> frozenset[str]:
     rights = _prefs(master).get("workRights")
-    if rights is None:
+    if not rights:  # absent or {}: the profile says nothing, so the old default holds
         return DEFAULT_HOME
     return frozenset(c for c, r in rights.items() if r.get("status") in HOME_STATUSES)
 
@@ -36,6 +36,18 @@ def pay_floor(master: dict, market: str | None) -> dict | None:
         return floor
     key = market.upper() if market else None
     return floor.get(key) or floor.get("default")
+
+
+def ireland_pay_floor(master: dict) -> dict | None:
+    """The personal floor for Irish jobs: only an explicit payFloor.IE entry.
+
+    The legacy single object and "default" never apply to Ireland, where the permit floors
+    are checked by the permit rule (spec section 3).
+    """
+    floor = _prefs(master).get("payFloor")
+    if not isinstance(floor, dict) or "amount" in floor:
+        return None
+    return floor.get("IE")
 
 
 def degree_recognised(master: dict, code: str = "IE") -> str:
