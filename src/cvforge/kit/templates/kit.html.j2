@@ -78,6 +78,17 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
 {% endif %}
 </ul>
 
+{% if kit.get("risks") %}
+<div class="notice" role="alert">
+<strong>Risks</strong>
+<ul>
+{% for r in kit.risks %}
+<li>{{ r }}</li>
+{% endfor %}
+</ul>
+</div>
+{% endif %}
+
 {% for label, fields in groups %}
 {% if fields %}
 <h2>{{ label }}</h2>
@@ -86,6 +97,15 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
 {% endfor %}
 {% endif %}
 {% endfor %}
+
+{% if kit.get("ireland_answers") %}
+<h2>Work authorisation</h2>
+{{ block("ie-sponsorship", "Do you require sponsorship?", kit.ireland_answers.sponsorship) }}
+{{ block("ie-right-to-work", "Right to work in Ireland", kit.ireland_answers.right_to_work) }}
+{% if kit.ireland_answers.english %}
+{{ block("ie-english", "English level", kit.ireland_answers.english) }}
+{% endif %}
+{% endif %}
 
 {% if employers %}
 <h2>Work experience</h2>

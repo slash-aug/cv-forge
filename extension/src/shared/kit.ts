@@ -81,6 +81,10 @@ export interface Kit {
   recruiter_note: { connect: string; message: string } | null;
   email: KitEmail | null;
   tracker: string[];
+  /** Optional: permit risks from the eligibility check. */
+  risks?: string[];
+  /** Optional: Irish work-authorisation answers; null for a non-Irish job. */
+  ireland_answers?: { sponsorship: string; right_to_work: string; english: string } | null;
 }
 
 export class KitVersionError extends Error {

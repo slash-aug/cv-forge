@@ -94,7 +94,17 @@
       "required": ["to", "subject", "body", "attachments"],
       "additionalProperties": false
     },
-    "tracker": {"type": "array", "items": {"type": "string"}}
+    "tracker": {"type": "array", "items": {"type": "string"}},
+    "risks": {"type": "array", "items": {"type": "string"}},
+    "ireland_answers": {
+      "type": ["object", "null"],
+      "properties": {
+        "sponsorship": {"type": "string"}, "right_to_work": {"type": "string"},
+        "english": {"type": "string"}
+      },
+      "required": ["sponsorship", "right_to_work", "english"],
+      "additionalProperties": false
+    }
   },
   "required": ["schema_version", "slug", "lang", "company", "role", "links", "fields", "work",
                "education", "languages", "certificates", "salary", "answers", "recruiter_note",

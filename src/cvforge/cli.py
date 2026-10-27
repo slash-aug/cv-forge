@@ -12,7 +12,7 @@ from datetime import date
 from pathlib import Path
 
 from cvforge.answers.bank import load_bank, lookup, normalise_question, save_answers
-from cvforge.answers.facts import knockout_facts
+from cvforge.answers.facts import ireland_facts, knockout_facts
 from cvforge.answers.grounding import DataError, answer_figures, load_salary
 from cvforge.answers.gupy import GUPY_QUESTIONS, gupy_skills
 from cvforge.apply import http as apply_http
@@ -581,6 +581,15 @@ def _seniority(title: str) -> str:
     return "mid"
 
 
+def _read_verdict(app_dir: Path) -> dict:
+    """verdict.json for an application, or {} when absent or unreadable."""
+    try:
+        data = json.loads((app_dir / "verdict.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
 def cmd_answers(args) -> int:
     """Look up pasted questions in the answer bank, or save audited answers to it."""
     cfg = load_config()
@@ -638,6 +647,11 @@ def cmd_answers(args) -> int:
     print("Knock-out facts:")
     for k, v in facts.items():
         print(f"  {k}: {v}")
+    ireland = _read_verdict(app_dir).get("ireland")
+    if ireland:
+        print("Ireland:")
+        for k, v in ireland_facts(master, ireland, lang).items():
+            print(f"  {k}: {v}")
     return 0
 
 
@@ -766,7 +780,9 @@ def cmd_kit(args) -> int:
              "letter_pdf": f"{first}_{last}_Cover_Letter_{company}.pdf"}
     files = {k: v for k, v in names.items() if (app_dir / v).exists()}
     findings = _audit_tailored(tailored, master, app_dir)
-    kit = build_kit(master, tailored, posting, salary, slug=args.slug, files=files)
+    verdict = _read_verdict(app_dir) if (app_dir / "verdict.json").exists() else None
+    kit = build_kit(master, tailored, posting, salary, slug=args.slug, files=files,
+                    verdict=verdict)
     findings += audit_rendered(master, kit=kit)
     if findings:
         _print_findings(findings)
