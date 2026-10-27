@@ -175,3 +175,113 @@ def test_reimport_removes_mark_when_no_longer_matching(tmp_path):
     f.write_bytes(make_xlsx([HEADER, ["Other Co", 1, 2]]))
     import_year(tmp_path, 2026, file=f)
     assert load_registry(tmp_path / "companies.yaml")[0]["sponsor"] == []
+
+
+def make_2025_xlsx(rows) -> bytes:
+    """The 2025 layout: sheet "Sheet1", no name header, months, then "Grand Total"."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Sheet1"
+    months = ["January", "February", "December"]
+    ws.append([None, *months, "Grand Total", None])
+    ws.append(["Grand Total", 9, 9, 9, 27, None])
+    for name, total in rows:
+        ws.append([name, None, None, total, total, None])
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def test_parse_2025_layout():
+    data = make_2025_xlsx([(" Stripe Payments Europe Limited", 12), ("Workhuman Unlimited Company", 3)])
+    assert parse_company_xlsx(data) == {"Stripe Payments Europe Limited": 12,
+                                        "Workhuman Unlimited Company": 3}
+
+
+def test_parse_skips_total_row():
+    data = make_xlsx([HEADER, ["Stripe Payments Europe Limited", 3, 41], ["Total", 3, 41]])
+    assert parse_company_xlsx(data) == {"Stripe Payments Europe Limited": 41}
+
+
+def test_parse_without_header_row_fails():
+    from cvforge.apply.dete import DeteError
+
+    with pytest.raises(DeteError):
+        parse_company_xlsx(make_xlsx([["Stripe", 1]], sheet="Sheet1"))
+
+
+def test_import_2025_layout_marks_registry(tmp_path):
+    add_company(tmp_path / "companies.yaml", "Stripe")
+    f = tmp_path / "companies-2025.xlsx"
+    f.write_bytes(make_2025_xlsx([(" Stripe Payments Europe Limited", 12)]))
+    result = import_year(tmp_path, 2025, file=f)
+    assert result.matched == ["Stripe"] and result.employers == 1
+
+
+@pytest.mark.parametrize("registry, dete_name", [
+    ("Railway", "Railway & Steam Packet Union SC"),
+    ("Remote", "Remote Management Technology Limited"),
+    ("Citi", "Citi Bus Limited"),
+])
+def test_prefix_of_another_business_is_only_possible(tmp_path, registry, dete_name):
+    add_company(tmp_path / "companies.yaml", registry)
+    f = tmp_path / "c.xlsx"
+    f.write_bytes(make_xlsx([HEADER, [dete_name, 1, 10]]))
+    result = import_year(tmp_path, 2026, file=f)
+    assert result.matched == [] and result.possible == {registry: [dete_name]}
+    assert load_registry(tmp_path / "companies.yaml")[0]["sponsor"] == []
+
+
+@pytest.mark.parametrize("registry, dete_name", [
+    ("Stripe", "Stripe Payments Europe Limited"),
+    ("Intercom", "Intercom R&D Unlimited Company"),
+    ("Okta", "Okta Identity Ireland Limited"),
+    ("Workato", "Workato Hibernia Limited"),
+    ("Notion", "Notion Labs, Ireland Limited"),
+    ("Version 1", "Version 1 Software Limited"),
+    ("Zendesk", "Zendesk International Limited"),
+    ("Crusoe", "Crusoe AI Ireland Limited"),
+    ("Indra", "Indra Sistemas S.A Irish Branch"),
+    ("J & E Davy", "J & E Davy Holdings Unlimited Company"),
+])
+def test_prefix_with_entity_descriptors_matches(tmp_path, registry, dete_name):
+    marks = _import_names(tmp_path, registry, [dete_name])
+    assert marks and marks[0]["matched"] == [dete_name]
+
+
+def test_cli_import_ie_prints_possible_match(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("CVFORGE_DATA_DIR", str(tmp_path))
+    add_company(tmp_path / "companies.yaml", "Railway")
+    f = tmp_path / "c.xlsx"
+    f.write_bytes(make_xlsx([HEADER, ["Railway & Steam Packet Union SC", 1, 10]]))
+    assert main(["company", "import-ie", "--year", "2026", "--file", str(f)]) == 0
+    out = capsys.readouterr().out
+    assert ("  Railway: possible match Railway & Steam Packet Union SC, add an alias to confirm"
+            in out)
+
+
+def test_cli_import_ie_missing_file_is_clean(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("CVFORGE_DATA_DIR", str(tmp_path))
+    assert main(["company", "import-ie", "--year", "2026", "--file",
+                 str(tmp_path / "missing.xlsx")]) == 1
+    err = capsys.readouterr().err
+    assert "ie 2026: cannot read" in err and "Traceback" not in err
+
+
+def test_cli_import_ie_unpublished_year_is_a_notice(tmp_path, monkeypatch, capsys):
+    from cvforge import cli
+    from cvforge.apply import dete
+
+    monkeypatch.setenv("CVFORGE_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(cli, "_today", lambda: __import__("datetime").date(2027, 1, 5))
+
+    def fake(data_dir, year, **kw):
+        if year == 2027:
+            raise dete.NoYearPage("no DETE statistics page for 2027")
+        return dete.ImportResult(year, 3)
+
+    monkeypatch.setattr(dete, "import_year", fake)
+    assert main(["company", "import-ie"]) == 0
+    out = capsys.readouterr().out
+    assert "ie 2027: not published yet, skipped" in out and "ie 2026: 3 employers" in out
+    assert main(["company", "import-ie", "--year", "2027"]) == 1

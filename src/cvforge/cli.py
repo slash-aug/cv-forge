@@ -829,6 +829,18 @@ def _import_ie(args) -> int:
     for year in years:
         try:
             result = dete.import_year(data_dir, year, file=Path(args.file) if args.file else None)
+        except dete.NoYearPage as exc:
+            if args.year:
+                print(f"ie {year}: {exc}", file=sys.stderr)
+                failed = True
+            else:  # early in the year DETE has not published the new page yet
+                print(f"ie {year}: not published yet, skipped")
+            continue
+        except OSError as exc:
+            where = f"cannot read {args.file}" if args.file else "file error"
+            print(f"ie {year}: {where}: {exc.strerror or exc}", file=sys.stderr)
+            failed = True
+            continue
         except (apply_http.FetchError, dete.DeteError, ValueError) as exc:
             print(f"ie {year}: {exc}", file=sys.stderr)
             failed = True
@@ -836,6 +848,9 @@ def _import_ie(args) -> int:
         print(f"ie {year}: {result.employers} employers, {len(result.matched)} registry matches")
         for company, names in result.details.items():
             print(f"  {company}: {', '.join(names)}")
+        for company, names in result.possible.items():
+            for name in names:
+                print(f"  {company}: possible match {name}, add an alias to confirm")
     return 1 if failed else 0
 
 

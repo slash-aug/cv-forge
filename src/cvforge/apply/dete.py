@@ -26,10 +26,22 @@ GENERIC = frozenset({
     "national", "tech", "data", "cloud", "health", "care", "smart", "digital", "first", "new",
     "the", "group", "services", "solutions", "systems"})
 SOURCE_YEAR = re.compile(r"\b(20\d{2})\b")
+# Words that may follow a registry name in a DETE name for a prefix match to count:
+# entity descriptors only ("Stripe Payments", "Okta Identity"), never another business
+# ("Railway & Steam Packet Union", "Citi Bus"). Phrases are in dete_key form.
+DESCRIPTORS = frozenset({
+    "payments", "technology", "technologies", "software", "labs", "holdings", "international",
+    "identity", "r d", "ai", "operations", "financial", "services", "sistemas", "s a",
+    "irish branch", "hibernia"})
+TOTAL_ROWS = frozenset({"grand total", "total"})
 
 
 class DeteError(Exception):
     """The DETE data could not be read."""
+
+
+class NoYearPage(FetchError):
+    """DETE has not published a statistics page for the year yet."""
 
 
 @dataclass
@@ -38,6 +50,7 @@ class ImportResult:
     employers: int
     matched: list[str] = field(default_factory=list)
     details: dict[str, list[str]] = field(default_factory=dict)  # company -> DETE names
+    possible: dict[str, list[str]] = field(default_factory=dict)  # unconfirmed prefix names
 
 
 def dete_key(name: str) -> str:
@@ -61,58 +74,100 @@ def xlsx_link(year_html: str) -> str | None:
     return None
 
 
+def _is_total_header(cell: str) -> bool:
+    return cell.startswith(("grand total", "permits issued grand total"))
+
+
+def _header(row) -> tuple[int, int] | None:
+    """(name column, total column) when the row is a header row, else None.
+
+    2026 layout: "Employer Name" ... "Permits Issued Grand Total". 2025 layout: an empty
+    name header, months, then "Grand Total".
+    """
+    cells = [str(c).strip().lower() if c is not None else "" for c in row]
+    total = next((i for i, c in enumerate(cells) if _is_total_header(c)), None)
+    if total is None:
+        return None
+    name = cells.index("employer name") if "employer name" in cells else 0
+    return (name, total) if name != total else None
+
+
+def _parse_sheet(ws) -> dict[str, int] | None:
+    """Permits per employer, or None when the sheet has no header row."""
+    cols = None
+    out: dict[str, int] = {}
+    for row in ws.iter_rows(values_only=True):
+        if cols is None:
+            cols = _header(row)
+            continue
+        name_col, total_col = cols
+        if len(row) <= max(name_col, total_col) or row[name_col] is None:
+            continue
+        name = str(row[name_col]).strip()
+        if not name or name.lower() in TOTAL_ROWS:
+            continue
+        try:
+            out[name] = out.get(name, 0) + int(row[total_col] or 0)
+        except (TypeError, ValueError):
+            continue
+    return out if cols is not None else None
+
+
 def parse_company_xlsx(data: bytes) -> dict[str, int]:
+    """The "Export" sheet when present, else the first sheet with a header row."""
     from openpyxl import load_workbook
 
     try:
         wb = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
     except Exception as exc:  # openpyxl raises many types on bad input
         raise DeteError(f"unreadable spreadsheet: {exc}") from exc
-    if "Export" not in wb.sheetnames:
-        raise DeteError("no 'Export' sheet in the spreadsheet")
-    name_col = total_col = None
-    out: dict[str, int] = {}
-    for row in wb["Export"].iter_rows(values_only=True):
-        if name_col is None:
-            cells = [str(c).strip().lower() if c is not None else "" for c in row]
-            if "employer name" in cells:
-                name_col = cells.index("employer name")
-                total_col = next((i for i, c in enumerate(cells)
-                                  if c.startswith("permits issued grand total")), None)
-                if total_col is None:
-                    raise DeteError("no 'Permits Issued Grand Total' column")
-            continue
-        if len(row) <= max(name_col, total_col) or row[name_col] is None:
-            continue
-        name = str(row[name_col]).strip()
-        if not name or name.lower() == "grand total":
-            continue
-        try:
-            out[name] = out.get(name, 0) + int(row[total_col] or 0)
-        except (TypeError, ValueError):
-            continue
-    if name_col is None:
-        raise DeteError("no 'Employer Name' header row")
-    return out
+    sheets = ["Export"] if "Export" in wb.sheetnames else wb.sheetnames
+    for sheet in sheets:
+        found = _parse_sheet(wb[sheet])
+        if found is not None:
+            return found
+    raise DeteError("no header row with an employer name and a 'Grand Total' column")
 
 
-def _matches(key: str, employers: dict[str, int]) -> tuple[int, list[str]] | None:
-    """(permit total, DETE names) for a company key.
+def _descriptors_only(rest: str) -> bool:
+    """True when every word of `rest` is an entity descriptor (two-word phrases first)."""
+    words = rest.split()
+    i = 0
+    while i < len(words):
+        if " ".join(words[i:i + 2]) in DESCRIPTORS and i + 1 < len(words):
+            i += 2
+        elif words[i] in DESCRIPTORS:
+            i += 1
+        else:
+            return False
+    return bool(words)
 
-    An exact DETE name wins. Otherwise DETE names starting with the key plus a space, but only
-    for a distinctive key (4+ chars, not a generic word).
-    """
-    if not key:
-        return None
+
+def _prefixed(key: str, employers: dict[str, int]) -> tuple[list[str], list[str], list[str]]:
+    """(exact, confirmed prefix, possible prefix) DETE names for a company key."""
     exact: list[str] = []
     prefix: list[str] = []
+    possible: list[str] = []
+    if not key:
+        return exact, prefix, possible
     allow_prefix = len(key) >= PREFIX_MIN and key not in GENERIC
     for name in employers:
         ekey = dete_key(name)
         if ekey == key:
             exact.append(name)
         elif allow_prefix and ekey.startswith(key + " "):
-            prefix.append(name)
+            (prefix if _descriptors_only(ekey[len(key) + 1:]) else possible).append(name)
+    return exact, prefix, possible
+
+
+def _matches(key: str, employers: dict[str, int]) -> tuple[int, list[str]] | None:
+    """(permit total, DETE names) for a company key.
+
+    An exact DETE name wins. Otherwise DETE names starting with the key plus a space, but only
+    for a distinctive key (4+ chars, not a generic word) and only when the rest of the DETE
+    name is entity descriptors ("Stripe Payments Europe Limited", not "Citi Bus Limited").
+    """
+    exact, prefix, _ = _prefixed(key, employers)
     names = exact or prefix
     return (sum(employers[n] for n in names), names) if names else None
 
@@ -140,7 +195,7 @@ def import_year(data_dir: Path, year: int, *, fetch=http.get_bytes, file: Path |
         index = _fetch_dete(fetch, index_url).decode("utf-8", errors="replace")
         page = year_page_links(index).get(year)
         if page is None:
-            raise FetchError(f"no DETE statistics page for {year}")
+            raise NoYearPage(f"no DETE statistics page for {year}")
         page_url = urljoin(index_url, page)
         link = xlsx_link(_fetch_dete(fetch, page_url).decode("utf-8", errors="replace"))
         if link is None:
@@ -153,13 +208,16 @@ def import_year(data_dir: Path, year: int, *, fetch=http.get_bytes, file: Path |
     cache.write_text(json.dumps({"year": year, "source": source,
                                  "fetched": date.today().isoformat(), "employers": employers},
                                 ensure_ascii=False), encoding="utf-8")
-    details = _mark_registry(data_dir / "companies.yaml", year, employers)
-    return ImportResult(year, len(employers), list(details), details)
+    details, possible = _mark_registry(data_dir / "companies.yaml", year, employers)
+    return ImportResult(year, len(employers), list(details), details, possible)
 
 
-def _mark_registry(path: Path, year: int, employers: dict[str, int]) -> dict[str, list[str]]:
+def _mark_registry(path: Path, year: int, employers: dict[str, int]
+                   ) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+    """(matched DETE names, possible DETE names) per registry company; marks the matches."""
     registry = load_registry(path)
     details: dict[str, list[str]] = {}
+    possible: dict[str, list[str]] = {}
     today = date.today().isoformat()
     source = _source(year)
     changed = False
@@ -172,12 +230,17 @@ def _mark_registry(path: Path, year: int, employers: dict[str, int]) -> dict[str
             kept.append({"type": MARK_TYPE, "source": source, "date": today, "count": count,
                          "matched": sorted(names)})
             details[entry["name"]] = sorted(names)
+        else:
+            maybe = {p for n in [entry["name"], *entry.get("aliases", [])]
+                     for p in _prefixed(dete_key(n), employers)[2]}
+            if maybe:
+                possible[entry["name"]] = sorted(maybe)
         if kept != entry["sponsor"] or hits:
             changed = True
         entry["sponsor"] = kept
     if changed:
         _save(path, registry)
-    return details
+    return details, possible
 
 
 def _cached_years(data_dir: Path) -> list[tuple[int, Path]]:
