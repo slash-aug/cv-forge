@@ -13,8 +13,8 @@ from pathlib import Path
 
 from cvforge.answers.bank import load_bank, lookup, normalise_question, save_answers
 from cvforge.answers.facts import knockout_facts
-from cvforge.answers.gupy import GUPY_QUESTIONS, gupy_skills
 from cvforge.answers.grounding import DataError, answer_figures, load_salary
+from cvforge.answers.gupy import GUPY_QUESTIONS, gupy_skills
 from cvforge.apply import http as apply_http
 from cvforge.apply.check import Verdict, check
 from cvforge.apply.companies import (

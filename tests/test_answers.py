@@ -9,8 +9,8 @@ from cvforge import cli
 from cvforge.answers.bank import load_bank, lookup, normalise_question, save_answers
 from cvforge.answers.facts import knockout_facts
 from cvforge.answers.gupy import GUPY_QUESTIONS
-from cvforge.apply.posting import Posting
 from cvforge.apply.experience import engineering_months
+from cvforge.apply.posting import Posting
 from cvforge.profile.model import load_master
 
 PERSONA = Path(__file__).resolve().parent.parent / "examples" / "persona"
