@@ -17,7 +17,10 @@
  {
   "name": "Toast",
   "ats": "greenhouse",
-  "slug": "toast"
+  "slug": "toast",
+  "aliases": [
+   "Toasttab"
+  ]
  },
  {
   "name": "Udemy",
@@ -70,7 +73,7 @@
   "slug": "elastic"
  },
  {
-  "name": "Mongodb",
+  "name": "MongoDB",
   "ats": "greenhouse",
   "slug": "mongodb"
  },
@@ -90,22 +93,22 @@
   "slug": "flipdish"
  },
  {
-  "name": "Hubspotjobs",
+  "name": "HubSpot",
   "ats": "greenhouse",
   "slug": "hubspotjobs"
  },
  {
-  "name": "Gitlab",
+  "name": "GitLab",
   "ats": "greenhouse",
   "slug": "gitlab"
  },
  {
-  "name": "Sumup",
+  "name": "SumUp",
   "ats": "greenhouse",
   "slug": "sumup"
  },
  {
-  "name": "Grafanalabs",
+  "name": "Grafana Labs",
   "ats": "greenhouse",
   "slug": "grafanalabs"
  },
@@ -120,7 +123,7 @@
   "slug": "databricks"
  },
  {
-  "name": "Learnupon",
+  "name": "LearnUpon",
   "ats": "greenhouse",
   "slug": "learnupon"
  },
@@ -130,7 +133,7 @@
   "slug": "pinterest"
  },
  {
-  "name": "Newrelic",
+  "name": "New Relic",
   "ats": "greenhouse",
   "slug": "newrelic"
  },
@@ -140,7 +143,7 @@
   "slug": "qualio"
  },
  {
-  "name": "Zoominfo",
+  "name": "ZoomInfo",
   "ats": "greenhouse",
   "slug": "zoominfo"
  },
@@ -150,7 +153,7 @@
   "slug": "typeform"
  },
  {
-  "name": "Truelayer",
+  "name": "TrueLayer",
   "ats": "greenhouse",
   "slug": "truelayer"
  },
@@ -170,14 +173,17 @@
   "slug": "expel"
  },
  {
-  "name": "Planetscale",
+  "name": "PlanetScale",
   "ats": "greenhouse",
   "slug": "planetscale"
  },
  {
-  "name": "Remotecom",
+  "name": "Remote",
   "ats": "greenhouse",
-  "slug": "remotecom"
+  "slug": "remotecom",
+  "aliases": [
+   "Remote.com"
+  ]
  },
  {
   "name": "Mozilla",
@@ -195,7 +201,7 @@
   "slug": "monzo"
  },
  {
-  "name": "Cockroachlabs",
+  "name": "Cockroach Labs",
   "ats": "greenhouse",
   "slug": "cockroachlabs"
  },
@@ -210,7 +216,7 @@
   "slug": "honeycomb"
  },
  {
-  "name": "Gocardless",
+  "name": "GoCardless",
   "ats": "greenhouse",
   "slug": "gocardless"
  },
@@ -230,7 +236,7 @@
   "slug": "lokalise"
  },
  {
-  "name": "Launchdarkly",
+  "name": "LaunchDarkly",
   "ats": "greenhouse",
   "slug": "launchdarkly"
  },
@@ -250,7 +256,7 @@
   "slug": "chainguard"
  },
  {
-  "name": "Nearform",
+  "name": "NearForm",
   "ats": "greenhouse",
   "slug": "nearform"
  },
@@ -477,10 +483,13 @@
  {
   "name": "Davy",
   "ats": "workable",
-  "slug": "davy"
+  "slug": "davy",
+  "aliases": [
+   "J & E Davy"
+  ]
  },
  {
-  "name": "Version1",
+  "name": "Version 1",
   "ats": "smartrecruiters",
   "slug": "Version1"
  },
@@ -517,7 +526,11 @@
    "tenant": "citi",
    "wd": "wd5",
    "site": "2"
-  }
+  },
+  "aliases": [
+   "Citibank Europe",
+   "Citigroup"
+  ]
  },
  {
   "name": "Accenture",
@@ -540,24 +553,30 @@
   }
  },
  {
-  "name": "Fil",
+  "name": "Fidelity International",
   "ats": "workday",
   "slug": "fil",
   "workday": {
    "tenant": "fil",
    "wd": "wd3",
    "site": "001"
-  }
+  },
+  "aliases": [
+   "FIL"
+  ]
  },
  {
-  "name": "Fmr",
+  "name": "Fidelity Investments",
   "ats": "workday",
   "slug": "fmr",
   "workday": {
    "tenant": "fmr",
    "wd": "wd1",
    "site": "FidelityCareers"
-  }
+  },
+  "aliases": [
+   "FMR"
+  ]
  },
  {
   "name": "Zendesk",
@@ -570,7 +589,7 @@
   }
  },
  {
-  "name": "Alto",
+  "name": "Fuze Health",
   "ats": "workday",
   "slug": "alto",
   "workday": {
@@ -580,7 +599,7 @@
   }
  },
  {
-  "name": "Abcfinancial",
+  "name": "ABC Financial",
   "ats": "workday",
   "slug": "abcfinancial",
   "workday": {
@@ -600,11 +619,6 @@
   "slug": "airapps"
  },
  {
-  "name": "Platform Engineering",
-  "ats": "ashby",
-  "slug": "platform-engineering"
- },
- {
   "name": "Crusoe",
   "ats": "ashby",
   "slug": "crusoe"
@@ -622,7 +636,10 @@
  {
   "name": "Indra Group UK & Ireland",
   "ats": "workable",
-  "slug": "indra-uk"
+  "slug": "indra-uk",
+  "aliases": [
+   "Indra"
+  ]
  },
  {
   "name": "TEKenable",

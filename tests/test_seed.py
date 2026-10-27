@@ -41,3 +41,12 @@ def test_other_ats_urls(tmp_path):
     assert find_company(reg, "ServiceNow")["careers_url"] == "https://jobs.smartrecruiters.com/ServiceNow"
     assert find_company(reg, "OpenAI")["careers_url"] == "https://jobs.ashbyhq.com/openai"
     assert find_company(reg, "Pipedrive")["careers_url"] == "https://jobs.lever.co/pipedrive"
+
+
+def test_aliases_carried_and_names_fixed(tmp_path):
+    seed_ie(tmp_path / "c.yaml")
+    reg = load_registry(tmp_path / "c.yaml")
+    assert find_company(reg, "Citibank Europe")["name"] == "Citi"
+    assert find_company(reg, "FMR")["name"] == "Fidelity Investments"
+    assert find_company(reg, "HubSpot")["careers_url"] == "https://boards.greenhouse.io/hubspotjobs"
+    assert find_company(reg, "Platform Engineering") is None

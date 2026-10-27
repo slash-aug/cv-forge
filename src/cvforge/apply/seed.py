@@ -65,7 +65,8 @@ def seed_ie(registry_path: Path, seed_file: Path | None = None) -> SeedResult:
             kept += 1
             continue
         registry.append({"name": item["name"], **_defaults(), "ats": item["ats"],
-                         "careers_url": _careers_url(item), "notes": SEED_NOTE})
+                         "careers_url": _careers_url(item), "notes": SEED_NOTE,
+                         "aliases": list(item.get("aliases", []))})
         added += 1
     if added:
         _save(registry_path, registry)
