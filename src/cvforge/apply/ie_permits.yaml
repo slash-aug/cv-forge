@@ -1,0 +1,22 @@
+# Irish employment permit thresholds, dated, one entry per effective date.
+# The loader picks the latest entry whose effective_from is on or before the check date.
+# Figures are EUR per year (salary floors) and months (minimum contract length).
+tables:
+  - effective_from: 2026-03-01
+    csep_csol_degree: 40904
+    csep_any: 68911
+    gep: 36605
+    csep_min_months: 24
+    gep_min_months: 12
+    csol_soc: ["1136", "2133", "2134", "2135", "2136", "2137", "2139"]
+    ineligible_soc: []
+    source: https://enterprise.gov.ie/en/what-we-do/workplace-and-skills/employment-permits/permit-types/critical-skills-employment-permit/
+  - effective_from: 2025-01-01
+    csep_csol_degree: 38000
+    csep_any: 64000
+    gep: 34000
+    csep_min_months: 24
+    gep_min_months: 12
+    csol_soc: ["1136", "2133", "2134", "2135", "2136", "2137", "2139"]
+    ineligible_soc: []
+    source: https://enterprise.gov.ie/en/what-we-do/workplace-and-skills/employment-permits/permit-types/critical-skills-employment-permit/
