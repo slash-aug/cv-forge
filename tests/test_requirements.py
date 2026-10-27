@@ -113,3 +113,34 @@ def test_new_fields_need_verified_quotes(tmp_path):
         load_requirements(_write(tmp_path, _req(hiring_model={"type": "slave", "quote": "x"})))
     with pytest.raises(RequirementsError):
         load_requirements(_write(tmp_path, _req(travel={"requirement": "x"})))
+
+
+IRISH = {
+    "work_authorisation": {"status": "required-without-sponsorship", "quote": "Must have Stamp 4."},
+    "contract": {"type": "fixed-term", "months": 12, "quote": None},
+    "english_test": {"tests": ["IELTS"], "level": "7.0", "quote": "IELTS 7.0"},
+    "degree": {"requirement": "or-equivalent", "quote": "degree or equivalent"},
+    "occupation_soc": {"code": "2134", "reason": "programmer role"},
+}
+
+
+def test_irish_fields_load_and_quotes_checked(tmp_path):
+    req = load_requirements(_write(tmp_path, _req(**IRISH)))
+    assert req["occupation_soc"]["code"] == "2134"
+    posting = POSTING + "\nIELTS 7.0 and a degree or equivalent."
+    problems = quote_problems(req, posting)
+    assert problems == ['work_authorisation.quote: not in the posting: "Must have Stamp 4."']
+
+
+def test_status_other_than_silent_needs_quote(tmp_path):
+    bad = _req(work_authorisation={"status": "eu-only", "quote": None})
+    with pytest.raises(RequirementsError, match="work_authorisation.quote"):
+        load_requirements(_write(tmp_path, bad))
+    ok = _req(work_authorisation={"status": "silent"})
+    assert load_requirements(_write(tmp_path, ok))
+
+
+def test_bad_soc_code_rejected(tmp_path):
+    bad = _req(occupation_soc={"code": "21345", "reason": "x"})
+    with pytest.raises(RequirementsError, match="occupation_soc"):
+        load_requirements(_write(tmp_path, bad))

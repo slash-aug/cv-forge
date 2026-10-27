@@ -60,7 +60,8 @@ CEFR_TOKEN = re.compile(r"\b([abc][12])\b")
 CAVEAT_TERMS = (
     "reside", "residen", "eligib", "overlap", "travel", "time zone", "timezone",
     "work authori", "right to work", "citizen", "contractor", "employer of record", "eor",
-    "resid", "elegib", "elegiv", "fuso", "sobrepos", "viage", "cidadan", "autoriza", "pj", "clt")
+    "resid", "elegib", "elegiv", "fuso", "sobrepos", "viage", "cidadan", "autoriza", "pj", "clt",
+    "stamp", "sponsor", "permit", "eea", "authoris", "ielts")
 
 
 def _term_pattern(term: str) -> str:

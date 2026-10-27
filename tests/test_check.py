@@ -480,3 +480,8 @@ def test_is_irish_job():
     assert is_irish_job(req(workplace="hybrid", countries=["Ireland"]))
     assert is_irish_job(req(allowed=["Ireland"]))
     assert not is_irish_job(req(allowed=["Ireland", "UK"]))
+
+
+def test_stamp_sentence_is_a_caveat():
+    assert caveat_sentences("Great team. Applicants must hold Stamp 4.") == [
+        "Applicants must hold Stamp 4"]
