@@ -429,7 +429,8 @@ def test_ie_region_label_without_city_or_relocation():
 def test_ie_region_csep_route_line():
     from cvforge.render.irish import ireland_region
 
-    region = ireland_region(_ie_master(), city="Dublin", ireland={**IE_BLOCK, "route": "csep"})
+    region = ireland_region(_ie_master(), city="Dublin", ireland={**IE_BLOCK, "route": "csep",
+                                                                  "salary_eur_year": 70000.0})
     assert region.permit_line == "Eligible for Critical Skills Employment Permit (SOC 2136)"
     assert "Eligible for Critical Skills Employment Permit (SOC 2136)" in render_view(
         build_cv_view(T, _ie_master(), region))
@@ -438,7 +439,8 @@ def test_ie_region_csep_route_line():
 def test_ie_region_degree_yes_line_and_off_list_line():
     from cvforge.render.irish import ireland_region
 
-    yes = ireland_region(_ie_master(degreeRecognised="yes"), city=None, ireland=None)
+    yes = ireland_region(_ie_master(degreeRecognised="yes"), city=None,
+                         ireland={**IE_BLOCK, "route": "csep", "salary_eur_year": 45000.0})
     assert yes.permit_line == "Eligible for Critical Skills Employment Permit (SOC 2136)"
     off = ireland_region(_ie_master(), city=None,
                          ireland={**IE_BLOCK, "soc": "3131", "on_csol": False, "route": "gep"})
@@ -454,6 +456,31 @@ def test_ie_region_never_claims_csep_when_gep_route():
     region = ireland_region(_ie_master(degreeRecognised="yes"), city=None,
                             ireland={**IE_BLOCK, "route": "gep", "salary_eur_year": 38000.0})
     assert "Eligible" not in region.permit_line
+
+
+def test_permit_line_enforces_csep_rule_over_a_stale_route():
+    from cvforge.render.irish import ireland_region
+
+    stale = {**IE_BLOCK, "route": "csep", "salary_eur_year": 55000.0}
+    region = ireland_region(_ie_master(), city=None, ireland=stale)
+    assert region.permit_line == "Requires employment permit (Critical Skills occupation)"
+    # CSEP at any eligible occupation needs 68911 even off the CSOL
+    off = {**IE_BLOCK, "route": "csep", "soc": "3131", "on_csol": False, "salary_eur_year": 60000.0}
+    assert ireland_region(_ie_master(), city=None, ireland=off).permit_line == \
+        "Requires employment permit sponsorship"
+    high = {**IE_BLOCK, "route": "gep", "salary_eur_year": 68911.0}
+    assert ireland_region(_ie_master(), city=None, ireland=high).permit_line == \
+        "Eligible for Critical Skills Employment Permit (SOC 2136)"
+
+
+def test_permit_line_degree_yes_without_salary_is_not_eligible():
+    from cvforge.render.irish import ireland_region
+
+    master = _ie_master(degreeRecognised="yes")
+    line = "Requires employment permit (Critical Skills occupation)"
+    assert ireland_region(master, city=None, ireland=None).permit_line == line
+    unknown = {**IE_BLOCK, "route": "unknown", "salary_eur_year": None}
+    assert ireland_region(master, city=None, ireland=unknown).permit_line == line
 
 
 def test_ie_region_without_ie_work_rights_has_no_permit_line():
@@ -525,7 +552,7 @@ def _app(tmp_path, name, *, countries, quote, verdict=None):
     return app / "tailored.yaml"
 
 
-def test_build_defaults_region_from_requirements(tmp_path, monkeypatch):
+def test_build_defaults_region_from_requirements(tmp_path, monkeypatch, capsys):
     import yaml
 
     from cvforge.cli import main
@@ -540,7 +567,7 @@ def test_build_defaults_region_from_requirements(tmp_path, monkeypatch):
     assert views[-1] == build_cv_view(T, _ie_master())
 
     ie = _app(tmp_path, "ie", countries=["Ireland"], quote="Hybrid, 3 days a week in our Cork office.",
-              verdict={**IE_BLOCK, "route": "csep"})
+              verdict={**IE_BLOCK, "route": "csep", "salary_eur_year": 70000.0})
     assert main(["build", str(ie), "--master", m, "--no-letter"]) == 0
     assert views[-1]["contact"]["address"] == "Relocating to Cork, Ireland"
     assert views[-1]["contact"]["permit_line"] == \
@@ -554,6 +581,11 @@ def test_build_defaults_region_from_requirements(tmp_path, monkeypatch):
     assert views[-1]["contact"]["address"] == "Relocating to Ireland"
     assert views[-1]["contact"]["permit_line"] == \
         "Requires employment permit (Critical Skills occupation)"
+
+    broken = _app(tmp_path, "ie3", countries=["Ireland"], quote="Dublin.")
+    (broken.parent / "verdict.json").write_text("{not json", encoding="utf-8")
+    assert main(["build", str(broken), "--master", m, "--no-letter"]) == 1
+    assert "verdict.json" in capsys.readouterr().err
 
     assert main(["master-cv", m, "--lang", "en", "--out", str(tmp_path)]) == 0
     assert "permit_line" not in views[-1]["contact"]

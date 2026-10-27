@@ -170,7 +170,10 @@ def _region(choice: str | None, master: dict, app_dir: Path | None) -> Region | 
     ireland = None
     verdict_path = app_dir / "verdict.json" if app_dir else None
     if verdict_path and verdict_path.exists():
-        ireland = json.loads(verdict_path.read_text(encoding="utf-8")).get("ireland")
+        try:
+            ireland = json.loads(verdict_path.read_text(encoding="utf-8")).get("ireland")
+        except (OSError, ValueError, AttributeError) as e:
+            raise ProfileError(f"{verdict_path}: cannot read the verdict: {e}") from e
     return ireland_region(master, city=irish_city(req) if req else None, ireland=ireland,
                           today=_today())
 
