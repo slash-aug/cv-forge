@@ -468,8 +468,33 @@ def test_permit_line_enforces_csep_rule_over_a_stale_route():
     off = {**IE_BLOCK, "route": "csep", "soc": "3131", "on_csol": False, "salary_eur_year": 60000.0}
     assert ireland_region(_ie_master(), city=None, ireland=off).permit_line == \
         "Requires employment permit sponsorship"
-    high = {**IE_BLOCK, "route": "gep", "salary_eur_year": 68911.0}
+    high = {**IE_BLOCK, "route": "csep", "salary_eur_year": 68911.0}
     assert ireland_region(_ie_master(), city=None, ireland=high).permit_line == \
+        "Eligible for Critical Skills Employment Permit (SOC 2136)"
+
+
+def test_permit_line_never_upgrades_a_gep_verdict():
+    from cvforge.render.irish import ireland_region
+
+    # a 12-23 month fixed term: the check forced gep although salary and SOC give csep
+    short = {**IE_BLOCK, "route": "gep", "salary_eur_year": 75000.0}
+    region = ireland_region(_ie_master(), city=None, ireland=short)
+    assert region.permit_line == "Requires employment permit (Critical Skills occupation)"
+    assert "Eligible" not in region.permit_note
+    yes = ireland_region(_ie_master(degreeRecognised="yes"), city=None,
+                         ireland={**short, "salary_eur_year": 45000.0})
+    assert "Eligible" not in yes.permit_line
+
+
+def test_permit_line_uses_the_range_minimum():
+    from cvforge.render.irish import ireland_region
+
+    straddle = {**IE_BLOCK, "route": "csep", "salary_eur_year": 75000.0,
+                "salary_eur_year_min": 55000.0}
+    region = ireland_region(_ie_master(), city=None, ireland=straddle)
+    assert region.permit_line == "Requires employment permit (Critical Skills occupation)"
+    above = {**straddle, "salary_eur_year_min": 70000.0}
+    assert ireland_region(_ie_master(), city=None, ireland=above).permit_line == \
         "Eligible for Critical Skills Employment Permit (SOC 2136)"
 
 

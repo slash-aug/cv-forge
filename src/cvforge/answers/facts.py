@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import date
 
 from cvforge.apply.ie_permits import load_permit_table
-from cvforge.apply.ireland import route_for
+from cvforge.apply.ireland import claims_csep
 from cvforge.profile.model import localized
 from cvforge.profile.prefs import degree_recognised, self_apply
 
@@ -87,11 +87,10 @@ def _english(master: dict) -> str:
 
 def ireland_facts(master: dict, ireland: dict, lang: str) -> dict[str, str]:
     """Answers for an Irish form: sponsorship, right to work, English. Master facts only."""
-    # Never trust the stored route for a CSEP claim: recompute it from salary, SOC and degree.
-    route = route_for(ireland.get("salary_eur_year"), ireland.get("soc"),
-                      degree_recognised(master), load_permit_table(date.today())[0])
+    # A CSEP claim needs the verdict's csep route and the recompute from the lowest salary.
+    claim = claims_csep(ireland, degree_recognised(master), load_permit_table(date.today())[0])
     on_csol = bool(ireland.get("on_csol"))
-    if route == "csep":
+    if claim:
         text = "Yes. I will need a Critical Skills Employment Permit."
     else:
         text = "Yes. I will need an employment permit."

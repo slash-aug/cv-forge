@@ -14,15 +14,7 @@ if TYPE_CHECKING:
 SKIP_RIGHTS = {"required-without-sponsorship", "eu-only"}
 
 
-def salary_eur_year(req: dict, rates: Rates | None) -> tuple[float | None, str | None]:
-    """(EUR/year, None), or (None, currency) when the figure could not be converted.
-
-    The max when stated, else the min, as the salary rule does. (None, None): no salary.
-    """
-    salary = req.get("salary") or {}
-    amount = salary.get("max") if salary.get("max") is not None else salary.get("min")
-    if amount is None:
-        return None, None
+def _eur_year(amount, salary: dict, rates: Rates | None) -> tuple[float | None, str | None]:
     currency, period = salary["currency"].upper(), salary["period"]
     if currency == "EUR" and period == "year":
         return float(amount), None
@@ -32,6 +24,26 @@ def salary_eur_year(req: dict, rates: Rates | None) -> tuple[float | None, str |
         return annual(Money(amount, currency, period), "EUR", rates), None
     except NoRate:
         return None, currency
+
+
+def salary_eur_year(req: dict, rates: Rates | None) -> tuple[float | None, str | None]:
+    """(EUR/year, None), or (None, currency) when the figure could not be converted.
+
+    The max when stated, else the min, as the salary rule does. (None, None): no salary.
+    """
+    salary = req.get("salary") or {}
+    amount = salary.get("max") if salary.get("max") is not None else salary.get("min")
+    if amount is None:
+        return None, None
+    return _eur_year(amount, salary, rates)
+
+
+def salary_min_eur_year(req: dict, rates: Rates | None) -> float | None:
+    """The posted minimum in EUR/year; None when there is no minimum or no rate."""
+    salary = req.get("salary") or {}
+    if salary.get("min") is None:
+        return None
+    return _eur_year(salary["min"], salary, rates)[0]
 
 
 def route_for(salary_eur_year: float | None, soc: str | None, degree: str,
@@ -44,6 +56,20 @@ def route_for(salary_eur_year: float | None, soc: str | None, degree: str,
     if soc in table.csol_soc and salary_eur_year >= table.csep_csol_degree:
         return {"yes": "csep", "no": "gep"}.get(degree, "csep-if-degree")
     return "gep"
+
+
+def claims_csep(ireland: dict | None, degree: str, table: PermitTable) -> bool:
+    """True when a CV, letter or answer may say the candidate is eligible for a CSEP.
+
+    Claim surfaces may only downgrade the check: the verdict's route must be csep, and the
+    route recomputed from the lowest posted salary (the min when stated), the SOC and the
+    master's degree must be csep too. No verdict, no claim.
+    """
+    if not ireland or ireland.get("route") != "csep" or not ireland.get("soc"):
+        return False
+    low = ireland.get("salary_eur_year_min")
+    salary = low if low is not None else ireland.get("salary_eur_year")
+    return route_for(salary, ireland["soc"], degree, table) == "csep"
 
 
 def _first_text(value) -> str | None:
@@ -79,7 +105,9 @@ def permit_rule(req: dict, master: dict, record: tuple[int, int] | None, rates: 
     s, unconverted = salary_eur_year(req, rates)
     sponsorship_silent = (sponsorship.get("status") == "silent"
                           and auth.get("status", "silent") == "silent")
+    s_min = salary_min_eur_year(req, rates)
     block = {"route": "unknown", "soc": soc, "on_csol": on_csol, "salary_eur_year": s,
+             "salary_eur_year_min": s_min,
              "permit_record": list(record) if record else None, "lmnt": False,
              "sponsorship_silent": sponsorship_silent}
 
@@ -114,11 +142,19 @@ def permit_rule(req: dict, master: dict, record: tuple[int, int] | None, rates: 
     if short_term:
         route = "gep"
         risks.append(f"fixed term under {table.csep_min_months // 12} years: GEP only{lmnt_suffix}")
+    elif kind == "fixed-term" and months is None:
+        route = "gep"
+        risks.append(f"fixed term of unknown length; CSEP needs {table.csep_min_months // 12} "
+                     "years")
     elif route == "csep-if-degree":
         risks.append("CSEP only if the Tecnólogo is recognised as a relevant degree; otherwise "
                      "GEP (no labour market test for a CSOL occupation)")
     elif route == "gep":
         risks.append("GEP only" + lmnt_suffix)
+    if route == "csep" and s_min is not None and route_for(s_min, soc, degree, table) != "csep":
+        # The tier comes from the max; an offer at the bottom of the range may not reach it.
+        floor = table.csep_csol_degree if degree == "yes" and on_csol else table.csep_any
+        risks.append(f"CSEP only if the offer is at least {floor:,}")
     block["route"] = route
     block["lmnt"] = route == "gep" and not on_csol
 

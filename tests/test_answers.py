@@ -318,3 +318,20 @@ def test_answers_cli_no_ireland_block_without_verdict(app, capsys):
     _tailored(app)
     assert _run() == 0
     assert "Ireland:" not in capsys.readouterr().out
+
+
+def test_ireland_facts_never_upgrade_a_gep_verdict():
+    short = {"route": "gep", "soc": "2134", "on_csol": True, "salary_eur_year": 75000,
+             "permit_record": None}
+    for degree, salary in (("unknown", 75000), ("yes", 45000)):
+        f = ireland_facts(_ie_master(degree), {**short, "salary_eur_year": salary}, "en")
+        assert "Critical Skills Employment Permit" not in f["sponsorship"]
+
+
+def test_ireland_facts_use_the_range_minimum():
+    straddle = {"route": "csep", "soc": "2134", "on_csol": True, "salary_eur_year": 75000,
+                "salary_eur_year_min": 55000, "permit_record": None}
+    f = ireland_facts(_ie_master("unknown"), straddle, "en")
+    assert "Critical Skills Employment Permit" not in f["sponsorship"]
+    f = ireland_facts(_ie_master("unknown"), {**straddle, "salary_eur_year_min": 70000}, "en")
+    assert "Critical Skills Employment Permit" in f["sponsorship"]

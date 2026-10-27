@@ -7,7 +7,7 @@ from datetime import date
 
 from cvforge.apply.check import REGIONS
 from cvforge.apply.ie_permits import load_permit_table
-from cvforge.apply.ireland import route_for
+from cvforge.apply.ireland import claims_csep
 from cvforge.profile.prefs import degree_recognised, self_apply, work_rights
 
 REFERENCES = "References available on request"
@@ -33,10 +33,9 @@ def _permit_line(master: dict, ireland: dict | None, today: date | None) -> str:
     table = load_permit_table(today or date.today())[0]
     on_csol = bool(ireland["on_csol"]) if "on_csol" in ireland and ireland.get("soc") \
         else soc in table.csol_soc
-    # Checked here, not taken from the verdict's route: a stale or edited verdict.json
-    # must never claim CSEP without a known salary over the floor that applies.
-    salary = ireland.get("salary_eur_year")
-    if soc and route_for(salary, soc, degree_recognised(master), table) == "csep":
+    # The verdict must say csep and the recompute from the lowest posted salary must agree:
+    # a stale, edited or fixed-term-downgraded verdict never becomes a CSEP claim.
+    if claims_csep(ireland, degree_recognised(master), table):
         return f"Eligible for Critical Skills Employment Permit (SOC {soc})"
     if on_csol:
         return "Requires employment permit (Critical Skills occupation)"
