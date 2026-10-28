@@ -16,6 +16,7 @@ CLONE_SIMILARITY = 0.8
 MARKET_ORDER = {"IE": 0, "BR": 1}
 WORDS = re.compile(r"\w+")
 SPACE = re.compile(r"\s+")
+GHOST_SIGNS = frozenset({"stale", "ghost history"})
 
 
 @dataclass
@@ -33,6 +34,11 @@ class Row:
     first_seen: str
     new: bool
     applied: dict | None
+
+
+def is_tagged(row: Row) -> bool:
+    """True when the row carries a ghost sign: cloned, stale or ghost history."""
+    return any(t.startswith("cloned") or t in GHOST_SIGNS for t in row.tags)
 
 
 def _url_key(url: str) -> str:

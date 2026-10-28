@@ -16,7 +16,7 @@ from cvforge.apply.seed import SEED_NOTE
 from cvforge.discover import store
 from cvforge.discover.filters import master_keywords
 from cvforge.discover.permit import needs_rates
-from cvforge.discover.rows import Row, build_rows
+from cvforge.discover.rows import Row, build_rows, is_tagged
 from cvforge.discover.screen import DROP_REASONS, Outcome, screen
 from cvforge.discover.sources import Role, SourceError, fetch_board
 from cvforge.money.rates import Rates
@@ -24,7 +24,6 @@ from cvforge.profile.prefs import primary_market
 
 FETCH_SOURCES = ("greenhouse", "ashby", "lever", "workable", "gupy")
 MARKETS = ("IE", "BR", "all")
-GHOST_SIGNS = frozenset({"stale", "ghost history"})
 
 
 @dataclass
@@ -72,11 +71,6 @@ def _load_rates(rates: Callable[[], Rates | None]) -> Rates | None:
         return None
 
 
-def _is_tagged(row: Row) -> bool:
-    """True when the row carries a ghost sign: cloned, stale or ghost history."""
-    return any(t.startswith("cloned") or t in GHOST_SIGNS for t in row.tags)
-
-
 def _run_role(role: Role, out: Outcome) -> dict:
     return {"key": role.key, "company": role.company, "title": role.title, "location": role.location,
             "url": role.url, "market": out.market, "drop": out.drop, "fit": out.fit,
@@ -86,7 +80,7 @@ def _run_role(role: Role, out: Outcome) -> dict:
 def _last_run_row(row: Row) -> dict:
     return {"market": row.market, "company": row.company, "title": row.title, "locations": row.locations,
             "url": row.urls[0] if row.urls else "", "fit": row.fit, "tags": row.tags,
-            "first_seen": row.first_seen, "tagged": _is_tagged(row), "applied": row.applied}
+            "first_seen": row.first_seen, "tagged": is_tagged(row), "applied": row.applied}
 
 
 def _write_text(path: Path, text: str) -> None:
