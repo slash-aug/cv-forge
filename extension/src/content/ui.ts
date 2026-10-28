@@ -32,6 +32,25 @@ button:disabled{opacity:.6;cursor:default}
 
 let ui: Ui | null = null;
 
+/** True inside an iframe; a top we may not read also means framed. */
+export function isFramed(win: Window): boolean {
+  try {
+    return win.top !== win;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Where the dock sits. In a frame the page often stretches the frame to the form's full
+ * height, so a fixed bottom corner is the end of the form: use the frame's top instead.
+ */
+export function dockPosition(framed: boolean): { position: string; top: string; bottom: string } {
+  return framed
+    ? { position: "absolute", top: "16px", bottom: "auto" }
+    : { position: "fixed", top: "auto", bottom: "16px" };
+}
+
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, cls?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
   if (text !== undefined) e.textContent = text;
@@ -51,6 +70,7 @@ function ensure(): Ui {
   const style = document.createElement("style");
   style.textContent = CSS;
   const dock = el("div", undefined, "dock");
+  Object.assign(dock.style, dockPosition(isFramed(window)));
   const parts = { bar: el("div"), summary: el("div"), applied: el("div"), chips: el("div", undefined, "chips") };
   dock.append(parts.bar, parts.summary, parts.applied);
   root.append(style, dock, parts.chips);

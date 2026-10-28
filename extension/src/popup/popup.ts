@@ -1,4 +1,5 @@
 import { errorText, type Job, type Match, type Msg, type Result } from "../shared/messages";
+import { twoStep } from "./confirm";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -71,13 +72,11 @@ $<HTMLSelectElement>("choose").addEventListener("change", async (e) => {
   if (!showError(await send({ type: "chooseJob", tabId, slug: chosen, url: tabUrl }))) await renderTab();
 });
 
-$("applied").addEventListener("click", async () => {
-  if (!slug || !window.confirm(`Mark ${slug} as applied?`)) return;
-  const button = $<HTMLButtonElement>("applied");
-  button.disabled = true;
+// Two clicks instead of window.confirm, which closes the Firefox popup before the result shows.
+twoStep($<HTMLButtonElement>("applied"), $("status"), async () => {
+  if (!slug) return "";
   const r = await send({ type: "markApplied", slug });
-  button.disabled = false;
-  if (!showError(r)) $("status").textContent = `Marked ${slug} as applied`;
+  return showError(r) ? "" : `Marked ${slug} as applied`;
 });
 
 // Initial token state: show the field when none is stored.
