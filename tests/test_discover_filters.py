@@ -183,3 +183,45 @@ def test_refuses_sponsorship_new_forms():
 def test_is_senior_level_v():
     assert is_senior("Software Engineer V", "") is True
     assert is_senior("Software Engineer (Remote) v", "") is False
+
+
+@pytest.mark.parametrize("loc,wp,desc,want", [
+    ("Home based - EMEA", None, "", ("IE", False)),
+    ("Home-based, Europe", None, "", ("IE", False)),
+    ("Work from home - EU", None, "", ("IE", False)),
+    ("WFH (Ireland)", None, "", ("IE", False)),
+    ("Home based - Worldwide", None, "", ("IE", True)),
+    ("Home based - Worldwide", None, "Open across Brazil.", ("BR", False)),
+    ("EMEA", None, "", ("IE", False)),
+    ("Europe", None, "", ("IE", False)),
+    ("Europe or US", None, "", ("IE", False)),
+    ("US", None, "", (None, False)),
+    ("London, UK", None, "", (None, False)),
+])
+def test_market_home_based_and_region_only(loc, wp, desc, want):
+    assert market_of(loc, wp, desc, home="IE") == want
+
+
+@pytest.mark.parametrize("loc", ["US-CA-Dublin", "Dublin, CA", "Dublin, OH", "Dublin, California",
+                                 "Dublin, Ohio, United States", "Dublin, CA, US"])
+def test_market_us_dublin_is_not_ireland(loc):
+    assert market_of(loc, "onsite", "", home="IE") == (None, False)
+
+
+@pytest.mark.parametrize("loc", ["Dublin", "Dublin, IE", "Dublin, Ireland", "Dublin, Co. Dublin"])
+def test_market_irish_dublin_still_ireland(loc):
+    assert market_of(loc, "onsite", "", home="IE") == ("IE", False)
+
+
+def test_stack_fit_all_caps_keywords_case_sensitive():
+    assert stack_fit("a solid team that gets some rest", ["SOLID", "REST"]) == ("partial", [])
+    assert stack_fit("SOLID principles and REST APIs", ["SOLID", "REST"]) == ("partial", ["SOLID", "REST"])
+    assert stack_fit("modern typescript", ["TypeScript"]) == ("partial", ["TypeScript"])
+
+
+def test_member_of_technical_staff():
+    assert is_software("Member of Technical Staff")
+    assert is_senior("Member of Technical Staff", "") is False
+    assert is_senior("Member of Technical Staff, Frontend", "") is False
+    assert is_senior("Senior Member of Technical Staff", "") is True
+    assert is_senior("Staff Engineer", "") is True

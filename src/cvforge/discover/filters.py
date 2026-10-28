@@ -13,8 +13,13 @@ market_of(location, workplace, description, home)
 - IE: the location names Ireland, an Irish place (IRISH_PLACES), or `IE` as a
   whole word (case-sensitive, location only, never the description).
 - IE also when the role is remote and the location names Ireland, EMEA,
-  Europe, EU or UK & Ireland. A remote role is one with workplace "remote" or
-  the word "remote" in the location.
+  Europe, EU or UK & Ireland. A remote role is one with workplace "remote",
+  or "remote", "home based", "home-based", "work from home" or "wfh" in the
+  location.
+- IE also when one alternative of the location (split on "or", "/", ";",
+  "|") names only EMEA, Europe or EU ("EMEA", "Europe or US"), remote or not.
+- Dublin in the US ("US-CA-Dublin", "Dublin, CA", "Dublin, California",
+  "Dublin, Ohio") is not an Irish place.
 - BR: the location names Brazil, Brasil, `BR` (case-sensitive) or a place in
   BRAZIL_PLACES, but only when the role is remote or in Londrina. A Brazilian
   on-site or hybrid role elsewhere gives None.
@@ -31,7 +36,8 @@ is_software(title)
 
 is_senior(title, description)
 - Title has a whole word from SENIOR_WORDS, a roman level III or above, or
-  L5/E5 and up. "team lead" is removed first. "Leadership", "Staffing" and
+  L5/E5 and up. "team lead" and "member of technical staff" are removed
+  first (the latter is a software title, not a senior one). "Leadership", "Staffing" and
   "Seniority" do not match.
 - Description asks for at least 5 years in a clear phrase ("5+ years",
   "5 or more years", "at least 6 years", "minimum (of) 7 years", "min. 5
@@ -46,7 +52,7 @@ stack_fit(text, keywords)
 - match: 3 or more distinct master keywords. partial: 1 or 2, or 0 with no
   foreign-stack term. misaligned: 0 and at least one FOREIGN_STACK term (a
   term that is also a master keyword is ignored). Keywords of 3 characters or
-  fewer match case-sensitively. No fuzzy spelling: "nodejs" is not "Node.js".
+  fewer, and all-caps keywords ("SOLID", "REST"), match case-sensitively. No fuzzy spelling: "nodejs" is not "Node.js".
   Matched keywords come back in keyword-list order, de-duplicated.
 """
 
@@ -68,6 +74,14 @@ BRAZIL_PLACES = (
     "parana", "minas gerais", "santa catarina", "rio grande do sul",
 )
 IE_REMOTE_TERMS = ("ireland", "emea", "europe", "eu", "uk & ireland")
+IE_REGIONS = frozenset({"emea", "europe", "eu"})
+US_STATES = frozenset({
+    "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "HI", "ID", "IL",
+    "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT",
+    "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI",
+    "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY", "DC",
+})
+MTS = "member of technical staff"
 BR_COUNTRY_TERMS = ("brazil", "brasil")
 
 SENIOR_WORDS = (
@@ -110,7 +124,7 @@ SPONSOR_REFUSALS = (
 )
 
 _STRONG_WORDS = (
-    r"developers?|programmers?|programmatore|software|full[\s-]?stack"
+    r"member\s+of\s+technical\s+staff|developers?|programmers?|programmatore|software|full[\s-]?stack"
     r"|front[\s-]?end|back[\s-]?end|desenvolvedor(?:a|es|as)?|programador(?:a|es|as)?"
 )
 _WEAK_WORDS = r"engineers?|engineering|web|dev|engenheiro(?:s|a|as)?"
@@ -146,15 +160,38 @@ def _mentions_br(folded: str) -> bool:
     return _any(folded, BR_COUNTRY_TERMS + BRAZIL_PLACES)
 
 
+_US_DUBLIN = re.compile(
+    r"\bUS-[A-Z]{2}-Dublin\b|\bDublin\s*,\s*(?:([A-Z]{2})\b|California\b|Ohio\b)", re.IGNORECASE
+)
+_HOME_BASED = re.compile(r"\bhome[\s-]based\b|\bwork from home\b|\bwfh\b")
+
+
+def _drop_us_dublin(raw: str) -> str:
+    def repl(m: re.Match[str]) -> str:
+        state = m.group(1)
+        return " " if state is None or state in US_STATES else m.group(0)
+    return _US_DUBLIN.sub(repl, raw)
+
+
+def _region_only(loc: str) -> bool:
+    """True when one alternative of the location names only EMEA, Europe or EU."""
+    for part in re.split(r"\s+or\s+|[/;|]", loc):
+        words = [t for t in re.findall(r"[a-z]+", part) if t not in REMOTE_NOISE]
+        if words and all(t in IE_REGIONS for t in words):
+            return True
+    return False
+
+
 def market_of(
     location: str, workplace: str | None, description: str, home: str
 ) -> tuple[str | None, bool]:
-    raw = location or ""
+    raw = _drop_us_dublin(location or "")
     loc = _norm(raw)
     tokens = re.findall(r"[a-z]+", loc)
     remote = (
         (workplace or "").lower() == "remote"
         or _has(loc, "remote")
+        or _HOME_BASED.search(loc) is not None
         or (bool(tokens) and all(t in ("anywhere", "worldwide", "global") for t in tokens))
     )
 
@@ -165,7 +202,7 @@ def market_of(
     )
     if ie_named:
         return "IE", False
-    if remote and _any(loc, IE_REMOTE_TERMS):
+    if (remote and _any(loc, IE_REMOTE_TERMS)) or _region_only(loc):
         return "IE", False
 
     br_named = _mentions_br(loc) or re.search(r"(?<![\w.])BR(?![\w.])", raw) is not None
@@ -223,7 +260,7 @@ def _years_required(description: str) -> int:
 
 
 def is_senior(title: str, description: str) -> bool:
-    folded = _norm(title).replace("team lead", " ")
+    folded = _norm(title).replace("team lead", " ").replace(MTS, " ")
     if _any(folded, SENIOR_WORDS) or _LEVEL_SUFFIX.search(folded) or _LEVEL_V.search(folded):
         return True
     return _years_required(description) >= 5
@@ -251,7 +288,7 @@ def master_keywords(master: dict) -> list[str]:
 
 
 def _keyword_hit(kw: str, raw: str, folded: str) -> bool:
-    if len(kw) <= 3:
+    if len(kw) <= 3 or kw.isupper():
         return _term(kw).search(raw) is not None
     return _has(folded, fold_accents(kw))
 
