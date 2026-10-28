@@ -1,6 +1,7 @@
 """Public job-board feeds (Greenhouse, Ashby, Lever, Workable) as lists of Role records."""
 from __future__ import annotations
 
+import unicodedata
 from dataclasses import dataclass
 from datetime import date
 
@@ -53,10 +54,16 @@ def board_url(ats: str, slug: str) -> str:
     }[ats]
 
 
+def clean_text(text: str) -> str:
+    """Replace control, format, surrogate, private-use and unassigned characters with spaces, tidy spacing."""
+    return " ".join("".join(" " if unicodedata.category(c).startswith("C") else c for c in text).split())
+
+
 def _role(post: Posting, *, ats: str, slug: str, job_id, company: str, url: str, location: str | None = None,
           salary: dict | None = None) -> Role:
-    return Role(source=ats, board=slug, job_id=str(job_id), company=company, title=post.title,
-                location=post.location if location is None else location, workplace=post.workplace,
+    return Role(source=ats, board=slug, job_id=str(job_id), company=clean_text(company),
+                title=clean_text(post.title),
+                location=clean_text(post.location if location is None else location), workplace=post.workplace,
                 url=url, description=post.description, salary=salary)
 
 

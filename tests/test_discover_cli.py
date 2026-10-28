@@ -166,3 +166,37 @@ def test_due_includes_jobs_line(env, capsys):
     out = capsys.readouterr().out
     assert "Jobs" in out
     assert "jobs: never fetched; run cvforge jobs fetch" in out
+
+
+def test_jobs_list_strips_control_characters(env, capsys):
+    cli.main(["jobs", "fetch"])
+    path = env / "jobs" / "last_run.json"
+    last = json.loads(path.read_text(encoding="utf-8"))
+    last["rows"][0]["title"] = "Dev\x1b[2J"
+    last["rows"][0]["locations"] = ["Dub\x1b]0;x\x07lin"]
+    path.write_text(json.dumps(last), encoding="utf-8")
+    capsys.readouterr()
+    assert cli.main(["jobs"]) == 0
+    out = capsys.readouterr().out
+    assert "\x1b" not in out and "\x07" not in out
+    assert "Dev [2J" in out
+
+
+def test_due_survives_corrupt_last_run(env, capsys):
+    cli.main(["jobs", "fetch"])
+    path = env / "jobs" / "last_run.json"
+    last = json.loads(path.read_text(encoding="utf-8"))
+    last["at"] = "garbage"
+    last["rows"][0]["first_seen"] = "garbage"
+    path.write_text(json.dumps(last), encoding="utf-8")
+    capsys.readouterr()
+    assert cli.main(["due"]) == 0
+    assert "last run unknown; run cvforge jobs fetch" in capsys.readouterr().out
+
+
+def test_real_load_master_missing_file(env, monkeypatch, capsys):
+    from cvforge.profile.model import load_master
+    monkeypatch.setattr(cli, "load_master", load_master)
+    (env / "profile" / "master.yaml").unlink()
+    assert cli.main(["jobs", "fetch"]) == 1
+    assert "master" in capsys.readouterr().err

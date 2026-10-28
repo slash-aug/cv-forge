@@ -47,6 +47,7 @@ from cvforge.discover.page import render_jobs
 from cvforge.discover.rows import intake_command
 from cvforge.discover.run import FETCH_SOURCES, MARKETS, due_lines, run_fetch
 from cvforge.discover.screen import DROP_REASONS
+from cvforge.discover.sources import clean_text
 from cvforge.guard import GuardError, check_message_file, check_staged, check_tree
 from cvforge.kit.data import build_kit
 from cvforge.kit.render import render_kit
@@ -495,13 +496,13 @@ def _run_jobs_fetch(cfg: Config, now: datetime, *, market: str = "all", source: 
         gupy_keywords=cfg.gupy_keywords, render=render_jobs)
     print(f"fetched {result.fetched} roles from {result.boards - result.failed} of {result.boards} sources")
     for error in result.errors:
-        print(error, file=sys.stderr)
+        print(clean_text(error), file=sys.stderr)
     print("dropped: " + ", ".join(f"{reason} {result.dropped.get(reason, 0)}" for reason in DROP_REASONS))
     irish = sum(1 for row in result.rows if row.market == "IE")
     brazilian = sum(1 for row in result.rows if row.market == "BR")
     viewed = jobs_store.read_last_viewed(jobs_dir)
-    new = sum(1 for row in result.rows
-              if row.applied is None and (viewed is None or datetime.fromisoformat(row.first_seen) > viewed))
+    new = sum(1 for row in result.rows if row.applied is None
+              and (viewed is None or datetime.fromisoformat(row.first_seen) > viewed))
     print(f"shown: {irish} Irish, {brazilian} Brazilian ({new} new)")
     if dry_run:
         print("(dry run, nothing written)")
@@ -531,12 +532,22 @@ def _is_stale(last: dict | None, now: datetime) -> bool:
 
 
 def _print_job(row: dict, new: bool) -> None:
-    tags = f" [{', '.join(row.get('tags') or [])}]" if row.get("tags") else ""
-    print(f"{'NEW ' if new else ''}{row['title']} | {row['company']} | "
-          f"{'; '.join(row.get('locations') or [])} | {row['fit']}{tags}")
+    tags = [clean_text(str(t)) for t in row.get("tags") or []]
+    locations = "; ".join(clean_text(str(loc)) for loc in row.get("locations") or [])
+    print(f"{'NEW ' if new else ''}{clean_text(str(row['title']))} | {clean_text(str(row['company']))} | "
+          f"{locations} | {clean_text(str(row['fit']))}{' [' + ', '.join(tags) + ']' if tags else ''}")
     url = row.get("url") or ""
     command = intake_command(url)
     print(f"  {command}" if command else f"  (open the link by hand: {url!r})")
+
+
+def _is_new(row: dict, viewed: datetime | None) -> bool:
+    if viewed is None:
+        return True
+    try:
+        return datetime.fromisoformat(row["first_seen"]) > viewed
+    except (KeyError, TypeError, ValueError):
+        return True
 
 
 def cmd_jobs(args) -> int:
@@ -557,14 +568,18 @@ def cmd_jobs(args) -> int:
         return 1
     viewed = jobs_store.read_last_viewed(jobs_dir)
     rows = last.get("rows") or []
-    open_rows = [r for r in rows if r.get("applied") is None]
-    new_rows = [r for r in open_rows if viewed is None or datetime.fromisoformat(r["first_seen"]) > viewed]
-    old_rows = [r for r in open_rows if r not in new_rows]
+    new_rows, old_rows, applied = [], [], []
+    for r in rows:
+        if r.get("applied") is not None:
+            applied.append(r)
+        elif _is_new(r, viewed):
+            new_rows.append(r)
+        else:
+            old_rows.append(r)
     for row in new_rows:
         _print_job(row, True)
     for row in old_rows:
         _print_job(row, False)
-    applied = [r for r in rows if r.get("applied") is not None]
     if applied:
         print("Already applied")
         for row in applied:

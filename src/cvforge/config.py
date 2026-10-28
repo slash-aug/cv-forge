@@ -81,14 +81,13 @@ def load_config(env: Mapping[str, str] | None = None, file: Path | None = None) 
         raise ConfigError(f"serve_port must be between 0 and 65535, got {serve_port}")
 
     raw_keywords = env.get("CVFORGE_GUPY_KEYWORDS")
-    if raw_keywords:
-        gupy_keywords = tuple(k.strip() for k in raw_keywords.split(",") if k.strip())
-    else:
+    gupy_keywords = tuple(k.strip() for k in (raw_keywords or "").split(",") if k.strip())
+    if not gupy_keywords:
         file_keywords = cfg.get("gupy_keywords")
         if file_keywords is None:
             gupy_keywords = GUPY_KEYWORDS
         elif isinstance(file_keywords, list) and all(isinstance(k, str) for k in file_keywords):
-            gupy_keywords = tuple(k.strip() for k in file_keywords if k.strip())
+            gupy_keywords = tuple(k.strip() for k in file_keywords if k.strip()) or GUPY_KEYWORDS
         else:
             raise ConfigError(f"gupy_keywords must be a list of strings, got {file_keywords!r}")
 

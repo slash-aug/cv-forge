@@ -168,15 +168,28 @@ def due_lines(jobs_dir: Path, now: datetime) -> list[str]:
     last = store.read_last_run(jobs_dir)
     if not last:
         return ["jobs: never fetched; run cvforge jobs fetch"]
-    viewed = store.read_last_viewed(jobs_dir)
-    new = [r for r in last.get("rows") or []
-           if r.get("applied") is None
-           and (viewed is None or datetime.fromisoformat(r["first_seen"]) > viewed)]
+    try:
+        viewed = store.read_last_viewed(jobs_dir)
+    except (KeyError, TypeError, ValueError):
+        viewed = None
+
+    def is_new(row: dict) -> bool:
+        if viewed is None:
+            return True
+        try:
+            return datetime.fromisoformat(row["first_seen"]) > viewed
+        except (KeyError, TypeError, ValueError):
+            return True
+
+    new = [r for r in last.get("rows") or [] if r.get("applied") is None and is_new(r)]
     irish = sum(1 for r in new if r.get("market") == "IE")
     brazilian = sum(1 for r in new if r.get("market") == "BR")
     tagged = sum(1 for r in new if r.get("tagged"))
     lines = [f"jobs: {irish} new Irish roles, {brazilian} new Brazilian ({tagged} tagged)"]
-    days = (now.date() - datetime.fromisoformat(last["at"]).date()).days
+    try:
+        days = (now.date() - datetime.fromisoformat(last["at"]).date()).days
+    except (KeyError, TypeError, ValueError):
+        return lines + ["jobs: last run unknown; run cvforge jobs fetch"]
     if days > 2:
         lines.append(f"jobs: last run {days} days ago; run cvforge jobs fetch")
     if last.get("failed"):

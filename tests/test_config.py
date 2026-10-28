@@ -76,3 +76,15 @@ def test_gupy_keywords_config(tmp_path):
     f.write_text('[cvforge]\ngupy_keywords = "go"\n')
     with pytest.raises(ConfigError):
         load_config(env={}, file=f)
+
+
+def test_gupy_keywords_empty_env_falls_back():
+    default = ("react", "node", "full stack", "typescript")
+    assert load_config(env={"CVFORGE_GUPY_KEYWORDS": " , ,"}, file=None).gupy_keywords == default
+
+
+def test_gupy_keywords_non_string_toml(tmp_path):
+    f = tmp_path / "cvforge.toml"
+    f.write_text('[cvforge]\ngupy_keywords = ["go", 3]\n')
+    with pytest.raises(ConfigError):
+        load_config(env={}, file=f)

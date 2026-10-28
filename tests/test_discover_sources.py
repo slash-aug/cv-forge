@@ -100,3 +100,11 @@ def test_entry_without_slug_raises_source_error():
         fetch_board({"name": "Acme", "ats": "greenhouse"}, get=fake({}), today=TODAY)
     with pytest.raises(SourceError):
         fetch_board({"name": "Acme", "ats": "gupy", "slug": "acme"}, get=fake({}), today=TODAY)
+
+
+def test_feed_text_is_cleaned():
+    page = ('{"jobs": [{"id": 1, "title": "Dev\\u001b[2J\\u202e", "absolute_url": "https://x.example/1", '
+            '"location": {"name": "Dub\\u001b]0;x\\u0007lin"}, "content": ""}]}')
+    roles = fetch_board(entry("greenhouse"), get=fake({board_url("greenhouse", "acme"): page}), today=TODAY)
+    assert roles[0].title == "Dev [2J"
+    assert roles[0].location == "Dub ]0;x lin"
