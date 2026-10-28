@@ -157,18 +157,22 @@ def test_prune_runs(tmp_path):
     today = date(2026, 10, 28)
     runs = tmp_path / "runs"
     runs.mkdir()
-    for name in ("2026-07-30.json", "2026-07-29.json", "notes.json", "2026-07-01.txt"):
+    for name in ("2026-07-30.json", "2026-07-29.json", "notes.json", "2026-07-01.txt",
+                 "2026-07-29T2305.json", "2026-07-30T0100.json", "2026-07-29T99.json"):
         (runs / name).write_text("{}")
-    assert prune_runs(tmp_path, today) == 1
-    assert sorted(p.name for p in runs.iterdir()) == ["2026-07-01.txt", "2026-07-30.json", "notes.json"]
+    assert prune_runs(tmp_path, today) == 2
+    assert sorted(p.name for p in runs.iterdir()) == [
+        "2026-07-01.txt", "2026-07-29T99.json", "2026-07-30.json", "2026-07-30T0100.json", "notes.json"]
     assert prune_runs(tmp_path / "missing", today) == 0
 
 
-def test_write_run_overwrites(tmp_path):
-    p = write_run(tmp_path, date(2026, 10, 28), {"n": 1})
-    assert p == tmp_path / "runs" / "2026-10-28.json"
-    write_run(tmp_path, date(2026, 10, 28), {"n": 2})
-    assert json.loads(p.read_text(encoding="utf-8")) == {"n": 2}
+def test_write_run_named_with_time(tmp_path):
+    p = write_run(tmp_path, datetime(2026, 10, 28, 23, 5), {"n": 1})
+    assert p == tmp_path / "runs" / "2026-10-28T2305.json"
+    q = write_run(tmp_path, datetime(2026, 10, 28, 23, 40), {"n": 2})
+    assert q == tmp_path / "runs" / "2026-10-28T2340.json"
+    assert json.loads(p.read_text(encoding="utf-8")) == {"n": 1}
+    assert json.loads(q.read_text(encoding="utf-8")) == {"n": 2}
 
 
 def test_last_viewed_roundtrip(tmp_path):

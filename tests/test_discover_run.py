@@ -71,7 +71,7 @@ def test_run_writes_files_and_counts(tmp_path, discover_master):
     result = fetch(tmp_path, discover_master, render=render)
     assert (tmp_path / "seen.json").exists()
     assert (tmp_path / "ghosts.json").exists()
-    run = json.loads((tmp_path / "runs" / "2026-10-28.json").read_text(encoding="utf-8"))
+    run = json.loads((tmp_path / "runs" / "2026-10-28T0900.json").read_text(encoding="utf-8"))
     keys = {r["key"]: r for r in run["roles"]}
     assert set(keys) == {"greenhouse:acme:101", "greenhouse:acme:102", "greenhouse:acme:103",
                          "ashby:globex:a1", "ashby:globex:a2"}
@@ -138,7 +138,7 @@ def test_all_failed_run_keeps_the_list(tmp_path, discover_master):
     assert last["at"] == "2026-10-29T09:00:00"
     assert last["failed"] == last["boards"] == 2 and last["errors"] == result.errors
     assert (tmp_path / "latest.html").read_text() == "<html>good</html>"
-    run = json.loads((tmp_path / "runs" / "2026-10-29.json").read_text())
+    run = json.loads((tmp_path / "runs" / "2026-10-29T0900.json").read_text())
     assert run["errors"] == result.errors and run["roles"] == []
 
 
@@ -242,6 +242,43 @@ def test_source_filter_fetches_one_ats(tmp_path, discover_master):
     result = fetch(tmp_path, discover_master, get=server, source="ashby")
     assert server.calls == [GLOBEX_URL]
     assert result.boards == 1
+
+
+def test_partial_run_keeps_the_list_and_page(tmp_path, discover_master):
+    fetch(tmp_path, discover_master, render=lambda r, v: "<html>full</html>")
+    before = (tmp_path / "last_run.json").read_text(encoding="utf-8")
+    later = NOW + timedelta(hours=2)
+    server = Server()
+    result = fetch(tmp_path, discover_master, get=server, source="ashby", now=later,
+                   render=lambda r, v: "<html>partial</html>")
+    assert server.calls == [GLOBEX_URL]
+    assert {r.company for r in result.rows} == {"Globex"}
+    assert (tmp_path / "last_run.json").read_text(encoding="utf-8") == before
+    assert (tmp_path / "latest.html").read_text(encoding="utf-8") == "<html>full</html>"
+    run = json.loads((tmp_path / "runs" / "2026-10-28T1100.json").read_text(encoding="utf-8"))
+    assert {r["key"] for r in run["roles"]} == {"ashby:globex:a1", "ashby:globex:a2"}
+    seen = json.loads((tmp_path / "seen.json").read_text(encoding="utf-8"))
+    assert seen["ashby:globex:a1"]["last_seen"] == "2026-10-28T11:00:00"
+    assert seen["greenhouse:acme:101"]["last_seen"] == "2026-10-28T09:00:00"
+    assert seen["greenhouse:acme:101"]["gone_since"] is None
+
+
+def test_same_day_runs_keep_both_run_files(tmp_path, discover_master):
+    fetch(tmp_path, discover_master)
+    fetch(tmp_path, discover_master, now=NOW + timedelta(minutes=30))
+    names = sorted(p.name for p in (tmp_path / "runs").iterdir())
+    assert names == ["2026-10-28T0900.json", "2026-10-28T0930.json"]
+
+
+def test_feed_entry_without_slug_is_listed_by_hand(tmp_path, discover_master):
+    noslug = {"name": "Noslug", "ats": "greenhouse", "careers_url": "https://noslug.example.com/careers",
+              "sponsor": [], "notes": ""}
+    server = Server()
+    result = fetch(tmp_path, discover_master, registry=[*REGISTRY, noslug], get=server)
+    assert server.calls == [ACME_URL, GLOBEX_URL] and result.boards == 2
+    assert result.manual == [
+        {"name": "Initech", "ats": "workday", "careers_url": "https://initech.example.com/careers"},
+        {"name": "Noslug", "ats": "greenhouse", "careers_url": "https://noslug.example.com/careers"}]
 
 
 def test_gupy_source_fetches_nothing_yet(tmp_path, discover_master):

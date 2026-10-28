@@ -19,7 +19,8 @@ RUN_KEEP_DAYS = 90
 GENDER_MARK = re.compile(r"\(\s*[a-z]\s*/\s*[a-z](?:\s*/\s*[a-z])?\s*\)")
 NON_WORD = re.compile(r"[\W_]+")
 LETTERS = re.compile(r"[^\W\d_]+")
-RUN_FILE = re.compile(r"^(\d{4}-\d{2}-\d{2})\.json$")
+# runs/YYYY-MM-DDTHHMM.json; the older runs/YYYY-MM-DD.json name is still pruned by its date.
+RUN_FILE = re.compile(r"^(\d{4}-\d{2}-\d{2})(?:T\d{4})?\.json$")
 
 
 def norm_title(title: str) -> str:
@@ -141,8 +142,9 @@ def write_last_viewed(jobs_dir: Path, now: datetime) -> None:
     _write_json(jobs_dir / "last_viewed.json", {"at": _iso(now)})
 
 
-def write_run(jobs_dir: Path, today: date, payload: dict) -> Path:
-    path = jobs_dir / "runs" / f"{today.isoformat()}.json"
+def write_run(jobs_dir: Path, now: datetime, payload: dict) -> Path:
+    """One file per run, named by date and minute so a second run the same day keeps the first."""
+    path = jobs_dir / "runs" / f"{now.strftime('%Y-%m-%dT%H%M')}.json"
     _write_json(path, payload)
     return path
 

@@ -75,6 +75,19 @@ def test_jobs_fetch_all_failed_exits_1(env, capsys):
     assert "Acme (greenhouse)" in captured.err
 
 
+def test_jobs_fetch_source_does_not_replace_the_list(env, capsys):
+    assert cli.main(["jobs", "fetch"]) == 0
+    before = (env / "jobs" / "last_run.json").read_text(encoding="utf-8")
+    page = (env / "jobs" / "latest.html").read_text(encoding="utf-8")
+    capsys.readouterr()
+    assert cli.main(["jobs", "fetch", "--source", "ashby"]) == 0
+    out = capsys.readouterr().out
+    assert "fetched 2 roles from 1 of 1 sources" in out
+    assert "(partial run, the list was not replaced)" in out
+    assert (env / "jobs" / "last_run.json").read_text(encoding="utf-8") == before
+    assert (env / "jobs" / "latest.html").read_text(encoding="utf-8") == page
+
+
 def test_jobs_fetch_gupy_is_manual(env, capsys):
     assert cli.main(["jobs", "fetch", "--source", "gupy"]) == 2
     captured = capsys.readouterr()

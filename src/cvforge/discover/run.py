@@ -52,7 +52,7 @@ def _home(entry: dict, master: dict) -> str:
 
 def _feed_boards(registry: list[dict], source: str | None) -> list[dict]:
     if source == "gupy":
-        return []  # Gupy is read by its own search, wired separately
+        return []  # Gupy has no plain public search (probed 2026-10-28): its roles come in by intake
     return [e for e in registry
             if e.get("ats") in FEED_ATS and board_slug(e) and (source is None or e.get("ats") == source)]
 
@@ -100,8 +100,11 @@ def run_fetch(jobs_dir: Path, *, master: dict, registry: list[dict], tracker_row
         raise ValueError(f"unknown source {source!r}; allowed: {', '.join(FETCH_SOURCES)}")
     today = now.date()
     boards = _feed_boards(registry, source)
+    # Manual ATS employers, plus feed-ATS employers whose board slug cannot be derived.
     manual = sorted(({"name": e.get("name"), "ats": e.get("ats"), "careers_url": e.get("careers_url")}
-                     for e in registry if e.get("ats") in MANUAL_ATS), key=lambda m: m["name"] or "")
+                     for e in registry
+                     if e.get("ats") in MANUAL_ATS or (e.get("ats") in FEED_ATS and not board_slug(e))),
+                    key=lambda m: m["name"] or "")
 
     fetched_roles: list[tuple[Role, str]] = []
     answered: set[tuple[str, str]] = set()
@@ -149,8 +152,12 @@ def run_fetch(jobs_dir: Path, *, master: dict, registry: list[dict], tracker_row
     store.save_seen(seen_path, seen)
     store.save_ghosts(ghosts_path, ghosts)
     at = now.isoformat(timespec="seconds")
-    store.write_run(jobs_dir, today, {"at": at, "errors": errors, "dropped": dropped,
-                                      "roles": [_run_role(r, o) for r, o in screened]})
+    store.write_run(jobs_dir, now, {"at": at, "errors": errors, "dropped": dropped,
+                                    "roles": [_run_role(r, o) for r, o in screened]})
+    if source is not None:
+        # A partial run updates sightings and its run file but never replaces the list or page.
+        store.prune_runs(jobs_dir, today)
+        return result
     if result.all_failed:
         # Nothing was read: keep the previous list so a network outage does not empty it.
         last_rows = (store.read_last_run(jobs_dir) or {}).get("rows") or []

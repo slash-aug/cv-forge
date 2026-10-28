@@ -506,6 +506,8 @@ def _run_jobs_fetch(cfg: Config, now: datetime, *, market: str = "all", source: 
     print(f"shown: {irish} Irish, {brazilian} Brazilian ({new} new)")
     if dry_run:
         print("(dry run, nothing written)")
+    elif source is not None:
+        print("(partial run, the list was not replaced)")
     elif (jobs_dir / "latest.html").exists():
         print(jobs_dir / "latest.html")
     return result
