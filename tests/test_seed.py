@@ -1,3 +1,5 @@
+import json
+
 from cvforge.apply.companies import add_company, find_company, load_registry
 from cvforge.apply.seed import seed_ie
 
@@ -50,3 +52,17 @@ def test_aliases_carried_and_names_fixed(tmp_path):
     assert find_company(reg, "FMR")["name"] == "Fidelity Investments"
     assert find_company(reg, "HubSpot")["careers_url"] == "https://boards.greenhouse.io/hubspotjobs"
     assert find_company(reg, "Platform Engineering") is None
+
+
+def test_seed_writes_slug_for_feed_items_only(tmp_path):
+    items = [
+        {"name": "Acme", "ats": "greenhouse", "slug": "acme"},
+        {"name": "Globex", "ats": "workday",
+         "workday": {"tenant": "globex", "wd": "wd3", "site": "ext"}},
+    ]
+    seed = tmp_path / "seed.json"
+    seed.write_text(json.dumps(items), encoding="utf-8")
+    seed_ie(tmp_path / "companies.yaml", seed)
+    reg = load_registry(tmp_path / "companies.yaml")
+    assert find_company(reg, "Acme")["slug"] == "acme"
+    assert "slug" not in find_company(reg, "Globex")

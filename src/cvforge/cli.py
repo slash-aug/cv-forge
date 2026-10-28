@@ -22,6 +22,7 @@ from cvforge.apply.companies import (
     add_sponsor,
     find_company,
     load_registry,
+    set_ghost,
 )
 from cvforge.apply.dete import dete_imported, permit_record
 from cvforge.apply.experience import engineering_months
@@ -817,6 +818,9 @@ def _format_company(entry: dict) -> str:
     for s in entry["sponsor"]:
         count = f", {s['count']} permits" if "count" in s else ""
         lines.append(f"  {s['type']} ({s['source']}, {s['date']}{count})")
+    if entry.get("ghost"):
+        g = entry["ghost"]
+        lines.append(f"ghost: {'marked' if g['mark'] else 'cleared'} ({g['date']})")
     if entry.get("notes"):
         lines.append(f"notes: {entry['notes']}")
     return "\n".join(lines)
@@ -874,6 +878,8 @@ def cmd_company(args) -> int:
         elif args.action == "sponsor":
             day = date.fromisoformat(args.date) if args.date else _today()
             entry = add_sponsor(path, args.name, type=args.type, source=args.source, day=day)
+        elif args.action == "ghost":
+            entry = set_ghost(path, args.name, mark=not args.clear, day=_today())
         else:
             entry = find_company(load_registry(path), args.name)
             if entry is None:
@@ -962,6 +968,9 @@ def _parser() -> argparse.ArgumentParser:
     c.add_argument("--type", required=True)
     c.add_argument("--source", required=True)
     c.add_argument("--date")
+    c = company.add_parser("ghost", help="mark a company as a ghost employer (or --clear)")
+    c.add_argument("name")
+    c.add_argument("--clear", action="store_true")
     c = company.add_parser("import-ie", help="import DETE employment permit statistics")
     c.add_argument("--year", type=int, action="append")
     c.add_argument("--file", help="a downloaded companies xlsx instead of fetching")

@@ -64,9 +64,12 @@ def seed_ie(registry_path: Path, seed_file: Path | None = None) -> SeedResult:
         if find_company(registry, item["name"]) is not None:
             kept += 1
             continue
-        registry.append({"name": item["name"], **_defaults(), "ats": item["ats"],
-                         "careers_url": _careers_url(item), "notes": SEED_NOTE,
-                         "aliases": list(item.get("aliases", []))})
+        entry = {"name": item["name"], **_defaults(), "ats": item["ats"],
+                 "careers_url": _careers_url(item), "notes": SEED_NOTE,
+                 "aliases": list(item.get("aliases", []))}
+        if item.get("slug"):
+            entry["slug"] = item["slug"]
+        registry.append(entry)
         added += 1
     if added:
         _save(registry_path, registry)

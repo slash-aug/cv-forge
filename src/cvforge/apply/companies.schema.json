@@ -24,7 +24,17 @@
           "additionalProperties": false
         }
       },
-      "notes": {"type": "string"}
+      "notes": {"type": "string"},
+      "slug": {"type": "string", "minLength": 1},
+      "ghost": {
+        "type": "object",
+        "properties": {
+          "mark": {"type": "boolean"},
+          "date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"}
+        },
+        "required": ["mark", "date"],
+        "additionalProperties": false
+      }
     },
     "required": ["name"],
     "additionalProperties": false
