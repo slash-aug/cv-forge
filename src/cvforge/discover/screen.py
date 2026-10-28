@@ -34,17 +34,17 @@ def screen(role: Role, *, home: str, keywords: list[str], master: dict,
            table: PermitTable, rates: Rates | None) -> Outcome:
     market, region_unknown = market_of(role.location, role.workplace, role.description, home)
     if market is None:
-        return Outcome(None, "out-of-market", None)
+        return Outcome(market=None, drop="out-of-market", fit=None)
     if not is_software(role.title):
-        return Outcome(market, "not-software", None)
+        return Outcome(market=market, drop="not-software", fit=None)
     if is_senior(role.title, role.description):
-        return Outcome(market, "senior", None)
+        return Outcome(market=market, drop="senior", fit=None)
     text = f"{role.title}\n{role.description}"
     if market == "IE" and refuses_sponsorship(text):
-        return Outcome(market, "no-sponsorship", None)
+        return Outcome(market=market, drop="no-sponsorship", fit=None)
     fit, matched = stack_fit(text, keywords)
     if fit == "misaligned":
-        return Outcome(market, "misaligned", fit, matched)
+        return Outcome(market=market, drop="misaligned", fit=fit, matched=matched)
     tags: list[str] = []
     if region_unknown:
         tags.append("region unknown")
@@ -54,8 +54,9 @@ def screen(role: Role, *, home: str, keywords: list[str], master: dict,
     if market == "IE":
         salary = permit_outcome(role.salary, master, table, rates)
         if salary.drop:
-            return Outcome(market, "below-permit", fit, matched, salary.route, salary, tags)
+            return Outcome(market=market, drop="below-permit", fit=fit, matched=matched,
+                           route=salary.route, salary=salary, tags=tags)
         route = salary.route
         if salary.salary_unknown:
             tags.append("salary unknown")
-    return Outcome(market, None, fit, matched, route, salary, tags)
+    return Outcome(market=market, drop=None, fit=fit, matched=matched, route=route, salary=salary, tags=tags)

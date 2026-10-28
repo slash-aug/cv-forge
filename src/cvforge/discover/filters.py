@@ -61,6 +61,7 @@ stack_fit(text, keywords)
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 
 from cvforge.text import fold_accents
 
@@ -141,25 +142,44 @@ def _norm(text: str) -> str:
     return re.sub(r"\s+", " ", fold_accents((text or "").replace("\u2019", "'")))
 
 
-def _term(term: str) -> re.Pattern[str]:
+def _whole(alternatives: str) -> re.Pattern[str]:
     """Whole-term pattern where `.`, `+` and `#` count as word characters."""
-    return re.compile(r"(?<![\w.+#])" + re.escape(term) + r"(?![\w+#])(?!\.\w)")
+    return re.compile(r"(?<![\w.+#])(?:" + alternatives + r")(?![\w+#])(?!\.\w)")
+
+
+@lru_cache(maxsize=512)
+def _term(term: str) -> re.Pattern[str]:
+    return _whole(re.escape(term))
+
+
+def _terms(terms: tuple[str, ...]) -> re.Pattern[str]:
+    """One pattern matching any of the terms, longest first."""
+    return _whole("|".join(re.escape(t) for t in sorted(terms, key=len, reverse=True)))
+
+
+@lru_cache(maxsize=512)
+def _fold(keyword: str) -> str:
+    return fold_accents(keyword)
 
 
 def _has(folded: str, term: str) -> bool:
     return _term(term).search(folded) is not None
 
 
-def _any(folded: str, terms: tuple[str, ...]) -> bool:
-    return any(_has(folded, t) for t in terms)
+_IRISH_PLACES_RE = _terms(IRISH_PLACES)
+_IE_REMOTE_RE = _terms(IE_REMOTE_TERMS)
+_IE_ANY_RE = _terms(IE_REMOTE_TERMS + IRISH_PLACES)
+_BR_ANY_RE = _terms(BR_COUNTRY_TERMS + BRAZIL_PLACES)
+_NOT_SOFTWARE_RE = _terms(_NOT_SOFTWARE)
+_SENIOR_RE = _terms(SENIOR_WORDS)
 
 
 def _mentions_ie(folded: str) -> bool:
-    return _any(folded, IE_REMOTE_TERMS + IRISH_PLACES)
+    return _IE_ANY_RE.search(folded) is not None
 
 
 def _mentions_br(folded: str) -> bool:
-    return _any(folded, BR_COUNTRY_TERMS + BRAZIL_PLACES)
+    return _BR_ANY_RE.search(folded) is not None
 
 
 _US_DUBLIN = re.compile(
@@ -199,12 +219,12 @@ def market_of(
 
     ie_named = (
         _has(loc, "ireland")
-        or _any(loc, IRISH_PLACES)
+        or _IRISH_PLACES_RE.search(loc) is not None
         or re.search(r"(?<![\w.])IE(?![\w.])", raw) is not None
     )
     if ie_named:
         return "IE", False
-    if (remote and _any(loc, IE_REMOTE_TERMS)) or _region_only(loc):
+    if (remote and _IE_REMOTE_RE.search(loc)) or _region_only(loc):
         return "IE", False
 
     br_named = _mentions_br(loc) or re.search(r"(?<![\w.])BR(?![\w.])", raw) is not None
@@ -233,7 +253,7 @@ def is_software(title: str) -> bool:
         return True
     if not re.search(rf"(?<![\w.+#])(?:{_WEAK_WORDS})(?![\w+#])", folded):
         return False
-    if _any(folded, _NOT_SOFTWARE) or re.search(r"\brecruit", folded):
+    if _NOT_SOFTWARE_RE.search(folded) or re.search(r"\brecruit", folded):
         return False
     return "quality assurance" not in folded
 
@@ -280,7 +300,7 @@ def _years_required(description: str) -> int:
 
 def is_senior(title: str, description: str) -> bool:
     folded = _norm(title).replace("team lead", " ").replace(MTS, " ")
-    if _any(folded, SENIOR_WORDS) or _LEVEL_SUFFIX.search(folded) or _LEVEL_V.search(folded):
+    if _SENIOR_RE.search(folded) or _LEVEL_SUFFIX.search(folded) or _LEVEL_V.search(folded):
         return True
     return _years_required(description) >= 5
 
@@ -309,7 +329,7 @@ def master_keywords(master: dict) -> list[str]:
 def _keyword_hit(kw: str, raw: str, folded: str) -> bool:
     if len(kw) <= 3 or kw.isupper():
         return _term(kw).search(raw) is not None
-    return _has(folded, fold_accents(kw))
+    return _has(folded, _fold(kw))
 
 
 def stack_fit(text: str, keywords: list[str]) -> tuple[str, list[str]]:
@@ -323,7 +343,7 @@ def stack_fit(text: str, keywords: list[str]) -> tuple[str, list[str]]:
         return "match", matched
     if matched:
         return "partial", matched
-    own = {fold_accents(k) for k in keywords}
+    own = {_fold(k) for k in keywords}
     strong = [t for t in FOREIGN_STACK_STRONG if t not in own and _has(folded, t)]
     weak = [t for t in FOREIGN_STACK_WEAK if t not in own and _has(folded, t)]
     misaligned = bool(strong) or len(weak) >= 2

@@ -37,11 +37,16 @@ def _iso(moment: datetime) -> str:
     return moment.isoformat(timespec="seconds")
 
 
-def _write_json(path: Path, data) -> None:
+def write_text_atomic(path: Path, text: str) -> None:
+    """Write through a temp file and rename, so a crash never leaves half a file."""
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    tmp.write_text(text, encoding="utf-8")
     os.replace(tmp, path)
+
+
+def _write_json(path: Path, data) -> None:
+    write_text_atomic(path, json.dumps(data, ensure_ascii=False, indent=1))
 
 
 def _read_json(path: Path):
@@ -50,18 +55,53 @@ def _read_json(path: Path):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def load_seen(path: Path) -> dict[str, dict]:
+def _load_map(path: Path) -> dict[str, dict]:
     return _read_json(path) or {}
 
 
+def _save_map(path: Path, data: dict[str, dict]) -> None:
+    _write_json(path, data)
+
+
+def load_seen(path: Path) -> dict[str, dict]:
+    return _load_map(path)
+
+
 def save_seen(path: Path, seen: dict[str, dict]) -> None:
-    _write_json(path, seen)
+    _save_map(path, seen)
+
+
+def is_new(first_seen: str | None, applied: dict | None, viewed: datetime | None) -> bool:
+    """A role not in the tracker and first seen after the last view; an odd stamp counts as new."""
+    if applied is not None:
+        return False
+    if viewed is None:
+        return True
+    try:
+        seen = datetime.fromisoformat(first_seen)
+    except (TypeError, ValueError):
+        return True  # show it rather than hide it
+    if seen.tzinfo is None and viewed.tzinfo is not None:
+        seen = seen.replace(tzinfo=viewed.tzinfo)
+    elif seen.tzinfo is not None and viewed.tzinfo is None:
+        viewed = viewed.replace(tzinfo=seen.tzinfo)
+    return seen > viewed
+
+
+def _repost_key(fp: str | None, company: str, title: str) -> tuple:
+    return fp, name_key(company), norm_title(title)
 
 
 def update_seen(seen: dict[str, dict], roles: list[Role], market_of_key: dict[str, str | None],
                 *, now: datetime, fetched: set[tuple[str, str]]) -> None:
     stamp = _iso(now)
     current = {r.key for r in roles}
+    # Gone records by repost key, in seen order; the loop below only ever removes candidates.
+    gone_index: dict[tuple, list[dict]] = {}
+    for old in seen.values():
+        if old.get("gone_since") and not old.get("successor"):
+            rkey = _repost_key(old.get("fingerprint"), old.get("company") or "", old.get("title") or "")
+            gone_index.setdefault(rkey, []).append(old)
     for role in roles:
         key = role.key
         market = market_of_key.get(key)
@@ -75,11 +115,9 @@ def update_seen(seen: dict[str, dict], roles: list[Role], market_of_key: dict[st
                 rec["gone_since"] = None
             continue
         fp = fingerprint(role.description)
-        company, title = name_key(role.company), norm_title(role.title)
         gone = [
-            old for old in seen.values()
-            if old.get("gone_since") and not old.get("successor") and old.get("fingerprint") == fp
-            and name_key(old.get("company") or "") == company and norm_title(old.get("title") or "") == title
+            old for old in gone_index.get(_repost_key(fp, role.company, role.title), [])
+            if old.get("gone_since") and not old.get("successor")
         ]
         first_seen, reposted = stamp, 0
         if gone:
@@ -105,11 +143,11 @@ def is_stale(record: dict, now: datetime) -> bool:
 
 
 def load_ghosts(path: Path) -> dict[str, dict]:
-    return _read_json(path) or {}
+    return _load_map(path)
 
 
 def save_ghosts(path: Path, ghosts: dict[str, dict]) -> None:
-    _write_json(path, ghosts)
+    _save_map(path, ghosts)
 
 
 def flag_ghosts(ghosts: dict[str, dict], flagged: dict[str, str], today: date) -> None:
@@ -121,16 +159,18 @@ def ghost_marked(company: str, ghosts: dict[str, dict], entry: dict | None, toda
     auto = ghosts.get(name_key(company))
     flagged = date.fromisoformat(auto["last_flagged"]) if auto else None
     manual = (entry or {}).get("ghost")
+    if manual and manual.get("mark"):
+        return True
+    if flagged is None:
+        return False
     if manual:
-        if manual.get("mark"):
-            return True
         try:
             marked_on = date.fromisoformat(str(manual["date"]))
         except (KeyError, ValueError):
             marked_on = None
-        if flagged is None or (marked_on is not None and marked_on >= flagged):
-            return False
-    return flagged is not None and (today - flagged).days <= GHOST_DAYS
+        if marked_on is not None and marked_on >= flagged:
+            return False  # cleared by hand after the last auto flag
+    return (today - flagged).days <= GHOST_DAYS
 
 
 def read_last_viewed(jobs_dir: Path) -> datetime | None:

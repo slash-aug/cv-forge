@@ -10,6 +10,7 @@ Builds tailored, audited, ATS-checked LaTeX CVs and cover letters from one maste
 - No AI attribution in commits or PRs (no Co-Authored-By, no "Generated with" lines).
 - No em dashes in public text (docs, code, commit messages).
 - Stage files by name; never `git add -A`.
+- Every PR gets a `/simplify` pass over its diff before it is ready to merge. Apply only the findings that keep behaviour; skip any that would break a rule or a core flow, and note why in the PR.
 - PR titles are one conventional-commit line (`type: subject`, `type(scope): subject` when a scope fits) that sums up the branch. The body is a summary plus how it was tested. Merges keep GitHub's default subject with the PR title as the description.
 
 ## Commands

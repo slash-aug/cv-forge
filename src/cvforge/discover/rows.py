@@ -11,7 +11,7 @@ from cvforge.apply.companies import find_company, name_key
 from cvforge.apply.posting import canonical_url
 from cvforge.discover.screen import Outcome
 from cvforge.discover.sources import Role
-from cvforge.discover.store import ghost_marked, is_stale, norm_title
+from cvforge.discover.store import ghost_marked, is_new, is_stale, norm_title
 from cvforge.kit.render import is_web
 from cvforge.text import fold_accents
 
@@ -66,17 +66,22 @@ def _url_key(url: str) -> str:
     return canonical_url(url).rstrip("/")
 
 
-def _matches(role: Role, tracker_rows: list[dict]) -> list[dict]:
+def _tracker_keys(tracker_rows: list[dict]) -> list[tuple[str | None, tuple | None, dict]]:
+    """Each tracker row's URL key and (company, title) key, None when blank, normalised once."""
+    keys = []
+    for row in tracker_rows:
+        url = _url_key(row["url"]) if row.get("url") else None
+        ident = (name_key(row.get("company") or ""), norm_title(row.get("role") or ""))
+        keys.append((url, ident if all(ident) else None, row))
+    return keys
+
+
+def _matches(role: Role, tracker_keys: list[tuple[str | None, tuple | None, dict]]) -> list[dict]:
     url = _url_key(role.url)
     ident = (name_key(role.company), norm_title(role.title))
-    found = []
-    for row in tracker_rows:
-        by_url = bool(row.get("url")) and _url_key(row["url"]) == url
-        row_ident = (name_key(row.get("company") or ""), norm_title(row.get("role") or ""))
-        by_name = all(row_ident) and row_ident == ident
-        if by_url or by_name:
-            found.append({"date": row.get("date") or "", "status": row.get("status")})
-    return found
+    return [{"date": row.get("date") or "", "status": row.get("status")}
+            for row_url, row_ident, row in tracker_keys
+            if (row_url is not None and row_url == url) or (row_ident is not None and row_ident == ident)]
 
 
 def _best(matches: list[dict]) -> dict | None:
@@ -89,7 +94,7 @@ def _best(matches: list[dict]) -> dict | None:
 
 
 def applied_match(role: Role, tracker_rows: list[dict]) -> dict | None:
-    return _best(_matches(role, tracker_rows))
+    return _best(_matches(role, _tracker_keys(tracker_rows)))
 
 
 def _place(role: Role) -> str:
@@ -163,8 +168,12 @@ def build_rows(kept: list[tuple[Role, Outcome]], seen: dict[str, dict], *, regis
     rows: list[Row] = []
     flagged: dict[str, str] = {}
     today = now.date()
+    order: dict[int, int] = {}
+    for i, (r, _) in enumerate(kept):
+        order.setdefault(id(r), i)
+    tracker_keys = _tracker_keys(tracker_rows)
     for group in merged:
-        group.sort(key=lambda u: min(i for i, (r, _) in enumerate(kept) if r is u[0][0]))
+        group.sort(key=lambda u: order[id(u[0][0])])
         members = [pair for unit in group for pair in unit]
         roles = [r for r, _ in members]
         first_role, first_out = members[0]
@@ -175,7 +184,7 @@ def build_rows(kept: list[tuple[Role, Outcome]], seen: dict[str, dict], *, regis
         stale = any(r.key in seen and is_stale(seen[r.key], now) for r in roles)
         clones = max(len(u) for u in group)
 
-        applied = _best([m for r in roles for m in _matches(r, tracker_rows)])
+        applied = _best([m for r in roles for m in _matches(r, tracker_keys)])
         tags = _unique(t for _, o in members for t in o.tags)
         if clones >= 2:
             tags.append(f"cloned ×{clones}")
@@ -186,10 +195,8 @@ def build_rows(kept: list[tuple[Role, Outcome]], seen: dict[str, dict], *, regis
         if sponsors_for(entry, first_out.market):
             tags.append("sponsor")
         if applied:
-            if applied["status"] == "drafted":
-                tags.append("in tracker (drafted)")
-            elif applied["status"] == "skipped":
-                tags.append("in tracker (skipped)")
+            if applied["status"] in ("drafted", "skipped"):
+                tags.append(f"in tracker ({applied['status']})")
             elif applied["date"]:
                 tags.append(f"applied on {applied['date']}")
             else:
@@ -201,13 +208,12 @@ def build_rows(kept: list[tuple[Role, Outcome]], seen: dict[str, dict], *, regis
             flagged[company] = "stale"
 
         first_seen = min(stamps)
-        is_new = (last_viewed is None or datetime.fromisoformat(first_seen) > last_viewed) and applied is None
         locations = _unique(r.location for r in roles if r.location) or [""]
         rows.append(Row(
             market=first_out.market, company=company, title=first_role.title, locations=locations,
             urls=[r.url for r in roles], fit=first_out.fit, matched=list(first_out.matched),
             route=first_out.route, salary=first_role.salary, tags=tags, first_seen=first_seen,
-            new=is_new, applied=applied))
+            new=is_new(first_seen, applied, last_viewed), applied=applied))
 
     rows.sort(key=lambda r: r.first_seen, reverse=True)
     rows.sort(key=lambda r: (MARKET_ORDER.get(r.market, 9), not r.new))

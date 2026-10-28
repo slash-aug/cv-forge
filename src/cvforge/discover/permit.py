@@ -28,7 +28,7 @@ class PermitOutcome:
 
 
 def _unknown() -> PermitOutcome:
-    return PermitOutcome(False, "unknown", True, None, None)
+    return PermitOutcome(drop=False, route="unknown", salary_unknown=True, eur_min=None, eur_max=None)
 
 
 def _clean(salary: dict | None) -> dict | None:
@@ -81,6 +81,7 @@ def permit_outcome(salary: dict | None, master: dict, table: PermitTable,
     figures = [f for f in (eur_min, eur_max) if f is not None]
     low, high = min(figures), max(figures)
     if clean["currency"].upper() != "EUR":
-        return PermitOutcome(high < table.gep, "unknown", True, low, high)
+        return PermitOutcome(drop=high < table.gep, route="unknown", salary_unknown=True,
+                             eur_min=low, eur_max=high)
     route = route_for(low, soc, degree_recognised(master), table)
-    return PermitOutcome(high < table.gep, route, False, low, high)
+    return PermitOutcome(drop=high < table.gep, route=route, salary_unknown=False, eur_min=low, eur_max=high)

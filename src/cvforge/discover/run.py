@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 import copy
-import os
 import time
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -83,12 +83,6 @@ def _last_run_row(row: Row) -> dict:
             "first_seen": row.first_seen, "tagged": is_tagged(row), "applied": row.applied}
 
 
-def _write_text(path: Path, text: str) -> None:
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    os.replace(tmp, path)
-
-
 def run_fetch(jobs_dir: Path, *, master: dict, registry: list[dict], tracker_rows: list[dict],
               table: PermitTable, rates: Callable[[], Rates | None], get: Get, now: datetime,
               market: str = "all", source: str | None = None, dry_run: bool = False,
@@ -166,7 +160,7 @@ def run_fetch(jobs_dir: Path, *, master: dict, registry: list[dict], tracker_row
     store.write_last_run(jobs_dir, {"at": at, "boards": result.boards, "failed": result.failed,
                                     "errors": errors, "dropped": dropped, "rows": last_rows})
     if render is not None and not result.all_failed:
-        _write_text(jobs_dir / "latest.html", render(result, store.read_last_viewed(jobs_dir)))
+        store.write_text_atomic(jobs_dir / "latest.html", render(result, store.read_last_viewed(jobs_dir)))
     store.prune_runs(jobs_dir, today)
     return result
 
@@ -179,20 +173,10 @@ def due_lines(jobs_dir: Path, now: datetime) -> list[str]:
         viewed = store.read_last_viewed(jobs_dir)
     except (KeyError, TypeError, ValueError):
         viewed = None
-
-    def is_new(row: dict) -> bool:
-        if viewed is None:
-            return True
-        try:
-            return datetime.fromisoformat(row["first_seen"]) > viewed
-        except (KeyError, TypeError, ValueError):
-            return True
-
-    new = [r for r in last.get("rows") or [] if r.get("applied") is None and is_new(r)]
-    irish = sum(1 for r in new if r.get("market") == "IE")
-    brazilian = sum(1 for r in new if r.get("market") == "BR")
+    new = [r for r in last.get("rows") or [] if store.is_new(r.get("first_seen"), r.get("applied"), viewed)]
+    markets = Counter(r.get("market") for r in new)
     tagged = sum(1 for r in new if r.get("tagged"))
-    lines = [f"jobs: {irish} new Irish roles, {brazilian} new Brazilian ({tagged} tagged)"]
+    lines = [f"jobs: {markets['IE']} new Irish roles, {markets['BR']} new Brazilian ({tagged} tagged)"]
     try:
         days = (now.date() - datetime.fromisoformat(last["at"]).date()).days
     except (KeyError, TypeError, ValueError):

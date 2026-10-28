@@ -7,6 +7,7 @@ import math
 import shutil
 import subprocess
 import sys
+from collections import Counter
 from dataclasses import asdict
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -498,12 +499,9 @@ def _run_jobs_fetch(cfg: Config, now: datetime, *, market: str = "all", source: 
     for error in result.errors:
         print(clean_text(error), file=sys.stderr)
     print("dropped: " + ", ".join(f"{reason} {result.dropped.get(reason, 0)}" for reason in DROP_REASONS))
-    irish = sum(1 for row in result.rows if row.market == "IE")
-    brazilian = sum(1 for row in result.rows if row.market == "BR")
-    viewed = jobs_store.read_last_viewed(jobs_dir)
-    new = sum(1 for row in result.rows if row.applied is None
-              and (viewed is None or datetime.fromisoformat(row.first_seen) > viewed))
-    print(f"shown: {irish} Irish, {brazilian} Brazilian ({new} new)")
+    markets = Counter(row.market for row in result.rows)
+    new = sum(1 for row in result.rows if row.new)
+    print(f"shown: {markets['IE']} Irish, {markets['BR']} Brazilian ({new} new)")
     if dry_run:
         print("(dry run, nothing written)")
     elif source is not None:
@@ -546,15 +544,6 @@ def _print_job(row: dict, new: bool) -> None:
     print(f"  {command}" if command else f"  (open the link by hand: {url!r})")
 
 
-def _is_new(row: dict, viewed: datetime | None) -> bool:
-    if viewed is None:
-        return True
-    try:
-        return datetime.fromisoformat(row["first_seen"]) > viewed
-    except (KeyError, TypeError, ValueError):
-        return True
-
-
 def cmd_jobs(args) -> int:
     if getattr(args, "action", None) == "fetch":
         return cmd_jobs_fetch(args)
@@ -577,7 +566,7 @@ def cmd_jobs(args) -> int:
     for r in rows:
         if r.get("applied") is not None:
             applied.append(r)
-        elif _is_new(r, viewed):
+        elif jobs_store.is_new(r.get("first_seen"), None, viewed):
             new_rows.append(r)
         else:
             old_rows.append(r)
