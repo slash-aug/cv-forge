@@ -72,23 +72,35 @@ BR_COUNTRY_TERMS = ("brazil", "brasil")
 
 SENIOR_WORDS = (
     "senior", "sr", "staff", "principal", "lead", "head", "director", "manager",
-    "architect", "distinguished", "vp", "chief", "senior", "lider", "gerente",
+    "architect", "distinguished", "vp", "chief", "lider", "gerente",
     "coordenador", "arquiteto", "especialista",
 )
 
-FOREIGN_STACK = (
-    "embedded", "firmware", "rtos", "fpga", "verilog", "vhdl", "swift", "swiftui",
-    "objective-c", "salesforce", "apex", "abap", "sap", "cobol", "mainframe",
-    "plc", "unity3d", "unreal engine",
+# Unambiguous foreign-stack terms make a role misaligned on their own.
+FOREIGN_STACK_STRONG = (
+    "firmware", "rtos", "fpga", "verilog", "vhdl", "swiftui", "objective-c",
+    "salesforce", "abap", "cobol", "mainframe", "unity3d", "unreal engine",
 )
+# Ambiguous words ("Acme PLC", "Apex Group") count only alongside another term.
+FOREIGN_STACK_WEAK = ("embedded", "swift", "apex", "sap", "plc")
+FOREIGN_STACK = FOREIGN_STACK_STRONG + FOREIGN_STACK_WEAK
+
+# Words that put no restriction on a remote role's region.
+REMOTE_NOISE = frozenset({
+    "remote", "global", "fully", "first", "worldwide", "anywhere", "hybrid",
+    "international", "home", "based", "wfh", "in", "the", "world", "work", "from",
+    "any", "location", "flexible",
+})
 
 _RIGHTS_PLACE = r"(?:ireland|the\s+eu|the\s+eea|europe|eu|eea)"
 SPONSOR_REFUSALS = (
     (
         r"\b(?:unable\s+to|not\s+able\s+to|cannot|can't|can\s+not|do\s+not|does\s+not"
-        r"|don't|doesn't|will\s+not|won't)\s+(?:\w+\s+)?sponsor"
+        r"|don't|doesn't|will\s+not|won't)\s+"
+        r"(?:(?:currently|typically|generally|normally|offer|provide)\s+)?sponsor"
     ),
-    r"\bno\s+(?:visa\s+|work\s+permit\s+)?sponsorship",
+    r"\bno\s+(?:visa\s+|work\s+permit\s+)?sponsorship\s+(?:is\s+)?(?:available|offered|provided)",
+    r"\bno\s+visa\s+sponsorship\b",
     r"\bsponsorship\s+(?:is\s+|are\s+)?(?:not\s+(?:available|offered|provided)|unavailable)",
     r"\bnot\s+(?:able\s+to\s+)?offer(?:ing)?\s+(?:visa\s+)?sponsorship",
     rf"\bmust\s+(?:already\s+)?have\s+(?:the\s+)?(?:full\s+)?right\s+to\s+work\s+in\s+{_RIGHTS_PLACE}",
@@ -97,11 +109,11 @@ SPONSOR_REFUSALS = (
     r"\bstamp\s*4\s+required",
 )
 
-_SOFTWARE_WORDS = (
-    r"engineers?|engineering|developers?|programmers?|programmatore|software"
-    r"|full[\s-]?stack|front[\s-]?end|back[\s-]?end|web|desenvolvedor(?:a|es|as)?"
-    r"|programador(?:a|es|as)?|engenheiro(?:s|a|as)?|dev"
+_STRONG_WORDS = (
+    r"developers?|programmers?|programmatore|software|full[\s-]?stack"
+    r"|front[\s-]?end|back[\s-]?end|desenvolvedor(?:a|es|as)?|programador(?:a|es|as)?"
 )
+_WEAK_WORDS = r"engineers?|engineering|web|dev|engenheiro(?:s|a|as)?"
 _NOT_SOFTWARE = (
     "sales", "solutions", "solution", "support", "customer", "field", "network",
     "hardware", "mechanical", "electrical", "civil", "manufacturing", "process",
@@ -109,7 +121,8 @@ _NOT_SOFTWARE = (
 
 
 def _norm(text: str) -> str:
-    return fold_accents((text or "").replace("’", "'"))
+    """Folded text with whitespace runs collapsed (also bounds regex work)."""
+    return re.sub(r"\s+", " ", fold_accents((text or "").replace("\u2019", "'")))
 
 
 def _term(term: str) -> re.Pattern[str]:
@@ -138,7 +151,12 @@ def market_of(
 ) -> tuple[str | None, bool]:
     raw = location or ""
     loc = _norm(raw)
-    remote = (workplace or "").lower() == "remote" or _has(loc, "remote")
+    tokens = re.findall(r"[a-z]+", loc)
+    remote = (
+        (workplace or "").lower() == "remote"
+        or _has(loc, "remote")
+        or (bool(tokens) and all(t in ("anywhere", "worldwide", "global") for t in tokens))
+    )
 
     ie_named = (
         _has(loc, "ireland")
@@ -159,8 +177,7 @@ def market_of(
     if not remote:
         return None, False
 
-    rest = re.sub(r"\b(?:remote|anywhere|worldwide)\b", " ", loc)
-    if re.search(r"\w", rest):
+    if any(t not in REMOTE_NOISE for t in re.findall(r"[a-z]+", loc)):
         return None, False  # restricted elsewhere, e.g. Remote - US
 
     desc = _norm(description)
@@ -173,23 +190,25 @@ def market_of(
 
 def is_software(title: str) -> bool:
     folded = _norm(title)
-    if not re.search(rf"(?<![\w.+#])(?:{_SOFTWARE_WORDS})(?![\w+#])", folded):
-        return False
-    if _has(folded, "software"):
+    if re.search(rf"(?<![\w.+#])(?:{_STRONG_WORDS})(?![\w+#])", folded):
         return True
+    if not re.search(rf"(?<![\w.+#])(?:{_WEAK_WORDS})(?![\w+#])", folded):
+        return False
     if _any(folded, _NOT_SOFTWARE) or re.search(r"\brecruit", folded):
         return False
     return "quality assurance" not in folded
 
 
-_LEVEL_SUFFIX = re.compile(r"(?<![\w.+#])(?:iii|iv|v|vi|vii|viii|ix|[le](?:[5-9]|\d\d))(?![\w+#])")
+_LEVEL_SUFFIX = re.compile(r"(?<![\w.+#])(?:iii|iv|vi|vii|viii|ix|[le](?:[5-9]|\d\d))(?![\w+#])")
+_LEVEL_V = re.compile(r"(?<![\w.+#])(?:engineer|developer|programmer|analyst|scientist) v(?![\w+#])")
 _UNIT = r"(?:years?|yrs?|anos?)"
-_RANGE = re.compile(rf"(\d{{1,2}})\s*(?:-|to|a)\s*\d{{1,2}}\s*\+?\s*{_UNIT}\b")
+_NOT_EXPERIENCE = r"(?!\s+(?:old|of\s+age|in\s+business|of\s+history|in\s+the\s+market))"
+_RANGE = re.compile(rf"(\d{{1,2}})\s*(?:-|to|a)\s*\d{{1,2}}\s*(?:\+\s*)?{_UNIT}\b{_NOT_EXPERIENCE}")
 _YEARS_PATTERNS = (
-    re.compile(rf"(\d{{1,2}})\s*\+\s*{_UNIT}\b"),
-    re.compile(rf"(\d{{1,2}})\s+or\s+more\s+{_UNIT}\b"),
+    re.compile(rf"(\d{{1,2}})\s*\+\s*{_UNIT}\b{_NOT_EXPERIENCE}"),
+    re.compile(rf"(\d{{1,2}})\s+or\s+more\s+{_UNIT}\b{_NOT_EXPERIENCE}"),
     re.compile(
-        rf"(?:at\s+least|minimum(?:\s+of)?|min\.?|no\s+minimo|pelo\s+menos)\s+(\d{{1,2}})\s*\+?\s*{_UNIT}\b"
+        rf"(?:at\s+least|minimum(?:\s+of)?|min\.?|no\s+minimo|pelo\s+menos)\s+(\d{{1,2}})\s*(?:\+\s*)?{_UNIT}\b{_NOT_EXPERIENCE}"
     ),
 )
 
@@ -205,7 +224,7 @@ def _years_required(description: str) -> int:
 
 def is_senior(title: str, description: str) -> bool:
     folded = _norm(title).replace("team lead", " ")
-    if _any(folded, SENIOR_WORDS) or _LEVEL_SUFFIX.search(folded):
+    if _any(folded, SENIOR_WORDS) or _LEVEL_SUFFIX.search(folded) or _LEVEL_V.search(folded):
         return True
     return _years_required(description) >= 5
 
@@ -238,7 +257,7 @@ def _keyword_hit(kw: str, raw: str, folded: str) -> bool:
 
 
 def stack_fit(text: str, keywords: list[str]) -> tuple[str, list[str]]:
-    raw = text or ""
+    raw = re.sub(r"\s+", " ", text or "")
     folded = _norm(raw)
     matched: list[str] = []
     for kw in keywords:
@@ -249,5 +268,7 @@ def stack_fit(text: str, keywords: list[str]) -> tuple[str, list[str]]:
     if matched:
         return "partial", matched
     own = {fold_accents(k) for k in keywords}
-    foreign = [t for t in FOREIGN_STACK if t not in own and _has(folded, t)]
-    return ("misaligned" if foreign else "partial"), matched
+    strong = [t for t in FOREIGN_STACK_STRONG if t not in own and _has(folded, t)]
+    weak = [t for t in FOREIGN_STACK_WEAK if t not in own and _has(folded, t)]
+    misaligned = bool(strong) or len(weak) >= 2
+    return ("misaligned" if misaligned else "partial"), matched

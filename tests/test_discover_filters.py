@@ -25,7 +25,7 @@ from cvforge.discover.filters import (
     ("Remote - Ireland", "remote", "", ("IE", False)),
     ("Remote, Canada", "remote", "", (None, False)),
     ("Anywhere", "remote", "Work from anywhere.", ("IE", True)),
-    ("Anywhere", None, "Work from anywhere.", (None, False)),
+    ("Anywhere", None, "Work from anywhere.", ("IE", True)),
     ("", "remote", "", ("IE", True)),
     ("Remote - Brazil", None, "", ("BR", False)),
 ])
@@ -110,3 +110,76 @@ def test_master_keywords_dedup():
     m = {"skills": [{"keywords": ["React", "Node.js"]}, {"keywords": ["React", "SQL"]}]}
     assert master_keywords(m) == ["React", "Node.js", "SQL"]
     assert master_keywords({}) == []
+
+
+@pytest.mark.parametrize("loc,wp", [
+    ("Remote - Global", "remote"), ("Fully Remote", None), ("100% Remote", None),
+    ("Remote-first", None), ("Remote - Anywhere in the world", None),
+    ("Remote / Hybrid", None), ("International", "remote"),
+    ("Anywhere", None), ("Worldwide", None), ("Global", None),
+])
+def test_market_remote_noise_words_are_no_restriction(loc, wp):
+    assert market_of(loc, wp, "", home="IE") == ("IE", True)
+
+
+def test_market_remote_noise_still_restricted_by_real_place():
+    assert market_of("Remote - Global, US only", None, "", home="IE") == (None, False)
+
+
+@pytest.mark.parametrize("text", [
+    "Acme PLC is hiring a developer", "Apex Group builds products",
+    "We move at swift pace", "engineers embedded in product teams",
+])
+def test_stack_fit_ambiguous_foreign_terms_alone_not_misaligned(text):
+    assert stack_fit(text, KW)[0] == "partial"
+
+
+def test_stack_fit_two_ambiguous_terms_misaligned():
+    assert stack_fit("Embedded Swift on PLC", KW)[0] == "misaligned"
+
+
+@pytest.mark.parametrize("desc", [
+    "Must be at least 18 years old", "at least 21 years of age",
+    "We have 15+ years in business", "25 years of history", "10+ years in the market",
+])
+def test_is_senior_ignores_non_experience_years(desc):
+    assert is_senior("Software Engineer", desc) is False
+
+
+@pytest.mark.parametrize("title", [
+    "Frontend Developer, Customer Portal", "Backend Engineer - Process Automation",
+    "Full Stack Developer, Field Services",
+])
+def test_is_software_strong_words_override_exclusions(title):
+    assert is_software(title)
+
+
+def test_is_software_weak_words_still_excluded():
+    assert not is_software("Support Engineer") and not is_software("Sales Engineer")
+
+
+def test_no_pathological_backtracking():
+    blob = " " * 50_000 + "x"
+    assert is_senior("Software Engineer", blob) is False
+    assert refuses_sponsorship(blob) is None
+    assert stack_fit(blob, KW) == ("partial", [])
+    assert is_senior("Software Engineer", "5" + " " * 50_000 + "+" + " " * 50_000 + "x") is False
+
+
+@pytest.mark.parametrize("text", [
+    "If you do not need sponsorship, tick no",
+    "we do not just sponsor, we relocate",
+    "No sponsorship needed",
+])
+def test_refuses_sponsorship_negatives(text):
+    assert refuses_sponsorship(text) is None
+
+
+def test_refuses_sponsorship_new_forms():
+    assert refuses_sponsorship("We do not currently sponsor visas")
+    assert refuses_sponsorship("No sponsorship available")
+
+
+def test_is_senior_level_v():
+    assert is_senior("Software Engineer V", "") is True
+    assert is_senior("Software Engineer (Remote) v", "") is False
