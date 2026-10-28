@@ -145,3 +145,60 @@ def test_letter_spacing_is_even_and_single_spaced_after_periods():
         assert r"\mbox{}\\" not in body, name
         assert r"\par\vspace{" in body, name
     assert r"\frenchspacing" in cls  # one space after a period, like the CV
+
+
+def _ie_master(self_apply=True):
+    import copy
+
+    master = copy.deepcopy(M)
+    master["x-preferences"]["relocation"] = True
+    master["x-preferences"]["workRights"] = {
+        "PT": {"status": "mobility"},
+        "IE": {"status": "needs-permit", "degreeRecognised": "unknown", "soc": ["2136"],
+               "selfApply": self_apply}}
+    return master
+
+
+IE_BLOCK = {"route": "csep-if-degree", "soc": "2136", "on_csol": True, "salary_eur_year": 55000.0,
+            "permit_record": None, "lmnt": False, "sponsorship_silent": False}
+SELF = " If it helps, I can apply for the permit myself."
+
+
+def test_no_region_letter_context_identical_to_today():
+    from cvforge.render.letter import letter_context
+
+    assert letter_context(T, M, TODAY, None) == letter_context(T, M, TODAY)
+
+
+def test_letter_permit_note_with_self_apply():
+    from cvforge.render.irish import ireland_region
+    from cvforge.render.letter import letter_context
+
+    master = _ie_master()
+    note = "Requires employment permit (Critical Skills occupation)."
+    ctx = letter_context(T, master, TODAY, ireland_region(master, city="Cork", ireland=IE_BLOCK))
+    assert ctx["letter"]["paragraphs"][-1] == note + SELF
+    assert len(ctx["letter"]["paragraphs"]) == len(T["letter"]["paragraphs"]) + 1
+    # a permit record and an explicit sponsorship statement drop the self-apply sentence
+    recorded = {**IE_BLOCK, "permit_record": [2025, 3]}
+    ctx = letter_context(T, master, TODAY, ireland_region(master, city=None, ireland=recorded))
+    assert ctx["letter"]["paragraphs"][-1] == note
+    # ...unless sponsorship is silent
+    silent = {**recorded, "sponsorship_silent": True}
+    ctx = letter_context(T, master, TODAY, ireland_region(master, city=None, ireland=silent))
+    assert ctx["letter"]["paragraphs"][-1] == note + SELF
+    # no selfApply: never the sentence
+    master = _ie_master(self_apply=False)
+    ctx = letter_context(T, master, TODAY, ireland_region(master, city=None, ireland=IE_BLOCK))
+    assert ctx["letter"]["paragraphs"][-1] == note
+
+
+def test_letter_ie_spelling_on_paragraphs():
+    from cvforge.render.irish import ireland_region
+    from cvforge.render.letter import letter_context
+
+    master = _ie_master()
+    t = {**T, "letter": {**T["letter"], "paragraphs": ["I organized the color center."]}}
+    ctx = letter_context(t, master, TODAY, ireland_region(master, city=None, ireland=IE_BLOCK))
+    assert ctx["letter"]["paragraphs"][0] == "I organised the colour centre."
+    assert render_letter(t, M, today=TODAY).count("organized") == 1

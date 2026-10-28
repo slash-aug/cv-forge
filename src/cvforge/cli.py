@@ -12,18 +12,20 @@ from datetime import date
 from pathlib import Path
 
 from cvforge.answers.bank import load_bank, lookup, normalise_question, save_answers
-from cvforge.answers.facts import knockout_facts
+from cvforge.answers.facts import ireland_facts, knockout_facts
 from cvforge.answers.grounding import DataError, answer_figures, load_salary
 from cvforge.answers.gupy import GUPY_QUESTIONS, gupy_skills
 from cvforge.apply import http as apply_http
-from cvforge.apply.check import Verdict, check
+from cvforge.apply.check import Verdict, check, home_regions, is_irish_job
 from cvforge.apply.companies import (
     add_company,
     add_sponsor,
     find_company,
     load_registry,
 )
+from cvforge.apply.dete import dete_imported, permit_record
 from cvforge.apply.experience import engineering_months
+from cvforge.apply.ie_permits import load_permit_table
 from cvforge.apply.intake import (
     IntakeError,
     fetch_posting,
@@ -31,8 +33,10 @@ from cvforge.apply.intake import (
     refuse_linkedin,
     resolve_shortlink,
 )
+from cvforge.apply.ireland import route_for
 from cvforge.apply.posting import Posting, canonical_url
 from cvforge.apply.requirements import load_requirements, posting_text, quote_problems
+from cvforge.apply.seed import seed_ie
 from cvforge.apply.workspace import create_app_dir
 from cvforge.build import LatexError, compile_tex
 from cvforge.checks.ats import AtsReport, ats_check
@@ -43,7 +47,9 @@ from cvforge.kit.render import render_kit
 from cvforge.money.normalise import Money
 from cvforge.money.rates import MoneyError, load_rates
 from cvforge.profile.model import ProfileError, load_master, localized
+from cvforge.profile.prefs import degree_recognised, ireland_pay_floor
 from cvforge.render.cv import build_cv_view, render_view
+from cvforge.render.irish import Region, ireland_region, irish_city
 from cvforge.render.letter import ASSETS_DIR, letter_context, render_letter_context
 from cvforge.salary.market import load_market, match_market
 from cvforge.salary.suggest import Suggestion, below_floor, displays, suggest
@@ -153,6 +159,25 @@ def cmd_audit(args) -> int:
     return 1 if findings else 0
 
 
+def _region(choice: str | None, master: dict, app_dir: Path | None) -> Region | None:
+    """The CV region: IE or none as asked, else IE when the application's job is in Ireland."""
+    if choice == "none":
+        return None
+    req_path = app_dir / "requirements.yaml" if app_dir else None
+    req = load_requirements(req_path) if req_path and req_path.exists() else None
+    if choice is None and not (req and is_irish_job(req)):
+        return None
+    ireland = None
+    verdict_path = app_dir / "verdict.json" if app_dir else None
+    if verdict_path and verdict_path.exists():
+        try:
+            ireland = json.loads(verdict_path.read_text(encoding="utf-8")).get("ireland")
+        except (OSError, ValueError, AttributeError) as e:
+            raise ProfileError(f"{verdict_path}: cannot read the verdict: {e}") from e
+    return ireland_region(master, city=irish_city(req) if req else None, ireland=ireland,
+                          today=_today())
+
+
 def cmd_build(args) -> int:
     master = load_master(Path(args.master))
     tailored_path = Path(args.tailored)
@@ -161,8 +186,10 @@ def cmd_build(args) -> int:
     if findings:
         _print_findings(findings)
         return 1
-    view = build_cv_view(tailored, master)
-    letter = letter_context(tailored, master) if tailored.get("letter") and not args.no_letter else None
+    region = _region(args.region, master, tailored_path.resolve().parent)
+    view = build_cv_view(tailored, master, region)
+    letter = (letter_context(tailored, master, region=region)
+              if tailored.get("letter") and not args.no_letter else None)
     if _confidential_blocked(master, cv=view, letter=letter):
         return 1
     cfg = load_config()
@@ -196,7 +223,7 @@ def cmd_build(args) -> int:
 def cmd_master_cv(args) -> int:
     master = load_master(Path(args.master))
     tailored = untailored(master, args.lang, args.angle)
-    view = build_cv_view(tailored, master)
+    view = build_cv_view(tailored, master, _region(args.region, master, None))
     if _confidential_blocked(master, cv=view):
         return 1
     cfg = load_config()
@@ -437,11 +464,14 @@ def cmd_due(args) -> int:
 def _write_verdict(app_dir: Path, today: date, verdict: str, *, results: Verdict | None = None,
                    problems=(), override: str | None = None) -> None:
     data = {"verdict": verdict, "checked": today.isoformat(), "override": override,
-            "problems": list(problems), "results": [], "warnings": [], "caveats": {}}
+            "problems": list(problems), "results": [], "warnings": [], "caveats": {},
+            "risks": [], "ireland": None}
     if results is not None:
         data["results"] = [asdict(r) for r in results.results]
         data["warnings"] = results.warnings
         data["caveats"] = results.caveats
+        data["risks"] = results.risks
+        data["ireland"] = results.ireland
     (app_dir / "verdict.json").write_text(
         json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
@@ -449,6 +479,20 @@ def _write_verdict(app_dir: Path, today: date, verdict: str, *, results: Verdict
 def _salary_stated(req: dict) -> bool:
     salary = req.get("salary") or {}
     return salary.get("max") is not None or salary.get("min") is not None
+
+
+def _needs_rates(req: dict, master: dict, irish: bool) -> bool:
+    """An Irish EUR/year salary against no floor or a EUR/year floor needs no rates."""
+    if not _salary_stated(req):
+        return False
+    if not irish:
+        return True
+    salary = req["salary"]
+    floor = ireland_pay_floor(master)
+    eur_year = (salary["currency"] or "").upper() == "EUR" and salary["period"] == "year"
+    floor_eur_year = floor is None or (floor["currency"].upper() == "EUR"
+                                       and floor["period"] == "year")
+    return not (eur_year and floor_eur_year)
 
 
 def _print_caveats(caveats: dict) -> None:
@@ -486,10 +530,13 @@ def cmd_check(args) -> int:
     master = load_master(Path(args.master) if args.master
                          else cfg.data_dir / "profile" / "master.yaml")
     company = find_company(load_registry(cfg.data_dir / "companies.yaml"), posting.company)
+    irish = is_irish_job(req) and "ireland" not in home_regions(master)
+    record = permit_record(cfg.data_dir, posting.company, company) if irish else None
     try:
         rates = (load_rates(cfg.data_dir / "salary", today, apply_http.get)
-                 if _salary_stated(req) else None)
-        verdict = check(req, posting, master, company, rates, today, clt_factor=cfg.clt_factor)
+                 if _needs_rates(req, master, irish) else None)
+        verdict = check(req, posting, master, company, rates, today, clt_factor=cfg.clt_factor,
+                        record=record, dete_imported=dete_imported(cfg.data_dir))
     except MoneyError as exc:
         print(str(exc), file=sys.stderr)
         _write_verdict(app_dir, today, "invalid", problems=[str(exc)])
@@ -498,6 +545,8 @@ def cmd_check(args) -> int:
         print(f"{'PASS' if r.ok else 'SKIP'} {r.rule}: {r.message}")
         if r.quote:
             print(f'    "{r.quote}"')
+    for risk in verdict.risks:
+        print(f"RISK {risk}")
     for warning in verdict.warnings:
         print(f"warning: {warning}")
     _print_caveats(verdict.caveats)
@@ -530,6 +579,15 @@ def _seniority(title: str) -> str:
     if words & {"junior", "jr", "jr.", "intern", "trainee"}:
         return "junior"
     return "mid"
+
+
+def _read_verdict(app_dir: Path) -> dict:
+    """verdict.json for an application, or {} when absent or unreadable."""
+    try:
+        data = json.loads((app_dir / "verdict.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def cmd_answers(args) -> int:
@@ -589,6 +647,11 @@ def cmd_answers(args) -> int:
     print("Knock-out facts:")
     for k, v in facts.items():
         print(f"  {k}: {v}")
+    ireland = _read_verdict(app_dir).get("ireland")
+    if ireland:
+        print("Ireland:")
+        for k, v in ireland_facts(master, ireland, lang).items():
+            print(f"  {k}: {v}")
     return 0
 
 
@@ -608,13 +671,19 @@ def cmd_salary(args) -> int:
     req = load_requirements(req_path) if req_path.exists() else None
     master = load_master(Path(args.master) if args.master
                          else cfg.data_dir / "profile" / "master.yaml")
-    pay_floor = (master.get("x-preferences") or {}).get("payFloor")
-    if not pay_floor:
-        print("master has no x-preferences.payFloor", file=sys.stderr)
-        return 1
-    floor = Money(pay_floor["amount"], pay_floor["currency"], pay_floor["period"])
+    irish = bool(req) and is_irish_job(req)
+    if irish:
+        pf = ireland_pay_floor(master)
+        table, _ = load_permit_table(_today())
+    else:
+        pf = (master.get("x-preferences") or {}).get("payFloor")
+        if not pf:
+            print("master has no x-preferences.payFloor", file=sys.stderr)
+            return 1
+    floor = (Money(pf["amount"], pf["currency"], pf["period"])
+             if pf else None)
     countries = ((req or {}).get("location") or {}).get("job_countries") or []
-    country = countries[0] if countries else (
+    country = "IE" if irish else countries[0] if countries else (
         (master.get("basics") or {}).get("location") or {}).get("countryCode", "")
     market_path = Path(args.market) if args.market else cfg.data_dir / "salary" / "market.csv"
     rows = match_market(load_market(market_path), role=posting.title,
@@ -631,18 +700,24 @@ def cmd_salary(args) -> int:
     try:
         rates = load_rates(cfg.data_dir / "salary", _today(), apply_http.get)
         s = suggest((req or {}).get("salary") if req and _salary_stated(req) else None,
-                    rows, floor, rates, clt_factor=cfg.clt_factor)
+                    rows, floor, rates, clt_factor=cfg.clt_factor,
+                    min_eur_year=table.csep_csol_degree if irish else None)
         if confirm_amount is not None:
             amount = confirm_amount
             contract = ((req or {}).get("salary") or {}).get("contract") \
                 if s.basis == "posting" else "unknown"
-            if below_floor(amount, s.currency, s.period, contract or "unknown", floor, rates,
+            if floor is not None and below_floor(amount, s.currency, s.period, contract or "unknown", floor, rates,
                            clt_factor=cfg.clt_factor):
                 print(f"warning: {amount:,.0f} {s.currency}/{s.period} is below your pay floor "
-                      f"({pay_floor['amount']} {pay_floor['currency']}/{pay_floor['period']})"
+                      f"({pf['amount']} {pf['currency']}/{pf['period']})"
                       f"{' (CLT basis x' + str(cfg.clt_factor) + ')' if contract == 'clt' else ''}",
                       file=sys.stderr)
             brl, eur, usd = displays(amount, s.currency, s.period, rates)
+            if irish and eur < table.csep_csol_degree:
+                shown = "" if (s.currency, s.period) == ("EUR", "year") \
+                    else f" ({eur:,.0f} EUR/year)"
+                print(f"warning: {amount:,.0f} {s.currency}/{s.period}{shown} is below the CSEP "
+                      f"floor ({table.csep_csol_degree:,} EUR/year)", file=sys.stderr)
             s = Suggestion(s.basis, amount, s.currency, s.period, brl, eur, usd,
                            [*s.sources, "amount set by candidate"])
     except MoneyError as exc:
@@ -661,6 +736,9 @@ def cmd_salary(args) -> int:
     print(f"  Rates: ECB {rates.day}")
     for src in s.sources:
         print(f"  Source: {src}")
+    if irish:
+        soc = ((req or {}).get("occupation_soc") or {}).get("code")
+        print(f"  Permit tier: {route_for(s.eur_year, soc, degree_recognised(master), table)}")
     if explanation:
         print(f"  Why: {explanation}")
     print("confirmed" if data["confirmed"] else "not confirmed: rerun with --confirm [AMOUNT]")
@@ -707,7 +785,9 @@ def cmd_kit(args) -> int:
              "letter_pdf": f"{first}_{last}_Cover_Letter_{company}.pdf"}
     files = {k: v for k, v in names.items() if (app_dir / v).exists()}
     findings = _audit_tailored(tailored, master, app_dir)
-    kit = build_kit(master, tailored, posting, salary, slug=args.slug, files=files)
+    verdict = _read_verdict(app_dir) if (app_dir / "verdict.json").exists() else None
+    kit = build_kit(master, tailored, posting, salary, slug=args.slug, files=files,
+                    verdict=verdict)
     findings += audit_rendered(master, kit=kit)
     if findings:
         _print_findings(findings)
@@ -735,10 +815,48 @@ def _format_company(entry: dict) -> str:
     lines.append(f"ats: {entry.get('ats') or '-'}")
     lines.append("sponsor:" + ("" if entry["sponsor"] else " -"))
     for s in entry["sponsor"]:
-        lines.append(f"  {s['type']} ({s['source']}, {s['date']})")
+        count = f", {s['count']} permits" if "count" in s else ""
+        lines.append(f"  {s['type']} ({s['source']}, {s['date']}{count})")
     if entry.get("notes"):
         lines.append(f"notes: {entry['notes']}")
     return "\n".join(lines)
+
+
+def _import_ie(args) -> int:
+    from cvforge.apply import dete
+
+    data_dir = load_config().data_dir
+    years = args.year or [_today().year, _today().year - 1]
+    if args.file and len(years) != 1:
+        print("--file needs exactly one --year", file=sys.stderr)
+        return 1
+    failed = False
+    for year in years:
+        try:
+            result = dete.import_year(data_dir, year, file=Path(args.file) if args.file else None)
+        except dete.NoYearPage as exc:
+            if args.year:
+                print(f"ie {year}: {exc}", file=sys.stderr)
+                failed = True
+            else:  # early in the year DETE has not published the new page yet
+                print(f"ie {year}: not published yet, skipped")
+            continue
+        except OSError as exc:
+            where = f"cannot read {args.file}" if args.file else "file error"
+            print(f"ie {year}: {where}: {exc.strerror or exc}", file=sys.stderr)
+            failed = True
+            continue
+        except (apply_http.FetchError, dete.DeteError, ValueError) as exc:
+            print(f"ie {year}: {exc}", file=sys.stderr)
+            failed = True
+            continue
+        print(f"ie {year}: {result.employers} employers, {len(result.matched)} registry matches")
+        for company, names in result.details.items():
+            print(f"  {company}: {', '.join(names)}")
+        for company, names in result.possible.items():
+            for name in names:
+                print(f"  {company}: possible match {name}, add an alias to confirm")
+    return 1 if failed else 0
 
 
 def cmd_company(args) -> int:
@@ -747,6 +865,12 @@ def cmd_company(args) -> int:
         if args.action == "add":
             entry = add_company(path, args.name, careers_url=args.careers, ats=args.ats,
                                 aliases=args.alias)
+        elif args.action == "import-ie":
+            return _import_ie(args)
+        elif args.action == "seed-ie":
+            result = seed_ie(path, Path(args.file) if args.file else None)
+            print(f"seed-ie: {result.added} added, {result.kept} already known")
+            return 0
         elif args.action == "sponsor":
             day = date.fromisoformat(args.date) if args.date else _today()
             entry = add_sponsor(path, args.name, type=args.type, source=args.source, day=day)
@@ -779,12 +903,15 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--master", required=True)
     p.add_argument("--out")
     p.add_argument("--no-letter", action="store_true")
+    p.add_argument("--region", choices=["IE", "none"],
+                   help="market variant (default: IE when requirements.yaml names an Irish job)")
     p.set_defaults(func=cmd_build)
     p = sub.add_parser("master-cv", help="build an untailored full CV for review")
     p.add_argument("master")
     p.add_argument("--lang", required=True, choices=["en", "pt-BR", "pt-PT"])
     p.add_argument("--angle")
     p.add_argument("--out")
+    p.add_argument("--region", choices=["IE", "none"], default="none", help="market variant")
     p.set_defaults(func=cmd_master_cv)
     p = sub.add_parser("guard", help="privacy and attribution checks for git hooks")
     guard = p.add_subparsers(dest="what", required=True)
@@ -835,6 +962,11 @@ def _parser() -> argparse.ArgumentParser:
     c.add_argument("--type", required=True)
     c.add_argument("--source", required=True)
     c.add_argument("--date")
+    c = company.add_parser("import-ie", help="import DETE employment permit statistics")
+    c.add_argument("--year", type=int, action="append")
+    c.add_argument("--file", help="a downloaded companies xlsx instead of fetching")
+    c = company.add_parser("seed-ie", help="seed Irish employers from the bundled JobPilot list")
+    c.add_argument("--file", help="a seed JSON file instead of the bundled one")
     c = company.add_parser("show", help="show a company")
     c.add_argument("name")
     p.set_defaults(func=cmd_company)

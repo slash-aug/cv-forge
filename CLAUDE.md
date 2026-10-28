@@ -18,11 +18,11 @@ Venv: `.venv/bin/cvforge`
 
 - `cvforge validate`: check the master profile against the schema
 - `cvforge audit`: check a tailored selection against master (ids, numbers, skill keywords, confidential terms)
-- `cvforge build`: render the PDF and run ATS checks
+- `cvforge build`: render the PDF and run ATS checks (`--region IE|none`, default from requirements.yaml)
 - `cvforge master-cv`: build the full master CV
 - `cvforge intake <link|->`: save a posting (link, or pasted text on stdin with `--company` and `--role`) and track it
 - `cvforge check <slug>`: verify requirements.yaml quotes and run the eligibility check (exit 2 = skip, `--override`)
-- `cvforge company add|sponsor|show`: company registry with visa sponsor marks
+- `cvforge company add|sponsor|show`: company registry with visa sponsor marks; `seed-ie` adds Irish employers, `import-ie` marks DETE permit holders
 - `cvforge salary <slug>`: suggest an expected salary at the market rate (`--confirm [AMOUNT]`, `--note` keeps the reasoning in salary.json)
 - `cvforge answers <slug>`: answer bank lookup and knock-out facts (`--save`)
 - `cvforge kit <slug>`: write kit.json and kit.html to copy into forms

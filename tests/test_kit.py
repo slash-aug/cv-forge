@@ -295,3 +295,29 @@ def test_kit_html_ignores_structured_salary():
     stripped = {**k, "salary": {kk: v for kk, v in k["salary"].items()
                                 if kk not in ("amount", "currency", "period")}}
     assert render_kit(k) == render_kit(stripped)
+
+
+def test_kit_without_verdict_unchanged():
+    k = kit()
+    assert "risks" not in k and "ireland_answers" not in k
+    assert build_kit(MASTER, TAILORED, POSTING, SALARY, slug="example-corp", files=FILES,
+                     verdict={"risks": [], "ireland": None})["risks"] == []
+
+
+def test_kit_includes_risks_and_ireland_answers():
+    verdict = {"risks": ["no permit record (DETE data not imported)"],
+               "ireland": {"route": "gep", "soc": "3131", "on_csol": False,
+                           "salary_eur_year": 30000, "permit_record": None,
+                           "lmnt": True, "sponsorship_silent": True}}
+    k = build_kit(MASTER, TAILORED, POSTING, SALARY, slug="example-corp", files=FILES,
+                  verdict=verdict)
+    assert k["risks"] == verdict["risks"]
+    assert k["ireland_answers"]["sponsorship"].startswith("Yes. I will need an employment permit.")
+    assert set(k["ireland_answers"]) == {"sponsorship", "right_to_work", "english"}
+    assert schema_problems(k, load_schema("cvforge.kit", "kit.schema.json")) == []
+    html = render_kit(k)
+    assert "no permit record (DETE data not imported)" in html
+    assert "<h2>Work authorisation</h2>" in html
+    assert html.index("no permit record") < html.index("<h2>Personal data</h2>")
+    plain = render_kit(kit())
+    assert "Work authorisation" not in plain.split("</style>")[1]

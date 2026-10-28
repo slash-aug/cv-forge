@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from cvforge.profile.model import ProfileError, load_master
-from cvforge.render.cv import build_cv_view, render_cv
+from cvforge.render.cv import build_cv_view, render_cv, render_view
 from cvforge.render.latex import (
     escape_tex,
     escape_url,
@@ -378,3 +378,268 @@ def test_compiled_cv_keeps_words_whole(cfg):
     text = "\n".join(page.extract_text() for page in PdfReader(pdf).pages)
     broken = [ln for ln in map(str.rstrip, text.splitlines()) if ln.endswith("-") and ln[-2:-1].isalpha()]
     assert not broken, broken
+
+
+def _ie_master(**rights):
+    master = copy.deepcopy(M)
+    prefs = master["x-preferences"]
+    prefs["relocation"] = True
+    prefs["workRights"] = {"BR": {"status": "citizen"}, "PT": {"status": "mobility"},
+                           "IE": {"status": "needs-permit", "degreeRecognised": "unknown",
+                                  "soc": ["2136"], **rights}}
+    return master
+
+
+IE_BLOCK = {"route": "csep-if-degree", "soc": "2136", "on_csol": True, "salary_eur_year": 55000.0,
+            "permit_record": None, "lmnt": False, "sponsorship_silent": True}
+
+
+def test_no_region_view_identical_to_today():
+    assert build_cv_view(T, M, None) == build_cv_view(T, M)
+    assert render_view(build_cv_view(T, M, None)) == render_cv(T, M)
+    assert "References" not in render_cv(T, M)
+
+
+def test_ie_region_header_line_and_label():
+    from cvforge.render.irish import ireland_region
+
+    master = _ie_master()
+    region = ireland_region(master, city="Cork", ireland=IE_BLOCK)
+    assert region.permit_line == "Requires employment permit (Critical Skills occupation)"
+    assert region.location_label == "Relocating to Cork, Ireland"
+    view = build_cv_view(T, master, region)
+    assert view["contact"]["address"] == "Relocating to Cork, Ireland"
+    tex = render_view(view)
+    assert r"\address{Relocating to Cork, Ireland}{}{}" in tex
+    head = tex.index(r"\patchcmd{\makehead}{\titlestyle{~|~\@title}}")
+    assert tex.index("Requires employment permit (Critical Skills occupation)", head) < tex.index(r"\extrainfo{")
+
+
+def test_ie_region_label_without_city_or_relocation():
+    from cvforge.render.irish import ireland_region
+
+    master = _ie_master()
+    assert ireland_region(master, city=None, ireland=IE_BLOCK).location_label == "Relocating to Ireland"
+    master["x-preferences"]["relocation"] = False
+    region = ireland_region(master, city="Cork", ireland=IE_BLOCK)
+    assert region.location_label is None
+    assert build_cv_view(T, master, region)["contact"]["address"] == build_cv_view(T, M)["contact"]["address"]
+
+
+def test_ie_region_csep_route_line():
+    from cvforge.render.irish import ireland_region
+
+    region = ireland_region(_ie_master(), city="Dublin", ireland={**IE_BLOCK, "route": "csep",
+                                                                  "salary_eur_year": 70000.0})
+    assert region.permit_line == "Eligible for Critical Skills Employment Permit (SOC 2136)"
+    assert "Eligible for Critical Skills Employment Permit (SOC 2136)" in render_view(
+        build_cv_view(T, _ie_master(), region))
+
+
+def test_ie_region_degree_yes_line_and_off_list_line():
+    from cvforge.render.irish import ireland_region
+
+    yes = ireland_region(_ie_master(degreeRecognised="yes"), city=None,
+                         ireland={**IE_BLOCK, "route": "csep", "salary_eur_year": 45000.0})
+    assert yes.permit_line == "Eligible for Critical Skills Employment Permit (SOC 2136)"
+    off = ireland_region(_ie_master(), city=None,
+                         ireland={**IE_BLOCK, "soc": "3131", "on_csol": False, "route": "gep"})
+    assert off.permit_line == "Requires employment permit sponsorship"
+    # no verdict: the CSOL comes from the permit table
+    assert ireland_region(_ie_master(), city=None, ireland=None).permit_line == \
+        "Requires employment permit (Critical Skills occupation)"
+
+
+def test_ie_region_never_claims_csep_when_gep_route():
+    from cvforge.render.irish import ireland_region
+
+    region = ireland_region(_ie_master(degreeRecognised="yes"), city=None,
+                            ireland={**IE_BLOCK, "route": "gep", "salary_eur_year": 38000.0})
+    assert "Eligible" not in region.permit_line
+
+
+def test_permit_line_enforces_csep_rule_over_a_stale_route():
+    from cvforge.render.irish import ireland_region
+
+    stale = {**IE_BLOCK, "route": "csep", "salary_eur_year": 55000.0}
+    region = ireland_region(_ie_master(), city=None, ireland=stale)
+    assert region.permit_line == "Requires employment permit (Critical Skills occupation)"
+    # CSEP at any eligible occupation needs 68911 even off the CSOL
+    off = {**IE_BLOCK, "route": "csep", "soc": "3131", "on_csol": False, "salary_eur_year": 60000.0}
+    assert ireland_region(_ie_master(), city=None, ireland=off).permit_line == \
+        "Requires employment permit sponsorship"
+    high = {**IE_BLOCK, "route": "csep", "salary_eur_year": 68911.0}
+    assert ireland_region(_ie_master(), city=None, ireland=high).permit_line == \
+        "Eligible for Critical Skills Employment Permit (SOC 2136)"
+
+
+def test_permit_line_never_upgrades_a_gep_verdict():
+    from cvforge.render.irish import ireland_region
+
+    # a 12-23 month fixed term: the check forced gep although salary and SOC give csep
+    short = {**IE_BLOCK, "route": "gep", "salary_eur_year": 75000.0}
+    region = ireland_region(_ie_master(), city=None, ireland=short)
+    assert region.permit_line == "Requires employment permit (Critical Skills occupation)"
+    assert "Eligible" not in region.permit_note
+    yes = ireland_region(_ie_master(degreeRecognised="yes"), city=None,
+                         ireland={**short, "salary_eur_year": 45000.0})
+    assert "Eligible" not in yes.permit_line
+
+
+def test_permit_line_uses_the_range_minimum():
+    from cvforge.render.irish import ireland_region
+
+    straddle = {**IE_BLOCK, "route": "csep", "salary_eur_year": 75000.0,
+                "salary_eur_year_min": 55000.0}
+    region = ireland_region(_ie_master(), city=None, ireland=straddle)
+    assert region.permit_line == "Requires employment permit (Critical Skills occupation)"
+    above = {**straddle, "salary_eur_year_min": 70000.0}
+    assert ireland_region(_ie_master(), city=None, ireland=above).permit_line == \
+        "Eligible for Critical Skills Employment Permit (SOC 2136)"
+
+
+def test_permit_line_degree_yes_without_salary_is_not_eligible():
+    from cvforge.render.irish import ireland_region
+
+    master = _ie_master(degreeRecognised="yes")
+    line = "Requires employment permit (Critical Skills occupation)"
+    assert ireland_region(master, city=None, ireland=None).permit_line == line
+    unknown = {**IE_BLOCK, "route": "unknown", "salary_eur_year": None}
+    assert ireland_region(master, city=None, ireland=unknown).permit_line == line
+
+
+def test_ie_region_without_ie_work_rights_has_no_permit_line():
+    from cvforge.render.irish import ireland_region
+
+    region = ireland_region(M, city="Cork", ireland=IE_BLOCK)
+    assert region.permit_line == ""
+    assert "employment permit" not in render_view(build_cv_view(T, M, region))
+
+
+def test_references_line_ie_only():
+    from cvforge.render.irish import ireland_region
+
+    assert "References available on request" not in render_cv(T, M)
+    master = _ie_master()
+    tex = render_view(build_cv_view(T, master, ireland_region(master, city=None, ireland=IE_BLOCK)))
+    assert "References available on request" in tex
+    assert tex.index("References available on request") > tex.index(r"\section{Languages}")
+    assert tex.index("References available on request") < tex.index(r"\end{document}")
+
+
+def test_ie_region_spelling_on_summary_and_bullets_only():
+    from cvforge.render.irish import ireland_region
+
+    master = _ie_master()
+    tailored = copy.deepcopy(T)
+    tailored["summary"]["text"] = "I optimized the color pipeline."
+    tailored["experience"][0]["positions"][0]["bullets"][0]["text"] = "Organized the center."
+    view = build_cv_view(tailored, master, ireland_region(master, city=None, ireland=IE_BLOCK))
+    assert view["summary"] == "I optimised the colour pipeline."
+    assert "Organised the centre." in view["experience"][0]["bullets"]
+    plain = build_cv_view(tailored, M)
+    assert plain["summary"] == "I optimized the color pipeline."
+    pt = build_cv_view({**tailored, "lang": "pt-BR", "summary": {"text": "color"}}, master,
+                       ireland_region(master, city=None, ireland=IE_BLOCK))
+    assert pt["summary"] == "color"
+
+
+def _stub_build(monkeypatch, tmp_path):
+    from cvforge import cli
+    from cvforge.checks.ats import AtsReport
+
+    views = []
+    monkeypatch.setattr(cli, "load_config", lambda: cli.Config(tmp_path, tmp_path, "lua", "xe"))
+    monkeypatch.setattr(cli, "compile_tex", lambda *a, **k: tmp_path / "x.pdf")
+    monkeypatch.setattr(cli, "_publish", lambda pdf, out, name: out / name)
+    monkeypatch.setattr(cli, "ats_check", lambda pdf, **k: AtsReport(True, [], "", 1, "stub"))
+    real = cli.render_view
+    monkeypatch.setattr(cli, "render_view", lambda view: views.append(view) or real(view))
+    return views
+
+
+def _app(tmp_path, name, *, countries, quote, verdict=None):
+    import json
+
+    import yaml
+
+    app = tmp_path / name
+    app.mkdir()
+    (app / "tailored.yaml").write_text((PERSONA / "tailored.yaml").read_text(encoding="utf-8"),
+                                       encoding="utf-8")
+    req = yaml.safe_load((PERSONA / "requirements.yaml").read_text(encoding="utf-8"))
+    req["location"] = {"workplace": "hybrid", "job_countries": countries, "allowed": [],
+                       "quote": quote}
+    (app / "requirements.yaml").write_text(yaml.safe_dump(req), encoding="utf-8")
+    if verdict is not None:
+        (app / "verdict.json").write_text(json.dumps({"verdict": "pass", "ireland": verdict}),
+                                          encoding="utf-8")
+    return app / "tailored.yaml"
+
+
+def test_build_defaults_region_from_requirements(tmp_path, monkeypatch, capsys):
+    import yaml
+
+    from cvforge.cli import main
+
+    views = _stub_build(monkeypatch, tmp_path)
+    master = tmp_path / "master.yaml"
+    master.write_text(yaml.safe_dump(_ie_master(), allow_unicode=True), encoding="utf-8")
+    m = str(master)
+
+    br = _app(tmp_path, "br", countries=["Brazil"], quote="Hybrid in Sao Paulo, Brazil.")
+    assert main(["build", str(br), "--master", m, "--no-letter"]) == 0
+    assert views[-1] == build_cv_view(T, _ie_master())
+
+    ie = _app(tmp_path, "ie", countries=["Ireland"], quote="Hybrid, 3 days a week in our Cork office.",
+              verdict={**IE_BLOCK, "route": "csep", "salary_eur_year": 70000.0})
+    assert main(["build", str(ie), "--master", m, "--no-letter"]) == 0
+    assert views[-1]["contact"]["address"] == "Relocating to Cork, Ireland"
+    assert views[-1]["contact"]["permit_line"] == \
+        "Eligible for Critical Skills Employment Permit (SOC 2136)"
+
+    assert main(["build", str(ie), "--master", m, "--no-letter", "--region", "none"]) == 0
+    assert views[-1] == build_cv_view(T, _ie_master())
+
+    no_city = _app(tmp_path, "ie2", countries=["Ireland"], quote="Remote within Ireland.")
+    assert main(["build", str(no_city), "--master", m, "--no-letter"]) == 0
+    assert views[-1]["contact"]["address"] == "Relocating to Ireland"
+    assert views[-1]["contact"]["permit_line"] == \
+        "Requires employment permit (Critical Skills occupation)"
+
+    broken = _app(tmp_path, "ie3", countries=["Ireland"], quote="Dublin.")
+    (broken.parent / "verdict.json").write_text("{not json", encoding="utf-8")
+    assert main(["build", str(broken), "--master", m, "--no-letter"]) == 1
+    assert "verdict.json" in capsys.readouterr().err
+
+    assert main(["master-cv", m, "--lang", "en", "--out", str(tmp_path)]) == 0
+    assert "permit_line" not in views[-1]["contact"]
+    assert main(["master-cv", m, "--lang", "en", "--out", str(tmp_path), "--region", "IE"]) == 0
+    assert views[-1]["contact"]["address"] == "Relocating to Ireland"
+
+
+@pytest.mark.latex
+def test_compiled_ie_region_cv_passes_ats(cfg, tmp_path, monkeypatch):
+    import yaml
+    from pypdf import PdfReader
+
+    from cvforge import cli
+
+    if not cfg.lualatex:
+        pytest.skip("no lualatex engine")
+    reports = []
+    real = cli.ats_check
+    monkeypatch.setattr(cli, "ats_check", lambda pdf, **k: reports.append(real(pdf, **k)) or reports[-1])
+    master = tmp_path / "master.yaml"
+    master.write_text(yaml.safe_dump(_ie_master(), allow_unicode=True), encoding="utf-8")
+    app = tmp_path / "app"
+    app.mkdir()
+    (app / "tailored.yaml").write_text((PERSONA / "tailored.yaml").read_text(encoding="utf-8"),
+                                       encoding="utf-8")
+    assert cli.main(["build", str(app / "tailored.yaml"), "--master", str(master), "--no-letter",
+                     "--region", "IE"]) == 0
+    assert reports[0].ok and reports[0].pages <= 2, reports[0].problems
+    text = "\n".join(p.extract_text() for p in PdfReader(next(app.glob("*_CV_*.pdf"))).pages)
+    for line in ("Requires employment permit (Critical Skills occupation)", "Relocating to Ireland",
+                 "References available on request"):
+        assert line in text

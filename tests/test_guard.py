@@ -16,6 +16,7 @@ from cvforge.guard import (
 DASH = chr(0x2014)
 CPF = "123.456" + ".789-09"
 PHONE = "+" + "55 11 91234-5678"
+PPS = "PPS 1234567" + "TA"
 
 
 def test_data_path_blocked():
@@ -44,6 +45,14 @@ def test_cpf_blocked():
 
 def test_phone_blocked():
     assert check_content("call " + PHONE, denylist=[])
+
+
+def test_ppsn_blocked():
+    assert "contains an Irish PPS number" in check_content(PPS, denylist=[])
+
+
+def test_plain_numbers_not_ppsn():
+    assert not any("PPS" in p for p in check_content("order 12345678 and 1234567", denylist=[]))
 
 
 def test_em_dash_blocked():

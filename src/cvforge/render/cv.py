@@ -3,6 +3,7 @@ import re
 
 from cvforge.profile.model import ProfileError, index, localized
 from cvforge.render.contact import contact_links
+from cvforge.render.irish import REFERENCES, Region, irish_spelling, skill_keywords
 from cvforge.render.latex import format_date, format_range, jinja_env
 
 HEADINGS = {
@@ -28,16 +29,21 @@ def _lookup(ids: dict, ref: str, kind: str) -> dict:
     return entry[1]
 
 
-def _contact(basics: dict, lang: str) -> dict:
+def _contact(basics: dict, lang: str, region: Region | None = None) -> dict:
     first, _, last = basics["name"].partition(" ")
     location = basics.get("location") or {}
     address = ", ".join(p for p in (location.get("city"), location.get("countryCode")) if p)
     label = basics.get("label")
-    return {
+    contact = {
         "first": first, "last": last, "address": address,
         "links": contact_links(basics),
         "title": localized(label, lang, item_id="basics.label") if label else "",
     }
+    if region is not None:
+        if region.location_label:
+            contact["address"] = region.location_label
+        contact["permit_line"] = region.permit_line
+    return contact
 
 
 def _positions(employer: dict, entry: dict, lang: str, ids: dict) -> list[dict]:
@@ -59,8 +65,11 @@ def _positions(employer: dict, entry: dict, lang: str, ids: dict) -> list[dict]:
     return sorted(rows, key=lambda r: r["start"], reverse=True)
 
 
-def build_cv_view(tailored: dict, master: dict) -> dict:
-    """Resolve refs and localise everything; the template only formats."""
+def build_cv_view(tailored: dict, master: dict, region: Region | None = None) -> dict:
+    """Resolve refs and localise everything; the template only formats.
+
+    `region` adds a market's variant (the Irish permit line, label, references, spelling).
+    """
     lang = tailored["lang"]
     ids = index(master)
     experience = []
@@ -100,10 +109,15 @@ def build_cv_view(tailored: dict, master: dict) -> dict:
         detail = ", ".join(p for p in (fluency, item.get("cefr")) if p)
         languages.append({"name": localized(item["language"], lang, item_id=ref), "detail": detail})
     summary = (tailored.get("summary") or {}).get("text", "")
-    return {
+    if region is not None and region.spelling and lang == "en":
+        keep = skill_keywords(master)
+        summary = irish_spelling(summary, keep)
+        for job in experience:
+            job["bullets"] = [irish_spelling(b, keep) for b in job["bullets"]]
+    view = {
         "lang": lang,
         "headings": HEADINGS[lang],
-        "contact": _contact(master["basics"], lang),
+        "contact": _contact(master["basics"], lang, region),
         "summary": summary,
         "experience": experience,
         "skills": skills,
@@ -111,6 +125,9 @@ def build_cv_view(tailored: dict, master: dict) -> dict:
         "certificates": certificates,
         "languages": languages,
     }
+    if region is not None and region.references:
+        view["references"] = REFERENCES
+    return view
 
 
 def render_view(view: dict) -> str:

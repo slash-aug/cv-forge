@@ -12,6 +12,8 @@ from cvforge.apply.check import (
     CAVEAT_TERMS,
     caveat_sentences,
     check,
+    home_regions,
+    is_irish_job,
     region_class,
     uncaptured_caveats,
 )
@@ -450,3 +452,36 @@ def test_caveat_scan_catches_elegivel_and_residencia():
     text = "Você é elegível para a vaga. Residência em Portugal é obrigatória."
     assert caveat_sentences(text) == [
         "Você é elegível para a vaga", "Residência em Portugal é obrigatória"]
+
+
+def test_ireland_and_eu_tokens():
+    assert region_class("Dublin") == "ireland" and region_class("EEA") == "eu"
+
+
+def test_home_unchanged_for_existing_masters():
+    assert home_regions(MASTER) == {"brazil", "portugal"}
+
+
+def test_home_follows_work_rights():
+    master = {"x-preferences": {"workRights": {"IE": {"status": "stamp4"},
+                                               "BR": {"status": "citizen"}}}}
+    assert home_regions(master) == {"ireland", "brazil"}
+    v = check(req(workplace="hybrid", countries=["Dublin"]), posting(), master, None, None,
+              TODAY, clt_factor=1.4)
+    assert v.results[1].ok and "Brazil or Ireland" in v.results[1].message
+
+
+def test_remote_eu_only_still_skips_for_non_irish_employer():
+    v = check(req(allowed=["EU"]), posting(), MASTER, None, None, TODAY, clt_factor=1.4)
+    assert not v.passed and "remote limited to EU" in v.results[1].message
+
+
+def test_is_irish_job():
+    assert is_irish_job(req(workplace="hybrid", countries=["Ireland"]))
+    assert is_irish_job(req(allowed=["Ireland"]))
+    assert not is_irish_job(req(allowed=["Ireland", "UK"]))
+
+
+def test_stamp_sentence_is_a_caveat():
+    assert caveat_sentences("Great team. Applicants must hold Stamp 4.") == [
+        "Applicants must hold Stamp 4"]

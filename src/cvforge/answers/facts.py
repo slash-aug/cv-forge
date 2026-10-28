@@ -1,10 +1,16 @@
 """Knock-out facts (visa, years, languages, relocation, notice, location), master only."""
 from __future__ import annotations
 
+from datetime import date
+
+from cvforge.apply.ie_permits import load_permit_table
+from cvforge.apply.ireland import claims_csep
 from cvforge.profile.model import localized
+from cvforge.profile.prefs import degree_recognised, self_apply
 
 PT = ("pt-BR", "pt-PT")
-ACRONYMS = {"eu": "EU", "uk": "UK", "us": "US", "usa": "USA", "cplp": "CPLP"}
+ACRONYMS = {"eu": "EU", "uk": "UK", "us": "US", "usa": "USA", "cplp": "CPLP",
+            "csep": "CSEP", "gep": "GEP", "soc": "SOC"}
 
 
 def _visa_name(key: str) -> str:
@@ -55,3 +61,44 @@ def knockout_facts(master: dict, months: int, lang: str) -> dict[str, str]:
         "location": ", ".join(
             str(loc[k]) for k in ("city", "region", "countryCode") if loc.get(k)),
     }
+
+
+CSOL_NOTE = " This role is on the Critical Skills Occupations List, so no labour market test is needed."
+SELF_APPLY = " If it helps, I can apply for the permit myself."
+
+
+def _text(value) -> str:
+    if isinstance(value, dict):
+        return str(value.get("en") or next(iter(value.values()), ""))
+    return str(value or "")
+
+
+def _english(master: dict) -> str:
+    """The EF SET certificate name, else the master English fluency. Never a made-up score."""
+    for cert in master.get("certificates") or []:
+        name = _text(cert.get("name"))
+        if "EF SET" in name:
+            return name
+    for item in master.get("languages") or []:
+        if _text(item.get("language")).casefold() == "english" and item.get("fluency"):
+            return _text(item["fluency"])
+    return ""
+
+
+def ireland_facts(master: dict, ireland: dict, lang: str) -> dict[str, str]:
+    """Answers for an Irish form: sponsorship, right to work, English. Master facts only."""
+    # A CSEP claim needs the verdict's csep route and the recompute from the lowest salary.
+    claim = claims_csep(ireland, degree_recognised(master), load_permit_table(date.today())[0])
+    on_csol = bool(ireland.get("on_csol"))
+    if claim:
+        text = "Yes. I will need a Critical Skills Employment Permit."
+    else:
+        text = "Yes. I will need an employment permit."
+    if on_csol:
+        text += CSOL_NOTE
+    silent = ireland.get("permit_record") is None or bool(ireland.get("sponsorship_silent"))
+    if self_apply(master) and silent:
+        text += SELF_APPLY
+    return {"sponsorship": text,
+            "right_to_work": "No, an employment permit is required.",
+            "english": _english(master)}

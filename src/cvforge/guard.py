@@ -16,6 +16,7 @@ BLOCKED_PREFIXES = ("data/", ".claude/agents/", ".claude/local/", "docs/superpow
 BLOCKED_NAMES = ("*.env", ".env*", "cvforge.toml")
 CPF = re.compile(r"\b\d{3}\.\d{3}\.\d{3}-\d{2}\b")
 PHONE_BR = re.compile(r"\+55\s?\(?\d{2}\)?\s?9?\d{4}-?\d{4}")
+PPSN = re.compile(r"\b\d{7}[A-W][A-IW]?\b")
 EM_DASH = "\u2014"
 EM_DASH_FORMS = (EM_DASH, "\\text" + "emdash", "&m" + "dash;", "&#82" + "12;", "&#x20" + "14;")
 TRAILER = re.compile(r"(?im)^co-authored-by:.*(claude|anthropic)")
@@ -47,6 +48,8 @@ def check_content(text: str, *, denylist: Iterable[str]) -> list[str]:
         problems.append("contains a CPF number")
     if PHONE_BR.search(text):
         problems.append("contains a Brazilian phone number")
+    if PPSN.search(text):
+        problems.append("contains an Irish PPS number")
     if any(form in fold(text) for form in map(fold, EM_DASH_FORMS)):
         problems.append("contains an em dash")
     return problems

@@ -7,7 +7,7 @@ import yaml
 
 from cvforge import cli
 from cvforge.answers.bank import load_bank, lookup, normalise_question, save_answers
-from cvforge.answers.facts import knockout_facts
+from cvforge.answers.facts import ireland_facts, knockout_facts, visa_text
 from cvforge.answers.gupy import GUPY_QUESTIONS
 from cvforge.apply.experience import engineering_months
 from cvforge.apply.posting import Posting
@@ -245,3 +245,93 @@ def test_normalise_matches_shared_table():
     assert len(rows) >= 15
     for row in rows:
         assert normalise_question(row["question"]) == row["key"], row["question"]
+
+
+# Ireland
+
+SELF = " If it helps, I can apply for the permit myself."
+CSOL = " This role is on the Critical Skills Occupations List, so no labour market test is needed."
+
+
+def _ie_master(degree="yes", self_apply=True, certs=None):
+    m = {**MASTER, "x-preferences": {**MASTER["x-preferences"], "workRights": {
+        "IE": {"status": "needs-permit", "degreeRecognised": degree, "selfApply": self_apply}}}}
+    if certs is not None:
+        m["certificates"] = certs
+    return m
+
+
+def test_ireland_facts_degree_unknown_never_claims_csep():
+    f = ireland_facts(_ie_master("unknown"), {"route": "csep-if-degree", "on_csol": True,
+                                              "permit_record": None}, "en")
+    assert "Critical Skills Employment Permit" not in f["sponsorship"]
+    assert f["sponsorship"].endswith("If it helps, I can apply for the permit myself.")
+
+
+def test_ireland_facts_never_trusts_stored_route():
+    f = ireland_facts(_ie_master("unknown"), {"route": "csep", "soc": "2134", "on_csol": True,
+                                              "salary_eur_year": 55000, "permit_record": None},
+                      "en")
+    assert "Critical Skills Employment Permit" not in f["sponsorship"]
+
+
+def test_ireland_facts_csep_route():
+    ie = {"route": "csep", "soc": "2134", "on_csol": True, "salary_eur_year": 55000,
+          "permit_record": None}
+    f = ireland_facts(_ie_master("yes"), ie, "en")
+    assert f["sponsorship"] == ("Yes. I will need a Critical Skills Employment Permit." + CSOL + SELF)
+    assert f["right_to_work"] == "No, an employment permit is required."
+
+
+def test_ireland_facts_self_apply_only_when_silent_and_enabled():
+    ie = {"soc": "3131", "on_csol": False, "salary_eur_year": 40000,
+          "permit_record": {"year": 2025}, "sponsorship_silent": False}
+    assert ireland_facts(_ie_master(), ie, "en")["sponsorship"] == "Yes. I will need an employment permit."
+    silent = {**ie, "sponsorship_silent": True}
+    assert ireland_facts(_ie_master(), silent, "en")["sponsorship"].endswith(SELF)
+    assert not ireland_facts(_ie_master(self_apply=False), silent, "en")["sponsorship"].endswith(SELF)
+
+
+def test_ireland_facts_english_from_master_only():
+    cert = [{"id": "c1", "name": "EF SET C1 Advanced", "issuer": "EF", "date": "2024-01"}]
+    assert ireland_facts(_ie_master(certs=cert), {}, "en")["english"] == "EF SET C1 Advanced"
+    f = ireland_facts(_ie_master(certs=[]), {}, "en")
+    assert f["english"] == "Fluent" and "IELTS" not in f["english"]
+
+
+def test_acronyms():
+    assert visa_text({"csep": "x"}) == "CSEP: x"
+    assert visa_text({"gep": "x", "soc": "y"}) == "GEP: x; SOC: y"
+
+
+def test_answers_cli_prints_ireland_block(app, capsys):
+    _tailored(app)
+    (app / "verdict.json").write_text(json.dumps({"risks": [], "ireland": {
+        "route": "gep", "soc": "3131", "on_csol": False, "salary_eur_year": 30000,
+        "permit_record": None, "lmnt": True, "sponsorship_silent": True}}), encoding="utf-8")
+    assert _run() == 0
+    out = capsys.readouterr().out
+    assert "Ireland:" in out and "right_to_work: No, an employment permit is required." in out
+
+
+def test_answers_cli_no_ireland_block_without_verdict(app, capsys):
+    _tailored(app)
+    assert _run() == 0
+    assert "Ireland:" not in capsys.readouterr().out
+
+
+def test_ireland_facts_never_upgrade_a_gep_verdict():
+    short = {"route": "gep", "soc": "2134", "on_csol": True, "salary_eur_year": 75000,
+             "permit_record": None}
+    for degree, salary in (("unknown", 75000), ("yes", 45000)):
+        f = ireland_facts(_ie_master(degree), {**short, "salary_eur_year": salary}, "en")
+        assert "Critical Skills Employment Permit" not in f["sponsorship"]
+
+
+def test_ireland_facts_use_the_range_minimum():
+    straddle = {"route": "csep", "soc": "2134", "on_csol": True, "salary_eur_year": 75000,
+                "salary_eur_year_min": 55000, "permit_record": None}
+    f = ireland_facts(_ie_master("unknown"), straddle, "en")
+    assert "Critical Skills Employment Permit" not in f["sponsorship"]
+    f = ireland_facts(_ie_master("unknown"), {**straddle, "salary_eur_year_min": 70000}, "en")
+    assert "Critical Skills Employment Permit" in f["sponsorship"]

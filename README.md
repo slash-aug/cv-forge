@@ -32,7 +32,7 @@ Commands:
 ```
 cvforge validate <master>                      check a master profile against the schema
 cvforge audit <tailored> --master <master>     compare a tailored CV with the master
-cvforge build <tailored> --master <master>     audit, render, compile and ATS-check
+cvforge build <tailored> --master <master>     audit, render, compile and ATS-check (--region IE|none)
 cvforge master-cv <master> --lang en           render a full CV straight from the master
 cvforge guard staged | tree | msg <file>       privacy checks used by the hooks and CI
 ```
@@ -42,8 +42,9 @@ cvforge guard staged | tree | msg <file>       privacy checks used by the hooks 
 Phase 2 turns one job posting into everything you need to apply. Python does the deterministic steps; the Claude commands `/apply` and `/outcome` (in `.claude/commands/`) drive them and write the two YAML files in between.
 
 - **Intake:** `cvforge intake <link>` or `cvforge intake - --company X --role Y` with pasted text on stdin saves the posting under `data/applications/<slug>/` and adds a tracker row. A posting guard flags stale or suspicious text. LinkedIn links are refused: paste the text instead. A posting that is already tracked exits with 3.
+- **Ireland first:** for Irish jobs `cvforge check` applies a permit rule (Critical Skills and General Employment Permit tiers, contract length, degree recognition, sponsor record) and prints `RISK` lines. `cvforge salary` suggests EUR and lifts to the permit floor, `cvforge answers` prints Irish right-to-work answers, and `cvforge build --region IE|none` renders the Irish CV variant (permit line, relocation label, Irish spelling, references); the default follows `requirements.yaml`. Brazil and Portugal behave as before.
 - **Eligibility:** Claude records what the posting says (years, location, sponsorship, pay, languages) in `requirements.yaml`, each fact with a quote. `cvforge check <slug>` verifies every quote appears verbatim in the posting, then compares the facts with your preferences in the master profile. Exit 2 means skip; `--override "reason"` continues and records why. Caveats (hiring model such as CLT via an Employer of Record, time zone overlap, travel) print as `INFO` lines and never skip; `WARN uncaptured` flags posting sentences about residence, eligibility, overlap or travel that no quote covers.
-- **Companies:** `cvforge company add | sponsor | show` keeps a registry with visa sponsor marks and their sources.
+- **Companies:** `cvforge company add | sponsor | show` keeps a registry with visa sponsor marks and their sources. `cvforge company seed-ie` adds about 118 Irish employers (from the MIT-licensed JobPilot preset), and `cvforge company import-ie` marks employers that hold Irish employment permits, from the DETE statistics (`--year`, `--file`).
 - **Salary:** `cvforge salary <slug>` suggests an expected salary from the posting range, an optional market CSV (see `examples/salary/market.template.csv`) and your pay floor, converted with ECB rates cached per day. `--confirm [AMOUNT]` locks it in.
 - **Answers:** `cvforge answers <slug>` looks up screening answers in the answer bank and your knock-out facts; `--save` audits the tailored file and stores its answers.
 - **Kit:** `cvforge kit <slug>` writes `kit.json` and a copy-ready `kit.html` with your details, work history cut to common field limits, salary, answers, the email to send when you apply by email, and links to the PDFs.
@@ -76,7 +77,8 @@ cvforge due
 | --- | --- | --- |
 | 1 | Foundation: master profile, tailoring, audit, LaTeX CV and letter, ATS check, privacy guards, CI | Done |
 | 2 | Apply flow: job link or pasted text, eligibility check, company registry with visa sponsor marks, salary suggestion, answer bank, copy-ready kit page, tracker with stages and a due view | Done |
-| 3 | Firefox extension: fills job forms from the kit, never on linkedin.com, never submits | Planned |
+| 3 | Firefox extension: fills job forms from the kit, never on linkedin.com, never submits. The next adapter decision (Workday is the likely candidate) comes after the Ireland work | Planned |
+| 3a | Ireland as the primary market: permit rule in `check`, DETE sponsor import, Irish salary, CV variant, answers | Done |
 | 4 | Discovery and company watchlist: job sources, Strider and Gupy tracking, ghost-job filter | Planned |
 | 5 | Feedback loop: email sync for replies, an application report and follow-up reminders | Planned |
 | 6 | A clean local web UI to track every application and run cv-forge without the command line | Planned |

@@ -14,6 +14,7 @@ dependencies = [
     "jinja2>=3.1",
     "jsonschema>=4",
     "pypdf>=4",
+    "openpyxl>=3.1",
     "tomli>=2; python_version < '3.11'",
 ]
 
@@ -27,7 +28,7 @@ cvforge = "cvforge.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-cvforge = ["**/*.j2", "**/*.json", "**/*.cls", "render/assets/**/*.ttf", "render/assets/**/*.otf", "render/assets/**/*.md", "render/assets/**/*.txt"]
+cvforge = ["**/*.j2", "**/*.json", "apply/*.yaml", "apply/seeds/*.md", "**/*.cls", "render/assets/**/*.ttf", "render/assets/**/*.otf", "render/assets/**/*.md", "render/assets/**/*.txt"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -33,6 +33,9 @@ def _rule_problems(req: dict) -> list[str]:
     sponsorship = req["sponsorship"]
     if sponsorship["status"] != "silent" and not sponsorship.get("quote"):
         problems.append(f"sponsorship.quote: required when status is {sponsorship['status']}")
+    auth = req.get("work_authorisation")
+    if auth and auth["status"] != "silent" and not auth.get("quote"):
+        problems.append(f"work_authorisation.quote: required when status is {auth['status']}")
     salary = req["salary"]
     if salary.get("min") is not None or salary.get("max") is not None:
         for key in ("currency", "period", "quote"):
@@ -67,7 +70,8 @@ def quotes(req: dict):
         yield f"{key}.quote", (req.get(key) or {}).get("quote")
     for i, item in enumerate(req.get("languages_required") or []):
         yield f"languages_required.{i}.quote", item.get("quote")
-    for key in ("hiring_model", "timezone", "travel"):
+    for key in ("hiring_model", "timezone", "travel",
+                "work_authorisation", "contract", "english_test", "degree"):
         if req.get(key):
             yield f"{key}.quote", req[key].get("quote")
 

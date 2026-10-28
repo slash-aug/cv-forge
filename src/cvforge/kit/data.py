@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 
-from cvforge.answers.facts import visa_text
+from cvforge.answers.facts import ireland_facts, visa_text
 from cvforge.profile.model import index, localized
 from cvforge.render.cv import build_cv_view
 from cvforge.text import split_name
@@ -140,11 +140,15 @@ def _email(tailored: dict, master: dict, files: dict[str, str]) -> dict | None:
 
 
 def build_kit(master: dict, tailored: dict, posting, salary: dict | None, *,
-              slug: str, files: dict[str, str]) -> dict:
-    """The kit.json document. `files` maps cv_pdf and letter_pdf to file names that exist."""
+              slug: str, files: dict[str, str], verdict: dict | None = None) -> dict:
+    """The kit.json document. `files` maps cv_pdf and letter_pdf to file names that exist.
+
+    With a verdict, the kit also carries its permit `risks` and, for an Irish job,
+    `ireland_answers`. Without one the document keeps its original keys.
+    """
     view = build_cv_view(tailored, master)
     note = tailored.get("recruiter_note")
-    return {
+    kit = {
         "schema_version": SCHEMA_VERSION,
         "slug": slug,
         "lang": tailored["lang"],
@@ -165,3 +169,9 @@ def build_kit(master: dict, tailored: dict, posting, salary: dict | None, *,
         "tracker": [f"cvforge track status {slug} applied",
                     f"cvforge track stage {slug} <name> --kind interview --due YYYY-MM-DD"],
     }
+    if verdict is not None:
+        ireland = verdict.get("ireland")
+        kit["risks"] = [str(r) for r in verdict.get("risks") or []]
+        kit["ireland_answers"] = (
+            ireland_facts(master, ireland, tailored["lang"]) if ireland else None)
+    return kit
