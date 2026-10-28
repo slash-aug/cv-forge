@@ -112,8 +112,39 @@ def test_applied_and_sponsor_rows_in_last_run(tmp_path, discover_master):
     fetch(tmp_path, discover_master, registry=registry, tracker_rows=tracker)
     rows = {r["title"]: r for r in json.loads((tmp_path / "last_run.json").read_text())["rows"]}
     assert rows["Full Stack Engineer"]["applied"] == {"date": "2026-10-20", "status": "applied"}
-    assert rows["Data Engineer"]["tagged"] is True  # "sponsor" counts as a tag
+    assert "applied on 2026-10-20" in rows["Full Stack Engineer"]["tags"]
+    assert rows["Full Stack Engineer"]["tagged"] is False
     assert "sponsor" in rows["Data Engineer"]["tags"]
+    assert rows["Data Engineer"]["tagged"] is False  # only ghost signs count as tagged
+
+
+def test_stale_row_is_tagged_in_last_run(tmp_path, discover_master):
+    fetch(tmp_path, discover_master)
+    fetch(tmp_path, discover_master, now=NOW + timedelta(days=15))
+    rows = json.loads((tmp_path / "last_run.json").read_text())["rows"]
+    assert rows and all("stale" in r["tags"] and r["tagged"] is True for r in rows)
+
+
+def test_all_failed_run_keeps_the_list(tmp_path, discover_master):
+    fetch(tmp_path, discover_master, render=lambda r, v: "<html>good</html>")
+    before = json.loads((tmp_path / "last_run.json").read_text())
+    assert before["rows"]
+    later = NOW + timedelta(days=1)
+    result = fetch(tmp_path, discover_master, get=Server(fail={ACME_URL, GLOBEX_URL}), now=later,
+                   render=lambda r, v: "<html>empty</html>")
+    assert result.all_failed
+    last = json.loads((tmp_path / "last_run.json").read_text())
+    assert last["rows"] == before["rows"]
+    assert last["at"] == "2026-10-29T09:00:00"
+    assert last["failed"] == last["boards"] == 2 and last["errors"] == result.errors
+    assert (tmp_path / "latest.html").read_text() == "<html>good</html>"
+    run = json.loads((tmp_path / "runs" / "2026-10-29.json").read_text())
+    assert run["errors"] == result.errors and run["roles"] == []
+
+
+def test_all_failed_first_run_has_empty_rows(tmp_path, discover_master):
+    fetch(tmp_path, discover_master, get=Server(fail={ACME_URL, GLOBEX_URL}))
+    assert json.loads((tmp_path / "last_run.json").read_text())["rows"] == []
 
 
 def test_failed_board_is_reported_and_others_continue(tmp_path, discover_master):
@@ -179,6 +210,24 @@ def test_market_filter(tmp_path, discover_master):
     assert [r.company for r in result.rows] == ["Hooli"]
     assert server.calls == [ACME_URL, GLOBEX_URL, HOOLI_URL]
     assert result.fetched == 6
+
+
+def test_market_filter_keeps_state_for_every_market(tmp_path, discover_master):
+    clone = {"title": "Frontend Engineer", "location": {"name": "Dublin, Ireland"},
+             "content": "&lt;p&gt;React and TypeScript for our shop builder.&lt;/p&gt;", "metadata": None}
+    board = json.dumps({"jobs": [{**clone, "id": i, "absolute_url": f"https://boards.greenhouse.io/cloneco/jobs/{i}"}
+                                 for i in (1, 2)]})
+    server = Server()
+    server.pages[board_url("greenhouse", "cloneco")] = board
+    registry = [{"name": "Cloneco", "ats": "greenhouse", "slug": "cloneco", "sponsor": [], "notes": ""},
+                {"name": "Hooli", "ats": "greenhouse", "slug": "hooli", "sponsor": [], "notes": ""}]
+    result = fetch(tmp_path, discover_master, registry=registry, get=server, market="BR")
+    assert [r.company for r in result.rows] == ["Hooli"]
+    ghosts = json.loads((tmp_path / "ghosts.json").read_text())
+    assert [g["name"] for g in ghosts.values()] == ["Cloneco"]
+    rows = json.loads((tmp_path / "last_run.json").read_text())["rows"]
+    assert {(r["company"], r["market"]) for r in rows} == {("Cloneco", "IE"), ("Hooli", "BR")}
+    assert next(r for r in rows if r["company"] == "Cloneco")["tagged"] is True
 
 
 def test_unknown_market_or_source_is_refused(tmp_path, discover_master):

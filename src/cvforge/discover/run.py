@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import os
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -23,7 +24,7 @@ from cvforge.profile.prefs import primary_market
 
 FETCH_SOURCES = ("greenhouse", "ashby", "lever", "workable", "gupy")
 MARKETS = ("IE", "BR", "all")
-UNTAGGED = frozenset({"partial", "region unknown", "salary unknown"})
+GHOST_SIGNS = frozenset({"stale", "ghost history"})
 
 
 @dataclass
@@ -72,7 +73,8 @@ def _load_rates(rates: Callable[[], Rates | None]) -> Rates | None:
 
 
 def _is_tagged(row: Row) -> bool:
-    return any(t not in UNTAGGED for t in row.tags)
+    """True when the row carries a ghost sign: cloned, stale or ghost history."""
+    return any(t.startswith("cloned") or t in GHOST_SIGNS for t in row.tags)
 
 
 def _run_role(role: Role, out: Outcome) -> dict:
@@ -85,6 +87,12 @@ def _last_run_row(row: Row) -> dict:
     return {"market": row.market, "company": row.company, "title": row.title, "locations": row.locations,
             "url": row.urls[0] if row.urls else "", "fit": row.fit, "tags": row.tags,
             "first_seen": row.first_seen, "tagged": _is_tagged(row), "applied": row.applied}
+
+
+def _write_text(path: Path, text: str) -> None:
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
 
 
 def run_fetch(jobs_dir: Path, *, master: dict, registry: list[dict], tracker_rows: list[dict],
@@ -124,7 +132,7 @@ def run_fetch(jobs_dir: Path, *, master: dict, registry: list[dict], tracker_row
     for _, out in screened:
         if out.drop:
             dropped[out.drop] += 1
-    kept = [(r, o) for r, o in screened if o.drop is None and (market == "all" or o.market == market)]
+    kept = [(r, o) for r, o in screened if o.drop is None]
 
     seen_path, ghosts_path = jobs_dir / "seen.json", jobs_dir / "ghosts.json"
     seen = store.load_seen(seen_path)
@@ -134,26 +142,30 @@ def run_fetch(jobs_dir: Path, *, master: dict, registry: list[dict], tracker_row
     store.update_seen(seen, [r for r, _ in screened], {r.key: o.market for r, o in screened},
                       now=now, fetched=answered)
     last_viewed = store.read_last_viewed(jobs_dir)
+    # Rows of every market feed ghost flags and last_run; --market only narrows the result and page.
     rows, flagged = build_rows(kept, seen, registry=registry, ghosts=ghosts, tracker_rows=tracker_rows,
                                last_viewed=last_viewed, now=now)
-    result = RunResult(now=now, rows=rows, dropped=dropped, errors=errors, boards=len(boards),
+    shown = rows if market == "all" else [row for row in rows if row.market == market]
+    result = RunResult(now=now, rows=shown, dropped=dropped, errors=errors, boards=len(boards),
                        failed=len(errors), fetched=len(screened), manual=manual)
     if dry_run:
         return result
 
-    new_ghosts = copy.deepcopy(ghosts)
-    store.flag_ghosts(new_ghosts, flagged, today)
+    store.flag_ghosts(ghosts, flagged, today)
     store.save_seen(seen_path, seen)
-    store.save_ghosts(ghosts_path, new_ghosts)
+    store.save_ghosts(ghosts_path, ghosts)
     at = now.isoformat(timespec="seconds")
     store.write_run(jobs_dir, today, {"at": at, "errors": errors, "dropped": dropped,
                                       "roles": [_run_role(r, o) for r, o in screened]})
+    if result.all_failed:
+        # Nothing was read: keep the previous list so a network outage does not empty it.
+        last_rows = (store.read_last_run(jobs_dir) or {}).get("rows") or []
+    else:
+        last_rows = [_last_run_row(row) for row in rows]
     store.write_last_run(jobs_dir, {"at": at, "boards": result.boards, "failed": result.failed,
-                                    "errors": errors, "dropped": dropped,
-                                    "rows": [_last_run_row(row) for row in rows]})
-    if render is not None:
-        html = render(result, store.read_last_viewed(jobs_dir))
-        (jobs_dir / "latest.html").write_text(html, encoding="utf-8")
+                                    "errors": errors, "dropped": dropped, "rows": last_rows})
+    if render is not None and not result.all_failed:
+        _write_text(jobs_dir / "latest.html", render(result, store.read_last_viewed(jobs_dir)))
     store.prune_runs(jobs_dir, today)
     return result
 
