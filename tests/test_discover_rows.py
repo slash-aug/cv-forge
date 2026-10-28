@@ -95,7 +95,7 @@ def test_stale_ghost_sponsor_tags():
     r = role()
     seen = seen_for(r, first=(NOW - timedelta(days=20)).isoformat(timespec="seconds"))
     ghosts = {"acme": {"name": "Acme", "last_flagged": "2026-10-01", "reason": "stale"}}
-    registry = [{"name": "Acme", "sponsor": {"source": "dete"}}]
+    registry = [{"name": "Acme", "sponsor": [{"type": "ie-permit", "source": "dete", "date": "2026-01-01"}]}]
     rows, flagged = build([r], seen, registry=registry, ghosts=ghosts)
     assert rows[0].tags == ["stale", "ghost history", "sponsor"]
     assert flagged == {"Acme Ltd": "stale"}
@@ -173,3 +173,21 @@ def test_clone_clusters_in_two_locations_merge_with_largest_count():
     rows, flagged = build(roles)
     assert len(rows) == 1 and rows[0].locations == ["Dublin, Ireland", "Cork, Ireland"]
     assert "cloned ×3" in rows[0].tags and flagged == {"Acme Ltd": "cloned"}
+
+
+def _mark(kind):
+    return [{"name": "Acme", "sponsor": [{"type": kind, "source": "x", "date": "2026-01-01"}]}]
+
+
+def test_sponsor_tag_only_for_irish_permit_marks():
+    r = role()
+    assert "sponsor" in build([r], registry=_mark("ie-permit"))[0][0].tags
+    assert "sponsor" in build([r], registry=_mark("other"))[0][0].tags
+    for kind in ("pt-tech-visa", "nl-ind", "uk-sponsor"):
+        assert "sponsor" not in build([r], registry=_mark(kind))[0][0].tags
+
+
+def test_no_sponsor_tag_on_brazilian_rows():
+    r = role(location="Remote, Brazil")
+    rows, _ = build([r], registry=_mark("ie-permit"), outcomes={"1": outcome(market="BR")})
+    assert rows[0].market == "BR" and "sponsor" not in rows[0].tags

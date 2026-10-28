@@ -3,7 +3,7 @@
 <article class="role" data-new="{{ '1' if v.new else '0' }}" data-tagged="{{ '1' if v.tagged else '0' }}" data-fit="{{ r.fit }}">
   <h3>{{ r.title }}{% if v.new %} <span class="badge">new</span>{% endif %}</h3>
   <p class="sub">{{ r.company }} | {{ r.locations|join("; ") }}</p>
-  <p class="meta">{{ v.salary }} | {{ v.route }}</p>
+  <p class="meta">{{ v.salary }}{% if v.route %} | {{ v.route }}{% endif %}</p>
   <p class="meta">fit: {{ r.fit }}{% if r.matched %} ({{ r.matched|join(", ") }}){% endif %} | first seen {{ v.first_seen }}</p>
   {% if r.applied %}<p class="meta">applied{% if r.applied.date %} {{ r.applied.date }}{% else %} (date unknown){% endif %}{% if r.applied.status %} ({{ r.applied.status }}){% endif %}</p>{% endif %}
   {% if r.tags %}<p class="tags">{% for t in r.tags %}<span class="tag">{{ t }}</span>{% endfor %}</p>{% endif %}

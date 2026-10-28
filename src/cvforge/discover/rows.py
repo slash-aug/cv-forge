@@ -7,7 +7,7 @@ import unicodedata
 from dataclasses import dataclass
 from datetime import datetime
 
-from cvforge.apply.companies import find_company, has_sponsor_mark, name_key
+from cvforge.apply.companies import find_company, name_key
 from cvforge.apply.posting import canonical_url
 from cvforge.discover.screen import Outcome
 from cvforge.discover.sources import Role
@@ -20,6 +20,7 @@ MARKET_ORDER = {"IE": 0, "BR": 1}
 WORDS = re.compile(r"\w+")
 SPACE = re.compile(r"\s+")
 GHOST_SIGNS = frozenset({"stale", "ghost history"})
+IE_SPONSOR_TYPES = frozenset({"ie-permit", "other"})
 
 
 @dataclass
@@ -42,6 +43,16 @@ class Row:
 def is_tagged(row: Row) -> bool:
     """True when the row carries a ghost sign: cloned, stale or ghost history."""
     return any(t.startswith("cloned") or t in GHOST_SIGNS for t in row.tags)
+
+
+def sponsors_for(entry: dict | None, market: str | None) -> bool:
+    """An Irish row with an ie-permit or other sponsor mark; Brazil needs no sponsorship."""
+    if market != "IE" or not entry:
+        return False
+    marks = entry.get("sponsor") or []
+    if isinstance(marks, dict):
+        marks = [marks]
+    return any(isinstance(m, dict) and m.get("type") in IE_SPONSOR_TYPES for m in marks)
 
 
 def intake_command(url: str) -> str | None:
@@ -172,7 +183,7 @@ def build_rows(kept: list[tuple[Role, Outcome]], seen: dict[str, dict], *, regis
             tags.append("stale")
         if ghost_marked(company, ghosts, entry, today):
             tags.append("ghost history")
-        if has_sponsor_mark(entry):
+        if sponsors_for(entry, first_out.market):
             tags.append("sponsor")
         if applied:
             if applied["status"] == "drafted":

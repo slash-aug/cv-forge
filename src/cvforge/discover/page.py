@@ -58,7 +58,9 @@ def _is_new(row: Row, last_viewed: datetime | None) -> bool:
 
 def _view(row: Row, last_viewed: datetime | None) -> dict:
     return {"row": row, "new": _is_new(row, last_viewed), "tagged": is_tagged(row),
-            "salary": salary_text(row.salary), "route": route_label(row.route),
+            "salary": salary_text(row.salary),
+            # Brazil needs no permit, so its cards carry no route label.
+            "route": route_label(row.route) if row.market == "IE" else None,
             "first_seen": (row.first_seen or "")[:10]}
 
 

@@ -116,3 +116,11 @@ def test_applied_without_date_and_dark_mode():
     html = render_jobs(result([row(applied={"date": None, "status": "applied"})]), None)
     assert "applied (date unknown)" in html and "applied None" not in html
     assert "prefers-color-scheme: dark" in html
+
+
+def test_route_label_hidden_on_brazilian_cards():
+    html = render_jobs(result([row(market="BR", title="Dev BR", route=None, tags=[])]), None)
+    assert "Dev BR" in html and "route unknown" not in html
+    assert "60,000-80,000 EUR / year</p>" in html
+    html = render_jobs(result([row(route=None)]), None)
+    assert "60,000-80,000 EUR / year | route unknown" in html
