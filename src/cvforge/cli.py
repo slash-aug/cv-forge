@@ -512,6 +512,9 @@ def _run_jobs_fetch(cfg: Config, now: datetime, *, market: str = "all", source: 
 
 
 def cmd_jobs_fetch(args) -> int:
+    if args.source == "gupy":
+        print("gupy has no plain public search; add Gupy roles with cvforge intake <link>", file=sys.stderr)
+        return 2
     cfg = load_config()
     now = _now()
     try:

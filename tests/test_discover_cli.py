@@ -75,6 +75,13 @@ def test_jobs_fetch_all_failed_exits_1(env, capsys):
     assert "Acme (greenhouse)" in captured.err
 
 
+def test_jobs_fetch_gupy_is_manual(env, capsys):
+    assert cli.main(["jobs", "fetch", "--source", "gupy"]) == 2
+    captured = capsys.readouterr()
+    assert captured.err.strip() == "gupy has no plain public search; add Gupy roles with cvforge intake <link>"
+    assert captured.out == ""
+
+
 def test_jobs_fetch_bad_args(env):
     with pytest.raises(SystemExit):
         cli.main(["jobs", "fetch", "--market", "XX"])
