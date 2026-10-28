@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re
 import shlex
+import unicodedata
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -45,7 +46,7 @@ def is_tagged(row: Row) -> bool:
 
 def intake_command(url: str) -> str | None:
     """The shell command to paste for a role, or None when the feed URL is not safe to put in one."""
-    if not is_web(url) or any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in url):
+    if not is_web(url) or any(c.isspace() or unicodedata.category(c).startswith("C") for c in url):
         return None
     return "cvforge intake " + shlex.quote(url)
 

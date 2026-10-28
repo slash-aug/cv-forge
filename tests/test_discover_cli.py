@@ -200,3 +200,20 @@ def test_real_load_master_missing_file(env, monkeypatch, capsys):
     (env / "profile" / "master.yaml").unlink()
     assert cli.main(["jobs", "fetch"]) == 1
     assert "master" in capsys.readouterr().err
+
+
+def test_intake_command_refuses_control_and_format_urls(env, capsys):
+    from cvforge.discover.rows import intake_command
+    bad = ["https://x.example/a\x9b2J", "https://x.example/a\u202eb", "https://x.example/a\x1bb"]
+    assert all(intake_command(u) is None for u in bad)
+    cli.main(["jobs", "fetch"])
+    path = env / "jobs" / "last_run.json"
+    last = json.loads(path.read_text(encoding="utf-8"))
+    last["rows"][0]["url"] = bad[0]
+    last["rows"][1]["url"] = bad[1]
+    path.write_text(json.dumps(last), encoding="utf-8")
+    capsys.readouterr()
+    assert cli.main(["jobs"]) == 0
+    out = capsys.readouterr().out
+    assert "\x9b" not in out and "\u202e" not in out
+    assert out.count("(open the link by hand:") == 2
