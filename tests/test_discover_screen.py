@@ -131,3 +131,24 @@ def test_screen_brazil_skips_permit_and_sponsorship(discover_master):
 def test_screen_bare_remote_is_home_with_region_unknown(discover_master):
     out = run(discover_master, role(location="Remote", description="React TypeScript Node.js"))
     assert out.market == "IE" and "region unknown" in out.tags
+
+
+def test_swapped_range_routes_from_the_lower_figure(discover_master):
+    out = permit_outcome(sal(90000, 60000), discover_master, TABLE, None)
+    assert out.route == "csep-if-degree" and out.eur_min == 60000 and out.eur_max == 90000
+
+
+def test_swapped_range_is_not_dropped_by_its_lower_figure(discover_master):
+    assert not permit_outcome(sal(40000, 30000), discover_master, TABLE, None).drop
+
+
+def test_zero_amount_is_unknown_not_dropped(discover_master):
+    for s in (sal(0, None), sal(None, 0), sal(-5, None), sal(0, 0)):
+        out = permit_outcome(s, discover_master, TABLE, None)
+        assert out.salary_unknown and not out.drop
+
+
+def test_zero_min_with_real_max_uses_the_max(discover_master):
+    out = permit_outcome(sal(0, 50000), discover_master, TABLE, None)
+    assert out.drop is False and not out.salary_unknown and out.route == "csep-if-degree"
+    assert out.eur_max == 50000

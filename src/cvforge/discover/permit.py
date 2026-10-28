@@ -34,7 +34,16 @@ def _clean(salary: dict | None) -> dict | None:
         return None
     if not isinstance(currency, str) or not currency.strip():
         return None
-    return {**salary, "period": period.strip().lower(), "currency": currency.strip()}
+    return {**salary, "period": period.strip().lower(), "currency": currency.strip(),
+            "min": _positive(salary.get("min")), "max": _positive(salary.get("max"))}
+
+
+def _positive(amount):
+    """None for a zero or negative amount; a non-numeric one is left for the caller to reject."""
+    try:
+        return None if float(amount) <= 0 else amount
+    except (TypeError, ValueError):
+        return amount
 
 
 def needs_rates(salary: dict | None) -> bool:
@@ -60,6 +69,8 @@ def permit_outcome(salary: dict | None, master: dict, table: PermitTable,
         return _unknown()
     soc_codes = (work_rights(master, "IE") or {}).get("soc") or []
     soc = soc_codes[0] if soc_codes else None
-    low = eur_min if eur_min is not None else eur_max
+    # A feed may swap min and max: the route uses the lower figure, the drop gate the higher.
+    figures = [f for f in (eur_min, eur_max) if f is not None]
+    low, high = min(figures), max(figures)
     route = route_for(low, soc, degree_recognised(master), table)
-    return PermitOutcome(eur_max < table.gep, route, False, eur_min, eur_max)
+    return PermitOutcome(high < table.gep, route, False, low, high)
