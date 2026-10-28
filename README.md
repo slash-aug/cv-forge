@@ -67,6 +67,25 @@ cvforge due
 
 `tests/test_apply_e2e.py` runs the same sequence. The human still clicks submit.
 
+## Job discovery (Phase 4)
+
+Phase 4 reads the public job feeds of the employers in your company registry once a day and lists the roles worth a look. It only reads and lists. Applying still goes through `cvforge intake <link>` and the Phase 2 flow.
+
+- **Sources:** the public feeds of Greenhouse, Ashby, Lever and Workable boards, one request per employer, sequential, with a 1 second pause. LinkedIn, job aggregators, Workday, SmartRecruiters and Personio stay manual: add those roles with `cvforge intake`. A source that fails (timeout, HTTP error, bad JSON) is reported and never aborts the run; its known roles are kept, so nothing comes back as "reposted".
+- **Gupy:** probed on 2026-10-28. A plain GET of the public search (`employability-portal.gupy.io/api/v1/jobs`) returned HTTP 404, so there is no plain public search. `cvforge jobs fetch --source gupy` prints that and exits 2. Add Gupy roles with `cvforge intake <link>`. The `gupy_keywords` setting stays reserved for when Gupy offers a public search.
+- **Filters:** every role is screened and each drop is recorded in the run file with its reason and counted in the log and the page footer. Reasons: `out-of-market` (not Irish, not Brazilian, not remote for either), `not-software` (the title is not an engineering role), `senior` (title or required years beyond your level), `no-sponsorship` (an Irish role that refuses sponsorship), `misaligned` (no overlap with your master stack), `below-permit` (an Irish role whose lowest posted salary is under the permit floor).
+- **Tags:** `cloned ×N` (the same title posted N times by one employer), `stale` (first seen more than 14 days ago and still open), `ghost history` (the company has an automatic or manual ghost mark; the automatic one expires 90 days after the last flagged role), `applied on DATE` (the tracker already has it), `sponsor` (the company has a sponsor mark), `region unknown` (the location did not say where the job is), `salary unknown` (an Irish role with no usable pay), `partial` (only part of your stack matches).
+- **Files** under `data/jobs/`: `seen.json` (first and last sighting per role), `ghosts.json` (automatic ghost marks), `runs/YYYY-MM-DD.json` (every kept and dropped role of a run, pruned after 90 days), `last_run.json` (when and how the last run went), `last_viewed.json` (marks what is new), and `latest.html` (the list page with filters, dropped counts and the manual list). A run where every source fails keeps the previous list.
+- **Commands:** `cvforge jobs` prints the list and refreshes first when the last run is older than 23 hours. `cvforge jobs fetch [--market IE|BR|all] [--source NAME] [--dry-run]` reads the feeds now; `--dry-run` writes nothing. `cvforge company ghost NAME [--clear]` marks or clears a ghost employer by hand. `cvforge due` shows a Jobs line and warns when the last run is older than 2 days.
+
+The daily run is a Windows scheduled task, set up once by hand. Run this in Windows PowerShell:
+
+```
+schtasks.exe /Create /TN "cv-forge jobs" /SC DAILY /ST 23:05 /TR "wsl.exe -d Ubuntu2204 -e bash -lc \"cd ~/dev/projects/slash/cv-forge && .venv/bin/cvforge jobs fetch >> ~/cvforge-jobs.log 2>&1\""
+```
+
+The task runs only while you are logged in to Windows, which is why `cvforge jobs` refreshes by itself after 23 hours.
+
 ## Flow
 
 ![Flow: master profile, tailor to a job, audit against master, render LaTeX, compile PDF, ATS check, you review and submit](docs/flow.svg)
@@ -79,7 +98,7 @@ cvforge due
 | 2 | Apply flow: job link or pasted text, eligibility check, company registry with visa sponsor marks, salary suggestion, answer bank, copy-ready kit page, tracker with stages and a due view | Done |
 | 3 | Firefox extension: fills job forms from the kit, never on linkedin.com, never submits. The next adapter decision (Workday is the likely candidate) comes after the Ireland work | Planned |
 | 3a | Ireland as the primary market: permit rule in `check`, DETE sponsor import, Irish salary, CV variant, answers | Done |
-| 4 | Discovery and company watchlist: job sources, Strider and Gupy tracking, ghost-job filter | Planned |
+| 4 | Job discovery: daily read of public employer feeds, market and permit filters, ghost-job tags, a list page and `cvforge jobs`. Gupy stays manual intake | Done |
 | 5 | Feedback loop: email sync for replies, an application report and follow-up reminders | Planned |
 | 6 | A clean local web UI to track every application and run cv-forge without the command line | Planned |
 
