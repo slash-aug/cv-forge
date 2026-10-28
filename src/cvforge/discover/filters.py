@@ -42,7 +42,9 @@ is_senior(title, description)
 - Description asks for at least 5 years in a clear phrase ("5+ years",
   "5 or more years", "at least 6 years", "minimum (of) 7 years", "min. 5
   years", "5+ anos", "no minimo 5 anos", "pelo menos 5 anos"). A range such
-  as "3-5 years" uses its lower bound. A bare "5 years" is not a phrase.
+  as "3-5 years" uses its lower bound. A bare "5 years" is not a phrase. A
+  phrase in the same clause as a wish word ("ideally", "preferred", "a plus",
+  "nice to have", "desejavel", "diferencial") does not count.
 
 refuses_sponsorship(text)
 - Returns the matched phrase for a refusal or for a requirement of existing
@@ -250,12 +252,29 @@ _YEARS_PATTERNS = (
 )
 
 
+_SOFT_BEFORE = re.compile(
+    r"(?:ideally|preferably|preferred|desirable|nice to have|bonus|idealmente|preferencialmente|desejavel)"
+    r"[^.;!?,]{0,40}$"
+)
+_SOFT_AFTER = re.compile(
+    r"^[^.;!?,]{0,20}?(?:preferred|desirable|(?:is|are|as|a) (?:big |huge )?plus|nice to have|bonus"
+    r"|desejavel|diferencial)"
+)
+
+
+def _soft(folded: str, m: re.Match[str]) -> bool:
+    """True when the years phrase sits in the same clause as a wish word."""
+    before = folded[max(0, m.start() - 60):m.start()]
+    after = folded[m.end():m.end() + 40]
+    return bool(_SOFT_BEFORE.search(before) or _SOFT_AFTER.search(after))
+
+
 def _years_required(description: str) -> int:
     folded = _norm(description)
-    lows = [int(m.group(1)) for m in _RANGE.finditer(folded)]
-    rest = _RANGE.sub(" ", folded)
+    lows = [int(m.group(1)) for m in _RANGE.finditer(folded) if not _soft(folded, m)]
+    rest = _RANGE.sub(lambda m: " " * len(m.group(0)), folded)
     for pat in _YEARS_PATTERNS:
-        lows.extend(int(m.group(1)) for m in pat.finditer(rest))
+        lows.extend(int(m.group(1)) for m in pat.finditer(rest) if not _soft(rest, m))
     return max(lows, default=0)
 
 

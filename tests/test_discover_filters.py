@@ -62,6 +62,27 @@ def test_is_senior_years(desc, want):
     assert is_senior("Software Engineer", desc) is want
 
 
+@pytest.mark.parametrize("desc", [
+    "Ideally 5+ years of experience", "ideally you have 5+ years with React",
+    "Preferably 6+ years", "5+ years preferred", "5+ years is a plus",
+    "Nice to have: 5+ years in fintech", "Bonus: at least 5 years with Go",
+    "5+ years would be desirable", "Idealmente 5+ anos", "5+ anos é um diferencial",
+    "Preferencialmente 5-7 anos", "Desejável: 5+ anos",
+])
+def test_soft_years_do_not_drop(desc):
+    assert is_senior("Software Engineer", desc) is False
+
+
+@pytest.mark.parametrize("desc", [
+    "Ideally based in Dublin. You have 5+ years of experience",
+    "5+ years of experience. Kotlin is a plus",
+    "Preferred: Go; required: 6+ years",
+    "Ideally 3+ years, and you must have 5+ years with Python",
+])
+def test_soft_word_in_another_clause_still_drops(desc):
+    assert is_senior("Software Engineer", desc) is True
+
+
 def test_is_software():
     assert is_software("Backend Engineer") and is_software("Desenvolvedora Full Stack")
     assert not is_software("Sales Engineer") and not is_software("Account Executive")
