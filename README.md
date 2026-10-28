@@ -79,11 +79,13 @@ Phase 4 reads the public job feeds of the employers in your company registry onc
 - **Files** under `data/jobs/`: `seen.json` (first and last sighting per role), `ghosts.json` (automatic ghost marks), `runs/YYYY-MM-DDTHHMM.json` (every kept and dropped role of a run, one file per run so two runs on one day both stay; pruned after 90 days, older `runs/YYYY-MM-DD.json` files too), `last_run.json` (when and how the last run went), `last_viewed.json` (marks what is new), and `latest.html` (the list page with filters, dropped counts and the manual list). A run where every source fails keeps the previous list. Employers on a feed ATS whose board slug cannot be read from the registry are listed by hand with their careers URL.
 - **Commands:** `cvforge jobs` prints the list and refreshes first when the last run is older than 23 hours. `cvforge jobs fetch [--market IE|BR|all] [--source NAME] [--dry-run]` reads the feeds now; `--dry-run` writes nothing. `--source` is a partial run: it updates `seen.json`, `ghosts.json` and writes its run file, and prints its result, but does not replace `last_run.json` or `latest.html`. `cvforge company ghost NAME [--clear]` marks or clears a ghost employer by hand. `cvforge due` shows a Jobs line and warns when the last run is older than 2 days.
 
-The daily run is a Windows scheduled task, set up once by hand. Run this in Windows PowerShell:
+The daily run is a Windows scheduled task, set up once by hand. It runs `scripts/jobs-nightly.sh`, which fetches and appends the output to `~/cvforge-jobs.log`. Run this in Command Prompt (cmd.exe), on one line, with your WSL distro name after `-d` (`wsl -l` lists them):
 
 ```
-schtasks.exe /Create /TN "cv-forge jobs" /SC DAILY /ST 23:05 /TR "wsl.exe -d Ubuntu2204 -e bash -lc \"cd ~/dev/projects/slash/cv-forge && .venv/bin/cvforge jobs fetch >> ~/cvforge-jobs.log 2>&1\""
+schtasks /Create /TN "cv-forge jobs" /SC DAILY /ST 23:05 /TR "wsl.exe -d Ubuntu2204 -e bash -lc ~/dev/projects/slash/cv-forge/scripts/jobs-nightly.sh"
 ```
+
+Test it with `schtasks /Run /TN "cv-forge jobs"` and check `~/cvforge-jobs.log` a few minutes later. `schtasks /Delete /TN "cv-forge jobs" /F` removes it.
 
 The task runs only while you are logged in to Windows, which is why `cvforge jobs` refreshes by itself after 23 hours.
 
