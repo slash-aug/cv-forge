@@ -63,8 +63,9 @@ def test_non_eur_without_rates_is_unknown(discover_master):
 
 
 def test_usd_converted_with_rates(discover_master):
+    # Converted for the drop gate only: a non-EUR salary never sets a route.
     out = permit_outcome(sal(44000, None, cur="USD"), discover_master, TABLE, RATES)
-    assert out.drop is False and out.route == "gep"
+    assert out.drop is False and out.route == "unknown" and out.salary_unknown
     assert out.eur_max == pytest.approx(40000)
 
 
@@ -152,3 +153,36 @@ def test_zero_min_with_real_max_uses_the_max(discover_master):
     out = permit_outcome(sal(0, 50000), discover_master, TABLE, None)
     assert out.drop is False and not out.salary_unknown and out.route == "csep-if-degree"
     assert out.eur_max == 50000
+
+
+CAD_RATES = Rates(day="2026-10-28", per_eur={"EUR": 1.0, "CAD": 1.5})
+
+
+def test_non_eur_salary_never_shows_a_route(discover_master):
+    out = permit_outcome(sal(215000, 270000, cur="CAD"), discover_master, TABLE, CAD_RATES)
+    assert out.route == "unknown" and out.salary_unknown and out.drop is False
+
+
+def test_non_eur_salary_still_dropped_below_permit(discover_master):
+    assert permit_outcome(sal(20000, 30000, cur="USD"), discover_master, TABLE, RATES).drop
+
+
+def test_eur_monthly_salary_keeps_its_route(discover_master):
+    out = permit_outcome(sal(7000, 8000, period="month"), discover_master, TABLE, RATES)
+    assert out.route == "csep" and not out.salary_unknown
+
+
+def test_screen_non_eur_salary_tagged_unknown_and_shown_as_posted(discover_master):
+    r = role(description="React, TypeScript and Node.js", salary=sal(215000, 270000, cur="CAD"))
+    out = screen(r, home="IE", keywords=master_keywords(discover_master), master=discover_master,
+                 table=TABLE, rates=CAD_RATES)
+    assert out.drop is None and out.route == "unknown" and "salary unknown" in out.tags
+    assert r.salary == sal(215000, 270000, cur="CAD")
+
+
+@pytest.mark.parametrize("amount", [float("nan"), float("inf"), "nan", "inf"])
+def test_non_finite_amount_is_missing(discover_master, amount):
+    out = permit_outcome(sal(amount, None), discover_master, TABLE, None)
+    assert out.salary_unknown and not out.drop
+    out = permit_outcome(sal(amount, 50000), discover_master, TABLE, None)
+    assert out.eur_min == 50000 and out.eur_max == 50000 and not out.drop

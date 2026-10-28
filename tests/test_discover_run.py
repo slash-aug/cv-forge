@@ -271,7 +271,8 @@ def test_rates_loaded_only_when_needed(tmp_path, discover_master):
     result = fetch(tmp_path / "b", discover_master, registry=registry, rates=rates)
     assert calls == [1]
     umbrella = next(r for r in result.rows if r.company == "Umbrella")
-    assert umbrella.route != "unknown"
+    # USD is converted for the drop gate only; a non-EUR salary never shows a route.
+    assert umbrella.route == "unknown" and "salary unknown" in umbrella.tags
 
 
 def test_rates_failure_means_none(tmp_path, discover_master):
