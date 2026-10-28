@@ -8,7 +8,7 @@ import shutil
 import subprocess
 import sys
 from dataclasses import asdict
-from datetime import date
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from cvforge.answers.bank import load_bank, lookup, normalise_question, save_answers
@@ -42,6 +42,11 @@ from cvforge.apply.workspace import create_app_dir
 from cvforge.build import LatexError, compile_tex
 from cvforge.checks.ats import AtsReport, ats_check
 from cvforge.config import Config, ConfigError, load_config
+from cvforge.discover import store as jobs_store
+from cvforge.discover.page import render_jobs
+from cvforge.discover.rows import intake_command
+from cvforge.discover.run import FETCH_SOURCES, MARKETS, due_lines, run_fetch
+from cvforge.discover.screen import DROP_REASONS
 from cvforge.guard import GuardError, check_message_file, check_staged, check_tree
 from cvforge.kit.data import build_kit
 from cvforge.kit.render import render_kit
@@ -459,7 +464,116 @@ def cmd_due(args) -> int:
         print(f"  {row['slug']}: {row['company']} / {row['role']} ({row['status']}, last update {row['last_update'] or row['date']})")
     for error in report.errors:
         print(f"bad stages file, {error}", file=sys.stderr)
+    print("Jobs")
+    for line in due_lines(cfg.data_dir / "jobs", _now()):
+        print(f"  {line}")
     return 1 if report.errors else 0
+
+
+REFRESH_HOURS = 23
+
+
+def _now() -> datetime:
+    return datetime.now().replace(microsecond=0)
+
+
+def _run_jobs_fetch(cfg: Config, now: datetime, *, market: str = "all", source: str | None = None,
+                    dry_run: bool = False):
+    """Run one discovery fetch with the data-directory inputs and print its summary."""
+    today = now.date()
+    jobs_dir = cfg.data_dir / "jobs"
+    master = load_master(cfg.data_dir / "profile" / "master.yaml")
+    registry = load_registry(cfg.data_dir / "companies.yaml")
+    tracker_rows = tracker.load(cfg.data_dir / "tracker.csv")
+    table, warnings = load_permit_table(today)
+    for warning in warnings:
+        print(warning, file=sys.stderr)
+    result = run_fetch(
+        jobs_dir, master=master, registry=registry, tracker_rows=tracker_rows, table=table,
+        rates=lambda: load_rates(cfg.data_dir / "salary", today, apply_http.get),
+        get=apply_http.get, now=now, market=market, source=source, dry_run=dry_run,
+        gupy_keywords=cfg.gupy_keywords, render=render_jobs)
+    print(f"fetched {result.fetched} roles from {result.boards - result.failed} of {result.boards} sources")
+    for error in result.errors:
+        print(error, file=sys.stderr)
+    print("dropped: " + ", ".join(f"{reason} {result.dropped.get(reason, 0)}" for reason in DROP_REASONS))
+    irish = sum(1 for row in result.rows if row.market == "IE")
+    brazilian = sum(1 for row in result.rows if row.market == "BR")
+    viewed = jobs_store.read_last_viewed(jobs_dir)
+    new = sum(1 for row in result.rows
+              if row.applied is None and (viewed is None or datetime.fromisoformat(row.first_seen) > viewed))
+    print(f"shown: {irish} Irish, {brazilian} Brazilian ({new} new)")
+    if dry_run:
+        print("(dry run, nothing written)")
+    elif (jobs_dir / "latest.html").exists():
+        print(jobs_dir / "latest.html")
+    return result
+
+
+def cmd_jobs_fetch(args) -> int:
+    cfg = load_config()
+    now = _now()
+    try:
+        result = _run_jobs_fetch(cfg, now, market=args.market, source=args.source, dry_run=args.dry_run)
+    except OSError as exc:
+        print(f"cannot write the jobs files: {exc}", file=sys.stderr)
+        return 1
+    return 1 if result.all_failed else 0
+
+
+def _is_stale(last: dict | None, now: datetime) -> bool:
+    if not last:
+        return True
+    try:
+        return now - datetime.fromisoformat(last["at"]) > timedelta(hours=REFRESH_HOURS)
+    except (KeyError, TypeError, ValueError):
+        return True
+
+
+def _print_job(row: dict, new: bool) -> None:
+    tags = f" [{', '.join(row.get('tags') or [])}]" if row.get("tags") else ""
+    print(f"{'NEW ' if new else ''}{row['title']} | {row['company']} | "
+          f"{'; '.join(row.get('locations') or [])} | {row['fit']}{tags}")
+    url = row.get("url") or ""
+    command = intake_command(url)
+    print(f"  {command}" if command else f"  (open the link by hand: {url!r})")
+
+
+def cmd_jobs(args) -> int:
+    if getattr(args, "action", None) == "fetch":
+        return cmd_jobs_fetch(args)
+    cfg = load_config()
+    now = _now()
+    jobs_dir = cfg.data_dir / "jobs"
+    failed = False
+    if _is_stale(jobs_store.read_last_run(jobs_dir), now):
+        try:
+            failed = _run_jobs_fetch(cfg, now).all_failed
+        except OSError as exc:
+            print(f"cannot write the jobs files: {exc}", file=sys.stderr)
+            failed = True
+    last = jobs_store.read_last_run(jobs_dir)
+    if not last or (failed and not last.get("rows")):
+        return 1
+    viewed = jobs_store.read_last_viewed(jobs_dir)
+    rows = last.get("rows") or []
+    open_rows = [r for r in rows if r.get("applied") is None]
+    new_rows = [r for r in open_rows if viewed is None or datetime.fromisoformat(r["first_seen"]) > viewed]
+    old_rows = [r for r in open_rows if r not in new_rows]
+    for row in new_rows:
+        _print_job(row, True)
+    for row in old_rows:
+        _print_job(row, False)
+    applied = [r for r in rows if r.get("applied") is not None]
+    if applied:
+        print("Already applied")
+        for row in applied:
+            _print_job(row, False)
+    page = jobs_dir / "latest.html"
+    if page.exists():
+        print(f"page: {page}")
+    jobs_store.write_last_viewed(jobs_dir, now)
+    return 0
 
 
 def _write_verdict(app_dir: Path, today: date, verdict: str, *, results: Verdict | None = None,
@@ -1009,6 +1123,14 @@ def _parser() -> argparse.ArgumentParser:
                    help="port, 1-65535 (default: serve_port in config, 47321; the extension uses 47321 only)")
     p.add_argument("--show-token", action="store_true", help="print the pairing token and exit")
     p.set_defaults(func=cmd_serve)
+    p = sub.add_parser("jobs", help="list discovered roles, refreshing when stale")
+    p.set_defaults(func=cmd_jobs, action=None)
+    jobs_sub = p.add_subparsers(dest="action")
+    f = jobs_sub.add_parser("fetch", help="read the employer feeds now")
+    f.add_argument("--market", choices=MARKETS, default="all")
+    f.add_argument("--source", choices=FETCH_SOURCES)
+    f.add_argument("--dry-run", action="store_true", help="screen and print, write nothing")
+    f.set_defaults(func=cmd_jobs)
     p = sub.add_parser("due", help="stages, follow-ups and stale applications")
     p.set_defaults(func=cmd_due)
     return parser

@@ -17,6 +17,9 @@ MIKTEX_BIN = Path("/mnt/d/MiKTeX/miktex/bin/x64")
 WIN_BUILD_DIR = Path("/mnt/d/cv-forge-build")
 
 
+GUPY_KEYWORDS = ("react", "node", "full stack", "typescript")
+
+
 class ConfigError(ValueError):
     """A configuration value or cvforge.toml that cannot be used."""
 
@@ -30,6 +33,7 @@ class Config:
     daily_cap: int = 10
     clt_factor: float = 1.4
     serve_port: int = 47321
+    gupy_keywords: tuple[str, ...] = GUPY_KEYWORDS
 
 
 def _engine(name: str) -> str:
@@ -76,6 +80,18 @@ def load_config(env: Mapping[str, str] | None = None, file: Path | None = None) 
     if not 0 <= serve_port <= 65535:
         raise ConfigError(f"serve_port must be between 0 and 65535, got {serve_port}")
 
+    raw_keywords = env.get("CVFORGE_GUPY_KEYWORDS")
+    if raw_keywords:
+        gupy_keywords = tuple(k.strip() for k in raw_keywords.split(",") if k.strip())
+    else:
+        file_keywords = cfg.get("gupy_keywords")
+        if file_keywords is None:
+            gupy_keywords = GUPY_KEYWORDS
+        elif isinstance(file_keywords, list) and all(isinstance(k, str) for k in file_keywords):
+            gupy_keywords = tuple(k.strip() for k in file_keywords if k.strip())
+        else:
+            raise ConfigError(f"gupy_keywords must be a list of strings, got {file_keywords!r}")
+
     default_build = WIN_BUILD_DIR if Path("/mnt/d").exists() else REPO_ROOT / "build"
     return Config(
         data_dir=Path(pick("data_dir") or REPO_ROOT / "data"),
@@ -85,4 +101,5 @@ def load_config(env: Mapping[str, str] | None = None, file: Path | None = None) 
         daily_cap=daily_cap,
         clt_factor=clt_factor,
         serve_port=serve_port,
+        gupy_keywords=gupy_keywords,
     )
