@@ -6,7 +6,7 @@ from importlib import resources
 
 import jinja2
 
-from cvforge.discover.rows import Row, is_tagged
+from cvforge.discover.rows import Row, intake_command, is_tagged
 from cvforge.discover.run import RunResult
 from cvforge.discover.screen import DROP_REASONS
 from cvforge.kit.render import is_web
@@ -36,9 +36,8 @@ def salary_text(salary: dict | None) -> str:
     bounds = "-".join(dict.fromkeys(b for b in (low, high) if b))
     if not bounds:
         return "salary unknown"
-    tail = " / ".join(x for x in (" ".join(x for x in (bounds, salary.get("currency")) if x),
-                                  salary.get("period")) if x)
-    return tail
+    amount = " ".join(x for x in (bounds, salary.get("currency")) if x)
+    return " / ".join(x for x in (amount, salary.get("period")) if x)
 
 
 def _is_new(row: Row, last_viewed: datetime | None) -> bool:
@@ -68,6 +67,7 @@ def render_jobs(result: RunResult, last_viewed: datetime | None) -> str:
         loader=jinja2.FileSystemLoader(str(resources.files("cvforge.discover").joinpath("templates"))),
         autoescape=True, trim_blocks=True, lstrip_blocks=True, undefined=jinja2.StrictUndefined)
     env.tests["web"] = is_web
+    env.globals["intake_command"] = intake_command
     sections = []
     for code, label in MARKETS:
         views = [_view(r, last_viewed) for r in result.rows if r.market == code]

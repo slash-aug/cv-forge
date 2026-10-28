@@ -5,12 +5,15 @@
   <p class="sub">{{ r.company }} | {{ r.locations|join("; ") }}</p>
   <p class="meta">{{ v.salary }} | {{ v.route }}</p>
   <p class="meta">fit: {{ r.fit }}{% if r.matched %} ({{ r.matched|join(", ") }}){% endif %} | first seen {{ v.first_seen }}</p>
-  {% if r.applied %}<p class="meta">applied {{ r.applied.date }}{% if r.applied.status %} ({{ r.applied.status }}){% endif %}</p>{% endif %}
+  {% if r.applied %}<p class="meta">applied{% if r.applied.date %} {{ r.applied.date }}{% else %} (date unknown){% endif %}{% if r.applied.status %} ({{ r.applied.status }}){% endif %}</p>{% endif %}
   {% if r.tags %}<p class="tags">{% for t in r.tags %}<span class="tag">{{ t }}</span>{% endfor %}</p>{% endif %}
   {% for url in r.urls %}
+  {% set cmd = intake_command(url) %}
   <div class="act">
-    <code>cvforge intake {{ url }}</code>
-    <button type="button" data-copy="cvforge intake {{ url }}">Copy</button>
+    {% if cmd %}
+    <code>{{ cmd }}</code>
+    <button type="button" data-copy="{{ cmd }}">Copy</button>
+    {% endif %}
     {% if url is web %}<a href="{{ url }}">open</a>{% endif %}
   </div>
   {% endfor %}

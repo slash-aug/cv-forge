@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import shlex
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -10,6 +11,7 @@ from cvforge.apply.posting import canonical_url
 from cvforge.discover.screen import Outcome
 from cvforge.discover.sources import Role
 from cvforge.discover.store import ghost_marked, is_stale, norm_title
+from cvforge.kit.render import is_web
 from cvforge.text import fold_accents
 
 CLONE_SIMILARITY = 0.8
@@ -39,6 +41,13 @@ class Row:
 def is_tagged(row: Row) -> bool:
     """True when the row carries a ghost sign: cloned, stale or ghost history."""
     return any(t.startswith("cloned") or t in GHOST_SIGNS for t in row.tags)
+
+
+def intake_command(url: str) -> str | None:
+    """The shell command to paste for a role, or None when the feed URL is not safe to put in one."""
+    if not is_web(url) or any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in url):
+        return None
+    return "cvforge intake " + shlex.quote(url)
 
 
 def _url_key(url: str) -> str:
