@@ -98,6 +98,7 @@ def test_record_fields():
     assert set(seen["greenhouse:acme:1"]) == {
         "key", "source", "board", "job_id", "company", "title", "url", "market", "first_seen",
         "last_seen", "gone_since", "times_reposted", "fingerprint", "location"}
+    assert "successor" not in seen["greenhouse:acme:1"]
     assert seen["greenhouse:acme:1"]["market"] is None
 
 
@@ -180,3 +181,58 @@ def test_last_run_roundtrip(tmp_path):
     assert read_last_run(tmp_path) is None
     write_last_run(tmp_path, {"at": "x"})
     assert read_last_run(tmp_path) == {"at": "x"}
+
+
+def _gone_one():
+    seen = {}
+    update_seen(seen, [role("1")], {}, now=NOW, fetched=GH)
+    update_seen(seen, [], {}, now=NOW + timedelta(days=1), fetched=GH)
+    return seen
+
+
+def test_gone_record_inherited_once():
+    seen = _gone_one()
+    update_seen(seen, [role("2")], {}, now=NOW + timedelta(days=2), fetched=GH)
+    assert seen["greenhouse:acme:1"]["successor"] == "greenhouse:acme:2"
+    later = NOW + timedelta(days=3)
+    update_seen(seen, [role("2"), role("3")], {}, now=later, fetched=GH)
+    rec = seen["greenhouse:acme:3"]
+    assert rec["times_reposted"] == 0 and rec["first_seen"] == "2026-10-31T23:05:00"
+
+
+def test_repost_chain_counts():
+    seen = _gone_one()
+    update_seen(seen, [role("2")], {}, now=NOW + timedelta(days=2), fetched=GH)
+    update_seen(seen, [], {}, now=NOW + timedelta(days=3), fetched=GH)
+    update_seen(seen, [role("3")], {}, now=NOW + timedelta(days=4), fetched=GH)
+    rec = seen["greenhouse:acme:3"]
+    assert rec["times_reposted"] == 2 and rec["first_seen"] == "2026-10-28T23:05:00"
+
+
+def test_same_run_clones_only_first_inherits():
+    seen = _gone_one()
+    update_seen(seen, [role("2"), role("3")], {}, now=NOW + timedelta(days=2), fetched=GH)
+    assert seen["greenhouse:acme:2"]["times_reposted"] == 1
+    assert seen["greenhouse:acme:3"]["times_reposted"] == 0
+    assert seen["greenhouse:acme:3"]["first_seen"] == "2026-10-30T23:05:00"
+
+
+def test_repost_record_stable_on_next_run():
+    seen = _gone_one()
+    update_seen(seen, [role("2")], {}, now=NOW + timedelta(days=2), fetched=GH)
+    update_seen(seen, [role("2")], {}, now=NOW + timedelta(days=3), fetched=GH)
+    assert seen["greenhouse:acme:2"]["times_reposted"] == 1
+
+
+def test_partial_record_skipped_in_matching():
+    seen = {"x": {"key": "x", "gone_since": "2026-10-01T00:00:00"}}
+    update_seen(seen, [role("2")], {}, now=NOW, fetched=GH)
+    assert seen["greenhouse:acme:2"]["times_reposted"] == 0
+
+
+def test_ghost_manual_false_without_usable_date():
+    today = date(2026, 10, 28)
+    auto = {"acme": {"name": "Acme", "last_flagged": "2026-10-01", "reason": "stale"}}
+    for manual in ({"mark": False}, {"mark": False, "date": "junk"}):
+        assert ghost_marked("Acme", auto, {"ghost": manual}, today)
+        assert not ghost_marked("Acme", {}, {"ghost": manual}, today)

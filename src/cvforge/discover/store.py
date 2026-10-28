@@ -77,13 +77,14 @@ def update_seen(seen: dict[str, dict], roles: list[Role], market_of_key: dict[st
         company, title = name_key(role.company), norm_title(role.title)
         gone = [
             old for old in seen.values()
-            if old.get("gone_since") and old["fingerprint"] == fp
-            and name_key(old["company"]) == company and norm_title(old["title"]) == title
+            if old.get("gone_since") and not old.get("successor") and old.get("fingerprint") == fp
+            and name_key(old.get("company") or "") == company and norm_title(old.get("title") or "") == title
         ]
         first_seen, reposted = stamp, 0
         if gone:
-            old = min(gone, key=lambda o: o["first_seen"])
+            old = min(gone, key=lambda o: (-o["times_reposted"], o["first_seen"]))
             first_seen, reposted = old["first_seen"], old["times_reposted"] + 1
+            old["successor"] = key
         seen[key] = {
             "key": key, "source": role.source, "board": role.board, "job_id": role.job_id,
             "company": role.company, "title": role.title, "url": role.url, "location": role.location,
@@ -122,8 +123,11 @@ def ghost_marked(company: str, ghosts: dict[str, dict], entry: dict | None, toda
     if manual:
         if manual.get("mark"):
             return True
-        marked_on = date.fromisoformat(str(manual["date"]))
-        if flagged is None or marked_on >= flagged:
+        try:
+            marked_on = date.fromisoformat(str(manual["date"]))
+        except (KeyError, ValueError):
+            marked_on = None
+        if flagged is None or (marked_on is not None and marked_on >= flagged):
             return False
     return flagged is not None and (today - flagged).days <= GHOST_DAYS
 
