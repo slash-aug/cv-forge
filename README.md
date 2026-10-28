@@ -161,7 +161,7 @@ LaTeX runs in `<build_dir>/.cvforge-jobs/<job>/`, which is wiped before each run
 
 A small extension fills application forms from a job's `kit.json`. It only fills after you click Fill. It never fills the phone number, never ticks consent boxes or answers consent questions, and never clicks Submit or Next. Salary is filled only when it is confirmed and the form's currency and period, when the form states them, match the kit.
 
-Greenhouse has a dedicated adapter. Every other site, Gupy included for now, uses a label guesser. On every site, searchable dropdowns (comboboxes, such as the Greenhouse location field) are left for you to pick from the list.
+Greenhouse has a dedicated adapter. Every other site, Gupy included for now, uses a label guesser. On Greenhouse, searchable dropdowns (country, location and dropdown questions) are filled by typing the kit's value and clicking the matching option in that dropdown's own list; it never clicks a button or link there, and a dropdown that already shows a value is left alone. Demographic and consent dropdowns are always left to you. On other sites, searchable dropdowns are left for you to pick from the list. Inside an embedded form the Fill button sits at the top of the form.
 
 1. Build it: `cd extension && npm install && npm run build`. Building needs Node 22.18 or newer (the build script imports TypeScript directly). Output goes to `extension/dist/chrome` and `extension/dist/firefox`.
 2. Start the server: `.venv/bin/cvforge serve`. It listens on `127.0.0.1` only, on port 47321. The extension connects to port 47321 only, so leave `serve_port` at its default; `cvforge serve` warns when it runs on another port. On start it prints how to show the pairing token, not the token itself.

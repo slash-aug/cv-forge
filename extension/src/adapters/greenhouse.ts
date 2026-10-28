@@ -143,10 +143,17 @@ function map(doc: Document): PageMap {
       continue;
     }
 
-    // Searchable dropdowns (location, country, react-select questions): typing does not choose an option.
+    // Searchable dropdowns (country, location, react-select questions): the engine picks an
+    // option through deps.pick; consent stays with the user and anything else is unplaced.
     if (isCombobox(el)) {
       const label = questionLabel(el);
-      (label !== "" && isConsentText(label) ? m.consent : m.unplaced).push(el as HTMLInputElement);
+      const words = `${el.id} ${el.name}`.toLowerCase().replace(/[_\-[\]]+/g, " ");
+      const isQuestion = el.id.startsWith("question_") || el.name.includes("answers_attributes");
+      if (label !== "" && isConsentText(label)) m.consent.push(el as HTMLInputElement);
+      else if (id === "country") field("basics.country", el);
+      else if (/\b(city|location)\b/.test(words) && !isQuestion) field("basics.city", el);
+      else if (isQuestion && label !== "") m.questions.push({ label, el, maxLength: null });
+      else m.unplaced.push(el);
       continue;
     }
     if (simple) {

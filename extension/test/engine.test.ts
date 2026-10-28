@@ -490,3 +490,59 @@ describe("review fixes", () => {
     expect(s.needsYou).toEqual([{ label: "b", el: null, note: "n" }]);
   });
 });
+
+describe("searchable dropdowns", () => {
+  let picks: [string, string, boolean][];
+  const combo = (id: string): HTMLInputElement => {
+    const el = input(id);
+    el.setAttribute("role", "combobox");
+    return el;
+  };
+  const picker = (outcome: "set" | "nomatch" | "differs" | "same") =>
+    vi.fn(async (el: HTMLInputElement, value: string, opts?: { prefix?: boolean }) => {
+      picks.push([el.id, value, !!opts?.prefix]);
+      return outcome;
+    });
+
+  beforeEach(() => {
+    picks = [];
+    document.body.innerHTML = `<input id="country"><input id="city"><input id="q1">`;
+  });
+
+  test("a country dropdown is picked with the country's English name", async () => {
+    kit.fields = [{ key: "basics.country", label: "Country", value: "BR", group: "personal" }];
+    const s = await fill(map({ fields: [{ key: "basics.country", el: combo("country"), guessed: false }] }), kit,
+      { ...deps, pick: picker("set") });
+    expect(picks).toEqual([["country", "Brazil", false]]);
+    expect(s.filled.map((f) => f.label)).toEqual(["Country"]);
+  });
+
+  test("a city dropdown accepts an option that starts with the city", async () => {
+    kit.fields = [{ key: "basics.city", label: "City", value: "Londrina", group: "personal" }];
+    await fill(map({ fields: [{ key: "basics.city", el: combo("city"), guessed: false }] }), kit,
+      { ...deps, pick: picker("set") });
+    expect(picks).toEqual([["city", "Londrina", true]]);
+  });
+
+  test("a dropdown question is picked from the kit answer", async () => {
+    kit.answers = [{ question: "Will you require sponsorship?", answer: "Yes", limit: null }];
+    const s = await fill(map({ questions: [{ label: "Will you require sponsorship?", el: combo("q1"), maxLength: null }] }), kit,
+      { ...deps, pick: picker("set") });
+    expect(picks).toEqual([["q1", "Yes", false]]);
+    expect(s.filled.map((f) => f.label)).toEqual(["Will you require sponsorship?"]);
+  });
+
+  test("no matching option is left to you", async () => {
+    kit.fields = [{ key: "basics.country", label: "Country", value: "BR", group: "personal" }];
+    const s = await fill(map({ fields: [{ key: "basics.country", el: combo("country"), guessed: false }] }), kit,
+      { ...deps, pick: picker("nomatch") });
+    expect(s.needsYou.map((n) => n.note)).toEqual(["no option matches Brazil"]);
+  });
+
+  test("without a picker a dropdown field is left to pick by hand and nothing is typed", async () => {
+    kit.fields = [{ key: "basics.country", label: "Country", value: "BR", group: "personal" }];
+    const s = await fill(map({ fields: [{ key: "basics.country", el: combo("country"), guessed: false }] }), kit, deps);
+    expect(input("country").value).toBe("");
+    expect(s.needsYou.map((n) => n.note)).toEqual(["pick from the list by hand"]);
+  });
+});

@@ -8,7 +8,8 @@ import { isLinkedInHost } from "../shared/linkedin";
 import { errorText, type ApiError, type Match, type Msg, type Result } from "../shared/messages";
 import type { Kit } from "../shared/kit";
 import { clearSubmitted, detectSent, rememberAdapter, rememberedAdapterName, watchSubmit } from "./applied";
-import { checkRadio, isEmpty, selectOption, setValue } from "./dom";
+import { pickOption } from "./combobox";
+import { checkRadio, isCombobox, isEmpty, selectOption, setValue } from "./dom";
 import { inUi, offerSave, showApplied, showButton, showSuggestion, showSummary, type SaveResult } from "./ui";
 
 type Send = (m: Msg) => Promise<Result<any>>;
@@ -32,6 +33,7 @@ function useAnswer(target: Target, answer: string): void {
   const empty = Array.isArray(target) ? target.every((r) => !r.checked) : isEmpty(target);
   if (!empty) return;
   if (Array.isArray(target)) checkRadio(target, answer);
+  else if (target instanceof HTMLInputElement && isCombobox(target)) void pickOption(target, answer);
   else if (target instanceof HTMLSelectElement) selectOption(target, answer);
   else setValue(target, answer);
 }
@@ -157,6 +159,7 @@ export async function start(win: Window, rawSend: Send): Promise<void> {
         return null;
       }
     },
+    pick: pickOption,
     suggest(slot: QuestionSlot, answer: string) {
       showSuggestion(slot, answer, () => useAnswer(slot.el, answer));
     },

@@ -31,7 +31,16 @@ export function labelText(el: Element): string {
   for (const id of (el.getAttribute("aria-labelledby") ?? "").split(/\s+/)) {
     if (id) parts.push(root.getElementById?.(id)?.textContent ?? "");
   }
-  return parts.join(" ").trim();
+  // A label and an aria-label often repeat each other ("Phone*" and "Phone"): say it once.
+  const key = (t: string): string => t.replace(/[\s*:]+/g, " ").trim().toLowerCase();
+  const seen = new Set<string>();
+  const unique = parts.map((p) => p.trim()).filter((p) => {
+    const k = key(p);
+    if (k === "" || seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  return unique.join(" ").trim();
 }
 
 /**
