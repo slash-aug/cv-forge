@@ -1,10 +1,14 @@
 """LaTeX escaping, date formatting and the shared Jinja environment."""
+from __future__ import annotations
+
 import re
 from importlib import resources
-
-import jinja2
+from typing import TYPE_CHECKING
 
 from cvforge.profile.model import ProfileError
+
+if TYPE_CHECKING:
+    import jinja2
 
 _ESCAPES = {
     "&": r"\&",
@@ -62,6 +66,8 @@ def format_range(start: str, end: str | None, lang: str, *, item_id: str = "date
 
 def jinja_env(package: str = "cvforge.render") -> jinja2.Environment:
     """Environment with LaTeX-safe delimiters; escaping is explicit via the |tex filter."""
+    import jinja2  # imported here so the CLI starts without it
+
     templates = resources.files(package).joinpath("templates")
     env = jinja2.Environment(
         loader=jinja2.FileSystemLoader(str(templates)),

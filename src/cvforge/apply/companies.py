@@ -5,6 +5,7 @@ import os
 import re
 from datetime import date
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import yaml
 
@@ -14,11 +15,19 @@ from cvforge.text import fold_accents
 SCHEMA_FILE = "companies.schema.json"
 ATS = ("ashby", "greenhouse", "lever", "teamtailor", "gupy",
        "workday", "smartrecruiters", "workable", "personio", "other")
+FEED_ATS = ("greenhouse", "ashby", "lever", "workable")
+MANUAL_ATS = ("workday", "smartrecruiters", "personio", "teamtailor")
+BOARD_HOSTS = {
+    "greenhouse": ("boards.greenhouse.io", "job-boards.greenhouse.io"),
+    "ashby": ("jobs.ashbyhq.com",),
+    "lever": ("jobs.lever.co",),
+    "workable": ("apply.workable.com",),
+}
 SPONSOR_TYPES = ("pt-tech-visa", "nl-ind", "uk-sponsor", "ie-permit", "other")
 LEGAL_SUFFIXES = frozenset(
     {"ltd", "lda", "inc", "llc", "gmbh", "sa", "s a", "bv", "plc", "ltda", "eireli", "me"}
 )
-FIELDS = ("name", "aliases", "careers_url", "ats", "sponsor", "notes")
+FIELDS = ("name", "aliases", "careers_url", "ats", "sponsor", "notes", "slug", "ghost")
 CONNECTORS = frozenset({"of", "for", "and", "the", "&"})
 NON_WORD = re.compile(r"[^\w]+")
 
@@ -69,6 +78,9 @@ def _defaults() -> dict:
 
 def _stringify(entry):
     """YAML reads an unquoted date as a date object; the schema and callers use ISO strings."""
+    if isinstance(entry, dict) and isinstance(entry.get("ghost"), dict) \
+            and isinstance(entry["ghost"].get("date"), date):
+        entry = {**entry, "ghost": {**entry["ghost"], "date": entry["ghost"]["date"].isoformat()}}
     if isinstance(entry, dict) and isinstance(entry.get("sponsor"), list):
         entry = {**entry, "sponsor": [
             {**s, "date": s["date"].isoformat()} if isinstance(s, dict)
@@ -82,6 +94,8 @@ def _for_yaml(entry: dict) -> dict:
     out = {k: entry[k] for k in FIELDS if k in entry}
     out["sponsor"] = [{k: date.fromisoformat(v) if k == "date" else v for k, v in s.items()}
                       for s in out.get("sponsor", [])]
+    if "ghost" in out:
+        out["ghost"] = {**out["ghost"], "date": date.fromisoformat(out["ghost"]["date"])}
     return out
 
 
@@ -152,3 +166,26 @@ def add_sponsor(path: Path, name: str, *, type: str, source: str, day: date) -> 
 
 def has_sponsor_mark(entry: dict | None) -> bool:
     return bool(entry and entry.get("sponsor"))
+
+
+def board_slug(entry: dict) -> str | None:
+    """The employer's slug on its feed ATS: the stored one, else read from careers_url."""
+    if entry.get("slug"):
+        return entry["slug"]
+    ats = entry.get("ats")
+    if ats not in BOARD_HOSTS or not entry.get("careers_url"):
+        return None
+    parts = urlsplit(entry["careers_url"])
+    if (parts.hostname or "").lower() not in BOARD_HOSTS[ats]:
+        return None
+    segments = [seg for seg in parts.path.split("/") if seg]
+    return segments[0] if segments else None
+
+
+def set_ghost(path: Path, name: str, *, mark: bool, day: date) -> dict:
+    """Record a manual ghost-employer mark (or its clearing) with the day it was made."""
+    registry = load_registry(path)
+    entry = _ensure(registry, name)
+    entry["ghost"] = {"mark": mark, "date": day.isoformat()}
+    _save(path, registry)
+    return entry

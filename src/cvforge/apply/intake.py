@@ -114,6 +114,10 @@ def _ashby(org: str, job_id: str, url: str, get: Get, today: date) -> Posting:
     job = next((j for j in board.get("jobs", []) if j.get("id") == job_id), None)
     if job is None:
         raise IntakeError(f"job {job_id} not found on the {org} board; it may be closed")
+    return _ashby_job(job, org=org, url=url, today=today)
+
+
+def _ashby_job(job: dict, *, org: str, url: str, today: date) -> Posting:
     location = job.get("location") or ""
     workplace = WORKPLACE.get(str(job.get("workplaceType") or "").lower().replace(" ", ""))
     if workplace is None and job.get("isRemote"):
@@ -185,6 +189,10 @@ def _greenhouse_embedded(url: str, page: str, today: date) -> Posting | None:
 
 def _lever(org: str, job_id: str, url: str, get: Get, today: date) -> Posting:
     job = _json(get(f"https://api.lever.co/v0/postings/{org}/{job_id}"))
+    return _lever_job(job, org=org, url=url, today=today)
+
+
+def _lever_job(job: dict, *, org: str, url: str, today: date) -> Posting:
     parts = [job.get("description") or ""]
     for block in job.get("lists") or []:
         parts.append(f"<h3>{block.get('text', '')}</h3><ul>{block.get('content', '')}</ul>")

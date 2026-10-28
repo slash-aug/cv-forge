@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 from importlib import resources
+from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
-import jinja2
-
 from cvforge.kit.data import LIMITS
+
+if TYPE_CHECKING:
+    import jinja2
 
 GROUPS = (("personal", "Personal data"), ("links", "Links"), ("preferences", "Preferences"))
 
@@ -30,11 +32,19 @@ def is_web(url) -> bool:
     return isinstance(url, str) and urlsplit(url.strip()).scheme.lower() in ("http", "https")
 
 
-def render_kit(kit: dict) -> str:
+def make_env(package: str) -> jinja2.Environment:
+    """HTML environment over the package's templates folder, with the `web` test."""
+    import jinja2  # imported here so the CLI starts without it
+
     env = jinja2.Environment(
-        loader=jinja2.FileSystemLoader(str(resources.files("cvforge.kit").joinpath("templates"))),
+        loader=jinja2.FileSystemLoader(str(resources.files(package).joinpath("templates"))),
         autoescape=True, trim_blocks=True, lstrip_blocks=True, undefined=jinja2.StrictUndefined)
     env.tests["web"] = is_web
+    return env
+
+
+def render_kit(kit: dict) -> str:
+    env = make_env("cvforge.kit")
     groups = [(label, [f for f in kit["fields"] if f["group"] == key]) for key, label in GROUPS]
     employers: list[dict] = []
     for w in kit["work"]:

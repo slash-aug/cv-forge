@@ -3,13 +3,17 @@ from datetime import date
 import pytest
 import yaml
 
+from cvforge import cli
 from cvforge.apply.companies import (
     CompanyError,
+    _save,
     add_company,
     add_sponsor,
+    board_slug,
     find_company,
     has_sponsor_mark,
     load_registry,
+    set_ghost,
 )
 from cvforge.cli import main
 
@@ -132,3 +136,52 @@ def test_gupy_is_a_known_ats(tmp_path):
     path = tmp_path / "companies.yaml"
     add_company(path, "Ventania Digital", careers_url="https://ventania.gupy.io", ats="gupy")
     assert load_registry(path)[0]["ats"] == "gupy"
+
+
+def test_slug_and_ghost_survive_other_writes(tmp_path):
+    path = tmp_path / "companies.yaml"
+    add_company(path, "Acme", ats="greenhouse")
+    reg = load_registry(path)
+    reg[0]["slug"] = "acme"
+    _save(path, reg)
+    set_ghost(path, "Acme", mark=True, day=date(2026, 10, 28))
+    add_sponsor(path, "Acme", type="ie-permit", source="test", day=date(2026, 10, 28))
+    entry = find_company(load_registry(path), "Acme")
+    assert entry["slug"] == "acme"
+    assert entry["ghost"] == {"mark": True, "date": "2026-10-28"}
+
+
+@pytest.mark.parametrize("entry,slug", [
+    ({"ats": "greenhouse", "slug": "given", "careers_url": "https://boards.greenhouse.io/other"}, "given"),
+    ({"ats": "greenhouse", "careers_url": "https://boards.greenhouse.io/acme"}, "acme"),
+    ({"ats": "greenhouse", "careers_url": "https://job-boards.greenhouse.io/acme/"}, "acme"),
+    ({"ats": "ashby", "careers_url": "https://jobs.ashbyhq.com/acme"}, "acme"),
+    ({"ats": "lever", "careers_url": "https://jobs.lever.co/acme"}, "acme"),
+    ({"ats": "workable", "careers_url": "https://apply.workable.com/acme"}, "acme"),
+    ({"ats": "workday", "careers_url": "https://acme.wd3.myworkdayjobs.com/x"}, None),
+    ({"ats": "greenhouse", "careers_url": "https://acme.com/careers"}, None),
+    ({"ats": None, "careers_url": None}, None),
+])
+def test_board_slug(entry, slug):
+    assert board_slug(entry) == slug
+
+
+def test_set_ghost_clear_writes_false(tmp_path):
+    path = tmp_path / "companies.yaml"
+    set_ghost(path, "Acme", mark=True, day=date(2026, 10, 27))
+    entry = set_ghost(path, "Acme", mark=False, day=date(2026, 10, 28))
+    assert entry["ghost"] == {"mark": False, "date": "2026-10-28"}
+    assert find_company(load_registry(path), "Acme")["ghost"] == {"mark": False, "date": "2026-10-28"}
+
+
+def test_cli_ghost(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("CVFORGE_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(cli, "_today", lambda: date(2026, 10, 28))
+    assert main(["company", "ghost", "Acme"]) == 0
+    capsys.readouterr()
+    assert main(["company", "show", "Acme"]) == 0
+    assert "ghost: marked (2026-10-28)" in capsys.readouterr().out
+    assert main(["company", "ghost", "Acme", "--clear"]) == 0
+    capsys.readouterr()
+    assert main(["company", "show", "Acme"]) == 0
+    assert "ghost: cleared (2026-10-28)" in capsys.readouterr().out

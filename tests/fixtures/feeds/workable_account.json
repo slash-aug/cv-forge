@@ -1,0 +1,4 @@
+{"name":"Acme","jobs":[
+{"title":"Software Engineer","shortcode":"AB12CD","city":"Cork","country":"Ireland","telecommuting":false,"url":"https://apply.workable.com/acme/j/AB12CD/","description":"<p>Work on our React app.</p>"},
+{"title":"QA Engineer","shortcode":"EF34GH","city":"","country":"Portugal","telecommuting":true,"description":"<p>Test our software.</p>"}
+]}

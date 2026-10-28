@@ -1,0 +1,5 @@
+{"jobs":[
+{"id":101,"title":"Full Stack Engineer","absolute_url":"https://boards.greenhouse.io/acme/jobs/101","location":{"name":"Dublin, Ireland"},"content":"&lt;p&gt;React and Node.js on the product team.&lt;/p&gt;","metadata":null},
+{"id":102,"title":"Data Engineer","absolute_url":"https://boards.greenhouse.io/acme/jobs/102?gh_src=abc","location":{"name":"Remote, EU"},"content":"&lt;p&gt;Python and SQL pipelines.&lt;/p&gt;","metadata":[{"name":"Employment Type","value":"Full-time"}]},
+{"id":103,"title":"Support Specialist","absolute_url":"https://boards.greenhouse.io/acme/jobs/103","location":null,"content":null,"metadata":null}
+]}

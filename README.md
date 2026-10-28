@@ -67,6 +67,26 @@ cvforge due
 
 `tests/test_apply_e2e.py` runs the same sequence. The human still clicks submit.
 
+## Job discovery (Phase 4)
+
+Phase 4 reads the public job feeds of the employers in your company registry once a day and lists the roles worth a look. It only reads and lists. Applying still goes through `cvforge intake <link>` and the Phase 2 flow.
+
+- **Sources:** the public feeds of Greenhouse, Ashby, Lever and Workable boards, one request per employer, sequential, with a 1 second pause. LinkedIn, job aggregators, Workday, SmartRecruiters and Personio stay manual: add those roles with `cvforge intake`. A source that fails (timeout, HTTP error, bad JSON) is reported and never aborts the run; its known roles are kept, so nothing comes back as "reposted".
+- **Gupy:** probed on 2026-10-28. A plain GET of the public search (`employability-portal.gupy.io/api/v1/jobs`) returned HTTP 404, so there is no plain public search. `cvforge jobs fetch --source gupy` prints that and exits 2. Add Gupy roles with `cvforge intake <link>`. The `gupy_keywords` setting stays reserved for when Gupy offers a public search.
+- **Filters:** every role is screened and each drop is recorded in the run file with its reason and counted in the log and the page footer. Reasons: `out-of-market` (not Irish, not Brazilian, not remote for either; "home based" and "work from home" count as remote, a location naming only EMEA, Europe or EU counts as Irish, and Dublin in the US does not), `not-software` (the title is not an engineering role; "Member of Technical Staff" is one), `senior` (a senior title word such as Senior, Staff, Lead or Manager, or 5 or more years of experience required; "ideally 5+ years", "5+ years preferred" and other wishes do not count), `no-sponsorship` (an Irish role that refuses sponsorship), `misaligned` (no master keyword matches and the text names a foreign-stack term such as firmware or Salesforce; no match without one is kept as `partial`), `below-permit` (an Irish role whose highest posted salary, converted to EUR, is under the lowest permit floor).
+- **Permit route:** shown on Irish rows only and computed only from a EUR salary, from the lowest posted figure. A salary in another currency is shown as posted with `route unknown` and the `salary unknown` tag: an exchange rate never makes a CSEP claim.
+- **Tags:** `cloned ×N` (the same company, title and location posted N times with near-identical descriptions), `stale` (first seen more than 14 days ago, or reposted after it was gone), `ghost history` (the company has an automatic or manual ghost mark; the automatic one expires 90 days after the last flagged role), `applied on DATE` (the tracker has it as applied), `applied (date unknown)` (applied with no date in the tracker), `in tracker (drafted)` and `in tracker (skipped)` (the tracker has it, not applied), `sponsor` (an Irish role whose company has an `ie-permit` or `other` sponsor mark; never on Brazilian rows), `region unknown` (the location did not say where the job is), `salary unknown` (an Irish role with no usable EUR pay), `partial` (only part of your stack matches).
+- **Files** under `data/jobs/`: `seen.json` (first and last sighting per role), `ghosts.json` (automatic ghost marks), `runs/YYYY-MM-DDTHHMM.json` (every kept and dropped role of a run, one file per run so two runs on one day both stay; pruned after 90 days, older `runs/YYYY-MM-DD.json` files too), `last_run.json` (when and how the last run went), `last_viewed.json` (marks what is new), and `latest.html` (the list page with filters, dropped counts and the manual list). A run where every source fails keeps the previous list. Employers on a feed ATS whose board slug cannot be read from the registry are listed by hand with their careers URL.
+- **Commands:** `cvforge jobs` prints the list and refreshes first when the last run is older than 23 hours. `cvforge jobs fetch [--market IE|BR|all] [--source NAME] [--dry-run]` reads the feeds now; `--dry-run` writes nothing. `--source` is a partial run: it updates `seen.json`, `ghosts.json` and writes its run file, and prints its result, but does not replace `last_run.json` or `latest.html`. `cvforge company ghost NAME [--clear]` marks or clears a ghost employer by hand. `cvforge due` shows a Jobs line and warns when the last run is older than 2 days.
+
+The daily run is a Windows scheduled task, set up once by hand. Run this in Windows PowerShell:
+
+```
+schtasks.exe /Create /TN "cv-forge jobs" /SC DAILY /ST 23:05 /TR "wsl.exe -d Ubuntu2204 -e bash -lc \"cd ~/dev/projects/slash/cv-forge && .venv/bin/cvforge jobs fetch >> ~/cvforge-jobs.log 2>&1\""
+```
+
+The task runs only while you are logged in to Windows, which is why `cvforge jobs` refreshes by itself after 23 hours.
+
 ## Flow
 
 ![Flow: master profile, tailor to a job, audit against master, render LaTeX, compile PDF, ATS check, you review and submit](docs/flow.svg)
@@ -79,7 +99,7 @@ cvforge due
 | 2 | Apply flow: job link or pasted text, eligibility check, company registry with visa sponsor marks, salary suggestion, answer bank, copy-ready kit page, tracker with stages and a due view | Done |
 | 3 | Firefox extension: fills job forms from the kit, never on linkedin.com, never submits. The next adapter decision (Workday is the likely candidate) comes after the Ireland work | Planned |
 | 3a | Ireland as the primary market: permit rule in `check`, DETE sponsor import, Irish salary, CV variant, answers | Done |
-| 4 | Discovery and company watchlist: job sources, Strider and Gupy tracking, ghost-job filter | Planned |
+| 4 | Job discovery: daily read of public employer feeds, market and permit filters, ghost-job tags, a list page and `cvforge jobs`. Gupy stays manual intake | Done |
 | 5 | Feedback loop: email sync for replies, an application report and follow-up reminders | Planned |
 | 6 | A clean local web UI to track every application and run cv-forge without the command line | Planned |
 

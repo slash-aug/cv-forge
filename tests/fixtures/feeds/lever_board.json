@@ -1,0 +1,4 @@
+[
+{"id":"l1","text":"Platform Engineer","categories":{"location":"Berlin, Germany"},"workplaceType":"hybrid","description":"<div>Run the platform.</div>","lists":[],"additional":"","salaryRange":{"currency":"EUR","interval":"per-year-salary","min":65000,"max":85000},"hostedUrl":"https://jobs.lever.co/acme/l1","applyUrl":"https://jobs.lever.co/acme/l1/apply"},
+{"id":"l2","text":"Designer","categories":{},"description":"<div>Design things.</div>","hostedUrl":"https://jobs.lever.co/acme/l2"}
+]

@@ -1,0 +1,158 @@
+{% macro card(v) %}
+{% set r = v.row %}
+<article class="role" data-new="{{ '1' if v.new else '0' }}" data-tagged="{{ '1' if v.tagged else '0' }}" data-fit="{{ r.fit }}">
+  <h3>{{ r.title }}{% if v.new %} <span class="badge">new</span>{% endif %}</h3>
+  <p class="sub">{{ r.company }} | {{ r.locations|join("; ") }}</p>
+  <p class="meta">{{ v.salary }}{% if v.route %} | {{ v.route }}{% endif %}</p>
+  <p class="meta">fit: {{ r.fit }}{% if r.matched %} ({{ r.matched|join(", ") }}){% endif %} | first seen {{ v.first_seen }}</p>
+  {% if r.applied %}<p class="meta">applied{% if r.applied.date %} {{ r.applied.date }}{% else %} (date unknown){% endif %}{% if r.applied.status %} ({{ r.applied.status }}){% endif %}</p>{% endif %}
+  {% if r.tags %}<p class="tags">{% for t in r.tags %}<span class="tag">{{ t }}</span>{% endfor %}</p>{% endif %}
+  {% for url in r.urls %}
+  {% set cmd = intake_command(url) %}
+  <div class="act">
+    {% if cmd %}
+    <code>{{ cmd }}</code>
+    <button type="button" data-copy="{{ cmd }}">Copy</button>
+    {% endif %}
+    {% if url is web %}<a href="{{ url }}">open</a>{% endif %}
+  </div>
+  {% endfor %}
+</article>
+{% endmacro %}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jobs: {{ day }}</title>
+<style>
+:root {
+  --bg: #f6f6f4; --card: #ffffff; --text: #1d1f21; --muted: #5d6368; --line: #dcdcd6;
+  --accent: #1f5fbf; --accent-text: #ffffff; --ok: #1a7f37; --warn: #a15c00; --warn-bg: #fff4e0;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15171a; --card: #1e2125; --text: #e6e6e3; --muted: #9aa0a6; --line: #34383d;
+    --accent: #6ea8fe; --accent-text: #0b1220; --ok: #56d364; --warn: #f0b35a; --warn-bg: #3a2c12;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text); line-height: 1.5;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+main { max-width: 860px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 1.4rem; margin: 0 0 8px; }
+h2 { font-size: 1.1rem; margin: 40px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+h3 { font-size: 1rem; margin: 0 0 4px; }
+h4 { font-size: 0.95rem; margin: 24px 0 8px; color: var(--muted); }
+.sub, .meta { color: var(--muted); margin: 0 0 4px; font-size: 0.9rem; }
+a { color: var(--accent); }
+.filters { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 0 0 8px; }
+.role { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 0 0 10px; overflow-wrap: anywhere; }
+.role[hidden] { display: none; }
+.badge { font-size: 0.7rem; background: var(--accent); color: var(--accent-text); border-radius: 4px; padding: 1px 6px; vertical-align: middle; }
+.tags { margin: 4px 0; }
+.tag { display: inline-block; font-size: 0.75rem; border: 1px solid var(--line); border-radius: 4px; padding: 0 6px; margin: 0 6px 4px 0; }
+.act { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 6px; }
+button {
+  font: inherit; font-size: 0.85rem; cursor: pointer; padding: 4px 12px; border-radius: 6px;
+  border: 1px solid var(--accent); background: var(--accent); color: var(--accent-text);
+}
+button.done { background: transparent; color: var(--ok); border-color: var(--ok); }
+.notice { background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 10px 12px; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.85em; }
+ul.plain { margin: 0; padding-left: 20px; }
+</style>
+</head>
+<body>
+<main>
+<h1>Jobs: {{ day }}</h1>
+<div class="filters">
+  <label><input type="checkbox" id="f-new"> New only</label>
+  <label><input type="checkbox" id="f-tagged"> Hide tagged</label>
+  <label><input type="checkbox" id="f-partial"> Hide partial</label>
+</div>
+
+{% for s in sections %}
+<h2>{{ s.label }}</h2>
+{% for v in s.open %}
+{{ card(v) }}
+{% else %}
+<p class="sub">No roles.</p>
+{% endfor %}
+{% if s.applied %}
+<h4>Already applied</h4>
+{% for v in s.applied %}
+{{ card(v) }}
+{% endfor %}
+{% endif %}
+{% endfor %}
+
+<h2>Run summary</h2>
+<h4>Dropped</h4>
+<ul class="plain">
+{% for reason, count in dropped %}
+  <li>{{ reason }}: {{ count }}</li>
+{% endfor %}
+</ul>
+{% if errors %}
+<h4>Source errors</h4>
+<div class="notice">
+<ul class="plain">
+{% for e in errors %}
+  <li>{{ e }}</li>
+{% endfor %}
+</ul>
+</div>
+{% endif %}
+{% if manual %}
+<h4>Check by hand</h4>
+<ul class="plain">
+{% for m in manual %}
+  <li>{% if m.careers_url is web %}<a href="{{ m.careers_url }}">{{ m.name }}</a>{% else %}{{ m.name }}{% endif %}{% if m.ats %} ({{ m.ats }}){% endif %}</li>
+{% endfor %}
+</ul>
+{% endif %}
+</main>
+<script>
+var roles = document.querySelectorAll('.role');
+function applyFilters() {
+  var onlyNew = document.getElementById('f-new').checked;
+  var noTagged = document.getElementById('f-tagged').checked;
+  var noPartial = document.getElementById('f-partial').checked;
+  roles.forEach(function (el) {
+    el.hidden = (onlyNew && el.dataset.new !== '1') ||
+      (noTagged && el.dataset.tagged === '1') ||
+      (noPartial && el.dataset.fit === 'partial');
+  });
+}
+document.querySelectorAll('.filters input').forEach(function (i) { i.addEventListener('change', applyFilters); });
+function fallbackCopy(text) {
+  return new Promise(function (resolve, reject) {
+    var area = document.createElement('textarea');
+    area.value = text; area.style.position = 'fixed'; area.style.opacity = '0';
+    document.body.appendChild(area); area.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (err) { ok = false; }
+    document.body.removeChild(area);
+    if (ok) { resolve(); } else { reject(new Error('copy failed')); }
+  });
+}
+function copyText(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(text).catch(function () { return fallbackCopy(text); });
+  }
+  return fallbackCopy(text);
+}
+document.addEventListener('click', function (event) {
+  var button = event.target.closest('button[data-copy]');
+  if (!button) { return; }
+  copyText(button.dataset.copy).then(function () {
+    button.textContent = 'Copied'; button.classList.add('done');
+    setTimeout(function () { button.textContent = 'Copy'; button.classList.remove('done'); }, 1500);
+  }, function () { button.textContent = 'Failed'; });
+});
+</script>
+</body>
+</html>

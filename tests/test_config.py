@@ -64,3 +64,27 @@ def test_config_serve_port(tmp_path):
     for bad in ("abc", "70000", "-1"):
         with pytest.raises(ConfigError):
             load_config(env={"CVFORGE_SERVE_PORT": bad}, file=None)
+
+
+def test_gupy_keywords_config(tmp_path):
+    assert load_config(env={"CVFORGE_GUPY_KEYWORDS": "react, vue,, "}, file=None).gupy_keywords == ("react", "vue")
+    assert load_config(env={}, file=tmp_path / "none.toml").gupy_keywords == (
+        "react", "node", "full stack", "typescript")
+    f = tmp_path / "cvforge.toml"
+    f.write_text('[cvforge]\ngupy_keywords = ["go", "rust"]\n')
+    assert load_config(env={}, file=f).gupy_keywords == ("go", "rust")
+    f.write_text('[cvforge]\ngupy_keywords = "go"\n')
+    with pytest.raises(ConfigError):
+        load_config(env={}, file=f)
+
+
+def test_gupy_keywords_empty_env_falls_back():
+    default = ("react", "node", "full stack", "typescript")
+    assert load_config(env={"CVFORGE_GUPY_KEYWORDS": " , ,"}, file=None).gupy_keywords == default
+
+
+def test_gupy_keywords_non_string_toml(tmp_path):
+    f = tmp_path / "cvforge.toml"
+    f.write_text('[cvforge]\ngupy_keywords = ["go", 3]\n')
+    with pytest.raises(ConfigError):
+        load_config(env={}, file=f)

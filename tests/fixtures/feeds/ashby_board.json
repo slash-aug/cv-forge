@@ -1,0 +1,4 @@
+{"apiVersion":"1","jobs":[
+{"id":"a1","title":"Backend Engineer","location":"Dublin, Ireland","secondaryLocations":[{"location":"Cork, Ireland"}],"workplaceType":"Remote","isRemote":true,"jobUrl":"https://jobs.ashbyhq.com/globex/a1","applyUrl":"https://jobs.ashbyhq.com/globex/a1/application","descriptionHtml":"<p>Build services in Go and TypeScript.</p>","compensation":{"summaryComponents":[{"compensationType":"Salary","interval":"1 YEAR","currencyCode":"EUR","minValue":60000,"maxValue":80000}]}},
+{"id":"a2","title":"Frontend Engineer","location":"London, UK","secondaryLocations":[],"workplaceType":"Hybrid","isRemote":false,"jobUrl":"https://jobs.ashbyhq.com/globex/a2","applyUrl":"https://jobs.ashbyhq.com/globex/a2/application","descriptionHtml":"<p>React front end work.</p>"}
+]}
