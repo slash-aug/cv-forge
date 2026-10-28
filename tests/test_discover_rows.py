@@ -80,9 +80,7 @@ def test_drafted_and_skipped_tags():
     drafted = {"url": "https://x.test/1", "company": "Acme", "role": "x", "date": "2026-10-01", "status": "drafted"}
     rows, _ = build([role()], tracker=[drafted])
     assert "in tracker (drafted)" in rows[0].tags and rows[0].new is False
-    skipped = dict(drafted, status="skipped")
-    rows, _ = build([role()], tracker=[skipped])
-    assert not any("applied" in t or "tracker" in t for t in rows[0].tags) and rows[0].new is False
+
 
 
 def test_new_relative_to_last_viewed():
@@ -126,3 +124,52 @@ def test_sorting_market_new_then_newest():
     outs = {"3": outcome("BR")}
     rows, _ = build([a, b, c, d], seen, last_viewed=datetime(2026, 10, 15), outcomes=outs)
     assert [r.title for r in rows] == ["Beta Engineer", "Alpha Engineer", "Delta Engineer", "Gamma Engineer"]
+
+
+def test_skipped_only_match_is_tagged():
+    row = {"url": "https://x.test/1", "company": "Acme", "role": "x", "date": "2026-10-01", "status": "skipped"}
+    rows, _ = build([role()], tracker=[row])
+    assert "in tracker (skipped)" in rows[0].tags and rows[0].new is False
+
+
+def test_applied_beats_skipped_in_either_order():
+    skipped = {"url": "", "company": "Acme", "role": "Frontend Engineer", "date": "2026-09-01", "status": "skipped"}
+    applied = dict(skipped, date="2026-10-01", status="applied")
+    for tracker in ([skipped, applied], [applied, skipped]):
+        assert applied_match(role(), tracker)["status"] == "applied"
+        rows, _ = build([role()], tracker=tracker)
+        assert "applied on 2026-10-01" in rows[0].tags
+        assert not any("skipped" in t for t in rows[0].tags)
+
+
+def test_applied_across_merged_row_beats_skipped_first_role():
+    skipped = {"url": "https://x.test/1", "company": "x", "role": "x", "date": "2026-09-01", "status": "skipped"}
+    applied = {"url": "https://x.test/2", "company": "x", "role": "x", "date": "2026-10-01", "status": "applied"}
+    roles = [role("1"), role("2", location="Cork, Ireland", description=OTHER)]
+    rows, _ = build(roles, tracker=[skipped, applied])
+    assert len(rows) == 1 and "applied on 2026-10-01" in rows[0].tags
+
+
+def test_latest_applied_date_wins():
+    old = {"url": "https://x.test/1", "company": "x", "role": "x", "date": "2026-09-01", "status": "applied"}
+    new = dict(old, date="2026-10-05", status="interview")
+    assert applied_match(role(), [old, new])["date"] == "2026-10-05"
+
+
+def test_missing_date_tag():
+    row = {"url": "https://x.test/1", "company": "x", "role": "x", "date": "", "status": "applied"}
+    rows, _ = build([role()], tracker=[row])
+    assert "applied (date unknown)" in rows[0].tags
+
+
+def test_empty_identity_never_matches_by_name():
+    row = {"url": "", "company": "", "role": "", "date": "2026-10-01", "status": "applied"}
+    assert applied_match(role(company="!!!", title="???"), [row]) is None
+
+
+def test_clone_clusters_in_two_locations_merge_with_largest_count():
+    roles = [role("1"), role("2"), role("3"),
+             role("4", location="Cork, Ireland"), role("5", location="Cork, Ireland")]
+    rows, flagged = build(roles)
+    assert len(rows) == 1 and rows[0].locations == ["Dublin, Ireland", "Cork, Ireland"]
+    assert "cloned ×3" in rows[0].tags and flagged == {"Acme Ltd": "cloned"}

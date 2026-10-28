@@ -39,16 +39,30 @@ def _url_key(url: str) -> str:
     return canonical_url(url).rstrip("/")
 
 
-def applied_match(role: Role, tracker_rows: list[dict]) -> dict | None:
+def _matches(role: Role, tracker_rows: list[dict]) -> list[dict]:
     url = _url_key(role.url)
-    for row in tracker_rows:
-        if row.get("url") and _url_key(row["url"]) == url:
-            return {"date": row.get("date"), "status": row.get("status")}
     ident = (name_key(role.company), norm_title(role.title))
+    found = []
     for row in tracker_rows:
-        if (name_key(row.get("company") or ""), norm_title(row.get("role") or "")) == ident:
-            return {"date": row.get("date"), "status": row.get("status")}
-    return None
+        by_url = bool(row.get("url")) and _url_key(row["url"]) == url
+        row_ident = (name_key(row.get("company") or ""), norm_title(row.get("role") or ""))
+        by_name = all(row_ident) and row_ident == ident
+        if by_url or by_name:
+            found.append({"date": row.get("date") or "", "status": row.get("status")})
+    return found
+
+
+def _best(matches: list[dict]) -> dict | None:
+    """An applied-like status beats drafted, which beats skipped; the latest date wins among equals."""
+    if not matches:
+        return None
+    rank = {"drafted": 1, "skipped": 2}
+    top = min(rank.get(m["status"], 0) for m in matches)
+    return max((m for m in matches if rank.get(m["status"], 0) == top), key=lambda m: m["date"])
+
+
+def applied_match(role: Role, tracker_rows: list[dict]) -> dict | None:
+    return _best(_matches(role, tracker_rows))
 
 
 def _place(role: Role) -> str:
@@ -134,7 +148,7 @@ def build_rows(kept: list[tuple[Role, Outcome]], seen: dict[str, dict], *, regis
         stale = any(r.key in seen and is_stale(seen[r.key], now) for r in roles)
         clones = max(len(u) for u in group)
 
-        applied = next((m for m in (applied_match(r, tracker_rows) for r in roles) if m), None)
+        applied = _best([m for r in roles for m in _matches(r, tracker_rows)])
         tags = _unique(t for _, o in members for t in o.tags)
         if clones >= 2:
             tags.append(f"cloned ×{clones}")
@@ -147,8 +161,12 @@ def build_rows(kept: list[tuple[Role, Outcome]], seen: dict[str, dict], *, regis
         if applied:
             if applied["status"] == "drafted":
                 tags.append("in tracker (drafted)")
-            elif applied["status"] != "skipped":
+            elif applied["status"] == "skipped":
+                tags.append("in tracker (skipped)")
+            elif applied["date"]:
                 tags.append(f"applied on {applied['date']}")
+            else:
+                tags.append("applied (date unknown)")
 
         if clones >= 2:
             flagged[company] = "cloned"
