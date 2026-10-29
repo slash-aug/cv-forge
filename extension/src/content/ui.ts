@@ -15,19 +15,20 @@ interface Ui {
   chips: HTMLElement;
 }
 
+// Dark only: light balloons glare on dark pages. New rules use these tokens, never a light colour.
 const CSS = `
-:host{all:initial}
+:host{all:initial;color-scheme:dark;--bg:#1f2937;--bg-raised:#374151;--bg-button:#111827;--fg:#f3f4f6;--fg-muted:#9ca3af;--border:#4b5563}
 *{box-sizing:border-box;font:13px/1.4 system-ui,sans-serif}
 .dock{position:fixed;right:16px;bottom:16px;z-index:2147483647;display:flex;flex-direction:column-reverse;gap:8px;align-items:flex-end;max-width:min(360px,calc(100vw - 32px))}
-button{cursor:pointer;border:1px solid #1f2937;background:#111827;color:#fff;border-radius:6px;padding:8px 12px}
+button{cursor:pointer;border:1px solid var(--border);background:var(--bg-button);color:var(--fg);border-radius:6px;padding:8px 12px}
 button:disabled{opacity:.6;cursor:default}
 .dock.framed{position:absolute;top:16px;bottom:auto}
-.panel{background:#fff;color:#111827;border:1px solid #9ca3af;border-radius:8px;padding:10px;max-height:60vh;overflow:auto;width:100%}
+.panel{background:var(--bg);color:var(--fg);border:1px solid var(--border);border-radius:8px;padding:10px;max-height:60vh;overflow:auto;width:100%}
 .panel h3{margin:8px 0 4px;font-weight:600}
-.panel .item{display:block;width:100%;text-align:left;background:#f3f4f6;color:#111827;border:0;margin:2px 0;padding:4px 6px}
-.panel .note{color:#4b5563}
+.panel .item{display:block;width:100%;text-align:left;background:var(--bg-raised);color:var(--fg);border:0;margin:2px 0;padding:4px 6px}
+.panel .note{color:var(--fg-muted)}
 .chips{position:absolute;top:0;left:0;z-index:2147483647}
-.chip{position:absolute;white-space:nowrap;background:#fff;color:#111827;border:1px solid #9ca3af;border-radius:6px;padding:4px;display:flex;gap:6px;align-items:center}
+.chip{position:absolute;white-space:nowrap;background:var(--bg);color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:4px;display:flex;gap:6px;align-items:center}
 .chip button{padding:3px 8px}
 `;
 
