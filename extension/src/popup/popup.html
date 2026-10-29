@@ -4,9 +4,10 @@
 <meta charset="utf-8">
 <title>cv-forge</title>
 <style>
-  body { font: 13px system-ui, sans-serif; width: 320px; margin: 12px; }
+  :root { color-scheme: dark; --bg: #1f2937; --fg: #f3f4f6; --fg-error: #fca5a5; }
+  body { font: 13px system-ui, sans-serif; width: 320px; margin: 0; padding: 12px; background: var(--bg); color: var(--fg); }
   .row { margin: 8px 0; }
-  .error { color: #b00020; }
+  .error { color: var(--fg-error); }
   select, input, button { font: inherit; }
   select, input[type="password"] { width: 100%; box-sizing: border-box; }
 </style>
