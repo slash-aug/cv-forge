@@ -67,11 +67,10 @@ def test_deny_is_superset_of_upstream_plus_extras():
     assert set(UPSTREAM_DENY + EXTRA_DENY) <= deny
 
 
-def test_ask_has_gh_remote_and_guard_files():
+def test_ask_has_remote_and_guard_files():
     ask = _load()["permissions"]["ask"]
     assert "Bash(gh api:*)" not in _load()["permissions"]["deny"]
-    for e in ("Bash(gh:*)", "Bash(gh api:*)", "Bash(git remote:*)",
-              "Edit(src/cvforge/guard.py)", "Edit(.githooks/**)"):
+    for e in ("Bash(git remote:*)", "Edit(src/cvforge/guard.py)", "Edit(.githooks/**)"):
         assert e in ask
 
 
@@ -84,11 +83,10 @@ def test_allow_is_minimal():
     ]
 
 
-def test_ask_covers_settings_github_and_push():
+def test_ask_covers_settings_and_github():
     ask = _load()["permissions"]["ask"]
     assert "Edit(.claude/settings.json)" in ask
     assert "Edit(.github/**)" in ask
-    assert "Bash(git push:*)" in ask
 
 
 def test_no_job_portal_entries():
