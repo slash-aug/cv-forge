@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import {
-  attachFile, checkRadio, clearHighlights, highlight, isEmpty, selectOption, setValue,
+  attachFile, checkRadio, clearHighlights, highlight, isEmpty, labelText, selectOption, setValue,
 } from "../src/content/dom";
 
 beforeEach(() => {
@@ -170,5 +170,17 @@ describe("highlight", () => {
     clearHighlights();
     expect(el.hasAttribute("data-cvforge-reason")).toBe(false);
     expect(el.style.outline).toBe("1px solid red");
+  });
+});
+
+describe("labelText duplicates", () => {
+  test("a label and an aria-label with the same words are said once", () => {
+    document.body.innerHTML = `<label for="p">Phone*</label><input id="p" aria-label="Phone">`;
+    expect(labelText(document.getElementById("p")!)).toBe("Phone*");
+  });
+
+  test("different texts are still joined", () => {
+    document.body.innerHTML = `<label for="p">Phone</label><input id="p" aria-label="Mobile number">`;
+    expect(labelText(document.getElementById("p")!)).toBe("Phone Mobile number");
   });
 });

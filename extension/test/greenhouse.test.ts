@@ -160,11 +160,10 @@ describe("new form", () => {
     expect((($("#resume") as HTMLInputElement).files?.length)).toBe(1);
   });
 
-  test("the location combobox is left to pick from the list", async () => {
+  test("the location combobox maps to the city field and waits for a picker", async () => {
     const summary = await fill(map, kit, deps());
+    expect(map.fields.find((f) => f.key === "basics.city")?.el).toBe($("#candidate-location"));
     expect(val("#candidate-location")).toBe("");
-    expect(map.unplaced).toContain($("#candidate-location"));
-    expect(map.fields.map((f) => f.key)).not.toContain("basics.city");
     const item = summary.needsYou.find((n) => n.el === $("#candidate-location"));
     expect(item?.note).toBe("pick from the list by hand");
   });
@@ -174,11 +173,14 @@ describe("new form", () => {
     expect(val("#question_19385418004")).toBe("https://linkedin.com/in/ana-exemplo");
   });
 
-  test("phone and country are not filled; phone is highlighted via phone", async () => {
+  test("phone is not filled and the country dropdown maps to the country field", async () => {
     const summary = await fill(map, kit, deps());
     expect(val("#phone")).toBe("");
     expect(map.phone).toEqual([$("#phone")]);
-    expect(map.unplaced).toContain($("#country"));
+    const country = map.fields.find((f) => f.key === "basics.country");
+    expect(country?.el).toBe($("#country"));
+    expect(country?.pick?.value?.("BR")).toBe("Brazil");
+    expect(map.fields.find((f) => f.key === "basics.city")?.pick?.prefix).toBe(true);
     expect(summary.needsYou.map((n) => n.el)).toContain($("#phone"));
   });
 
@@ -192,12 +194,13 @@ describe("new form", () => {
     }
   });
 
-  test("the privacy acknowledgement goes to consent, other dropdown questions to unplaced", () => {
+  test("the privacy acknowledgement goes to consent, other dropdown questions to questions", () => {
     expect(map.consent).toEqual([$("#question_19385423004")]);
+    const asked = map.questions.map((q) => q.el);
     for (const id of ["question_19385414004", "question_19385415004", "question_19385417004", "question_19385424004"]) {
-      expect(map.unplaced).toContain($(`#${id}`));
+      expect(asked).toContain($(`#${id}`));
+      expect(map.unplaced).not.toContain($(`#${id}`));
     }
-    expect(map.questions).toEqual([]);
   });
 
   test("Twitter stays unplaced and the aria-hidden required inputs are ignored", () => {
@@ -234,15 +237,15 @@ describe("location", () => {
     expect(map.unplaced).toContain($("#ethnicity"));
   });
 
-  test("any searchable combobox is unplaced, whatever its role attribute", () => {
+  test("a searchable combobox is a city field, a question or unplaced, whatever its role attribute", () => {
     document.body.innerHTML = `<form id="application_form">
       <label for="first_name">First name</label><input id="first_name" type="text" aria-autocomplete="both">
       <label for="loc">Location</label><input id="job_application_location" name="job_application[location]" type="text" aria-haspopup="listbox">
       <label for="question_1">Why us?</label><input id="question_1" type="text" aria-autocomplete="list"></form>`;
     const map = greenhouse.map(document);
-    expect(map.fields).toEqual([]);
-    expect(map.questions).toEqual([]);
-    for (const id of ["first_name", "job_application_location", "question_1"]) expect(map.unplaced).toContain($(`#${id}`));
+    expect(map.fields.map((f) => [f.key, (f.el as HTMLElement).id])).toEqual([["basics.city", "job_application_location"]]);
+    expect(map.questions.map((q) => (q.el as HTMLElement).id)).toEqual(["question_1"]);
+    expect(map.unplaced).toContain($("#first_name"));
   });
 
   test("a location field whose id and name say neither city nor location is unplaced", () => {

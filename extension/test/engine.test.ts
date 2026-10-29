@@ -151,6 +151,7 @@ describe("questions", () => {
 
 describe("never filled", () => {
   test("phone highlighted, never filled", async () => {
+    input("phone").required = true;
     const s = await fill(map({ phone: [input("phone")] }), kit, deps);
     expect(input("phone").value).toBe("");
     expect(input("phone").hasAttribute("data-cvforge-reason")).toBe(true);
@@ -158,6 +159,7 @@ describe("never filled", () => {
   });
 
   test("consent never ticked", async () => {
+    input("consent").required = true;
     const s = await fill(map({ consent: [input("consent")] }), kit, deps);
     expect(input("consent").checked).toBe(false);
     expect(input("consent").hasAttribute("data-cvforge-reason")).toBe(true);
@@ -170,10 +172,30 @@ describe("never filled", () => {
     expect(s.needsYou[0]?.note).toBe("pick from the list by hand");
   });
 
-  test("unplaced elements are highlighted and reported", async () => {
+  test("required unplaced elements are highlighted and reported", async () => {
+    input("mystery").setAttribute("aria-required", "true");
     const s = await fill(map({ unplaced: [input("mystery")] }), kit, deps);
     expect(input("mystery").hasAttribute("data-cvforge-reason")).toBe(true);
     expect(s.needsYou).toHaveLength(1);
+  });
+
+  test("an optional field left empty is reported and marked but not outlined", async () => {
+    const s = await fill(map({ unplaced: [input("mystery")] }), kit, deps);
+    expect(input("mystery").style.outline).toBe("");
+    expect(input("mystery").hasAttribute("data-cvforge-reason")).toBe(true);
+    expect(s.needsYou).toHaveLength(1);
+  });
+
+  test("a star in the label counts as required and is outlined", async () => {
+    document.body.insertAdjacentHTML("beforeend", `<label for="starred">Location (City)*</label><input id="starred">`);
+    await fill(map({ unplaced: [input("starred")] }), kit, deps);
+    expect(input("starred").style.outline).not.toBe("");
+  });
+
+  test("an optional field that conflicts with the kit is still outlined", async () => {
+    const s = await fill(map({ fields: [{ key: "basics.email", el: input("email"), guessed: false }] }), kit, deps);
+    expect(s.needsYou[0]?.note).toContain("already filled");
+    expect(input("email").style.outline).not.toBe("");
   });
 });
 
@@ -488,5 +510,61 @@ describe("review fixes", () => {
     const s = await fill(map({ lists: [slot] }), kit, deps);
     expect(s.filled).toEqual([{ label: "a", el: null }]);
     expect(s.needsYou).toEqual([{ label: "b", el: null, note: "n" }]);
+  });
+});
+
+describe("searchable dropdowns", () => {
+  let picks: [string, string, boolean][];
+  const combo = (id: string): HTMLInputElement => {
+    const el = input(id);
+    el.setAttribute("role", "combobox");
+    return el;
+  };
+  const picker = (outcome: "set" | "nomatch" | "differs" | "same") =>
+    vi.fn(async (el: HTMLInputElement, value: string, opts?: { prefix?: boolean }) => {
+      picks.push([el.id, value, !!opts?.prefix]);
+      return outcome;
+    });
+
+  beforeEach(() => {
+    picks = [];
+    document.body.innerHTML = `<input id="country"><input id="city"><input id="q1">`;
+  });
+
+  test("a dropdown field is picked with the value the adapter asks for", async () => {
+    kit.fields = [{ key: "basics.country", label: "Country", value: "BR", group: "personal" }];
+    const s = await fill(map({ fields: [{ key: "basics.country", el: combo("country"), guessed: false, pick: { value: () => "Brazil" } }] }), kit,
+      { ...deps, pick: picker("set") });
+    expect(picks).toEqual([["country", "Brazil", false]]);
+    expect(s.filled.map((f) => f.label)).toEqual(["Country"]);
+  });
+
+  test("a dropdown field passes the adapter's prefix option to the picker", async () => {
+    kit.fields = [{ key: "basics.city", label: "City", value: "Londrina", group: "personal" }];
+    await fill(map({ fields: [{ key: "basics.city", el: combo("city"), guessed: false, pick: { prefix: true } }] }), kit,
+      { ...deps, pick: picker("set") });
+    expect(picks).toEqual([["city", "Londrina", true]]);
+  });
+
+  test("a dropdown question is picked from the kit answer", async () => {
+    kit.answers = [{ question: "Will you require sponsorship?", answer: "Yes", limit: null }];
+    const s = await fill(map({ questions: [{ label: "Will you require sponsorship?", el: combo("q1"), maxLength: null }] }), kit,
+      { ...deps, pick: picker("set") });
+    expect(picks).toEqual([["q1", "Yes", false]]);
+    expect(s.filled.map((f) => f.label)).toEqual(["Will you require sponsorship?"]);
+  });
+
+  test("no matching option is left to you", async () => {
+    kit.fields = [{ key: "basics.country", label: "Country", value: "BR", group: "personal" }];
+    const s = await fill(map({ fields: [{ key: "basics.country", el: combo("country"), guessed: false }] }), kit,
+      { ...deps, pick: picker("nomatch") });
+    expect(s.needsYou.map((n) => n.note)).toEqual(["no option matches BR"]);
+  });
+
+  test("without a picker a dropdown field is left to pick by hand and nothing is typed", async () => {
+    kit.fields = [{ key: "basics.country", label: "Country", value: "BR", group: "personal" }];
+    const s = await fill(map({ fields: [{ key: "basics.country", el: combo("country"), guessed: false }] }), kit, deps);
+    expect(input("country").value).toBe("");
+    expect(s.needsYou.map((n) => n.note)).toEqual(["pick from the list by hand"]);
   });
 });

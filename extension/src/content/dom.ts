@@ -1,4 +1,4 @@
-import { normaliseQuestion } from "../shared/normalise";
+import { exact, same } from "../shared/text";
 
 type TextField = HTMLInputElement | HTMLTextAreaElement;
 
@@ -31,7 +31,16 @@ export function labelText(el: Element): string {
   for (const id of (el.getAttribute("aria-labelledby") ?? "").split(/\s+/)) {
     if (id) parts.push(root.getElementById?.(id)?.textContent ?? "");
   }
-  return parts.join(" ").trim();
+  // A label and an aria-label often repeat each other ("Phone*" and "Phone"): say it once.
+  const key = (t: string): string => t.replace(/[\s*:]+/g, " ").trim().toLowerCase();
+  const seen = new Set<string>();
+  const unique = parts.map((p) => p.trim()).filter((p) => {
+    const k = key(p);
+    if (k === "" || seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  return unique.join(" ").trim();
 }
 
 /**
@@ -43,23 +52,6 @@ export function isCombobox(el: Element): boolean {
   const auto = el.getAttribute("aria-autocomplete");
   return el.getAttribute("role") === "combobox" || auto === "list" || auto === "both" ||
     el.getAttribute("aria-haspopup") === "listbox";
-}
-
-function plain(text: string): string {
-  return text.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().trim().replace(/\s+/g, " ");
-}
-
-// normaliseQuestion drops stopwords, so answers like "No" (a Portuguese stopword) normalise
-// to nothing; fall back to the plain folded text for those.
-function same(a: string, b: string): boolean {
-  const na = normaliseQuestion(a);
-  const nb = normaliseQuestion(b);
-  if (na !== "" && na === nb) return true;
-  return plain(a) !== "" && plain(a) === plain(b);
-}
-
-function exact(a: string, b: string): boolean {
-  return plain(a) !== "" && plain(a) === plain(b);
 }
 
 /** First candidate whose texts match: exact folded pass over all, then the normalised pass. */
@@ -112,8 +104,21 @@ export function isEmpty(el: Element): boolean {
 const previousOutline = new WeakMap<HTMLElement, [string, string]>();
 
 /** Outline plus a reason attribute; outlines take no layout space. */
-export function highlight(el: Element, reason: string): void {
-  if (el instanceof HTMLElement) {
+/** Text of the legend of the fieldset holding el, or "". */
+export function legendText(el: Element): string {
+  return el.closest("fieldset")?.querySelector("legend")?.textContent ?? "";
+}
+
+/** True when the form marks the control as required: required, aria-required or a star in its label. */
+export function isRequired(el: Element): boolean {
+  if ((el as { required?: boolean }).required) return true;
+  if (el.getAttribute("aria-required") === "true") return true;
+  return /\*/.test(`${labelText(el)} ${legendText(el)}`);
+}
+
+/** Marks el with the reason; `outline` false keeps the marker (save offers use it) without the outline. */
+export function highlight(el: Element, reason: string, outline = true): void {
+  if (outline && el instanceof HTMLElement) {
     if (!previousOutline.has(el)) previousOutline.set(el, [el.style.outline, el.style.outlineOffset]);
     el.style.outline = "2px solid #d97706";
     el.style.outlineOffset = "2px";

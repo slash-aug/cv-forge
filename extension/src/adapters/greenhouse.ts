@@ -1,6 +1,7 @@
 import { isConsent, isConsentText } from "../content/consent";
-import { isCombobox, labelText } from "../content/dom";
-import type { Control, FieldKey, PageMap, Target } from "../fill/pagemap";
+import { countryName } from "../content/combobox";
+import { isCombobox, labelText, legendText } from "../content/dom";
+import type { Control, FieldKey, FieldSlot, PageMap, Target } from "../fill/pagemap";
 import { isLinkedInHost } from "../shared/linkedin";
 import { normaliseQuestion } from "../shared/normalise";
 import type { Adapter } from "./types";
@@ -12,6 +13,9 @@ const FORM = "#application_form, #application-form";
 const SENSITIVE = "#eeoc_fields, #demographic_questions, #demographic-section, .demographic--container";
 const SENSITIVE_NAME = /^job_application\[(gender|race|hispanic_ethnicity|veteran_status|disability_status)\]/;
 const DIGITS = /^[0-9]+$/;
+// Location fields, recognised by id or name words.
+const CITY = /\b(city|location)\b/;
+const idWords = (el: Control): string => `${el.id} ${el.name}`.toLowerCase().replace(/[_\-[\]]+/g, " ");
 
 const squash = (t: string): string => t.replace(/\s+/g, " ").trim();
 const cleanLabel = (t: string): string => squash(t).replace(/\s*\*$/, "");
@@ -77,8 +81,7 @@ function linkKey(label: string): FieldKey | "skip" | null {
 }
 
 function questionLabel(el: Control): string {
-  const legend = el.closest("fieldset")?.querySelector("legend")?.textContent;
-  return cleanLabel(legend ?? labelText(el));
+  return cleanLabel(legendText(el) || labelText(el));
 }
 
 function map(doc: Document): PageMap {
@@ -89,9 +92,9 @@ function map(doc: Document): PageMap {
   const root: ParentNode = doc.querySelector(FORM) ?? doc;
   const seenRadio = new Set<string>();
   const has = (key: FieldKey): boolean => m.fields.some((f) => f.key === key);
-  const field = (key: FieldKey, el: Target): void => {
+  const field = (key: FieldKey, el: Target, pick?: FieldSlot["pick"]): void => {
     if (has(key)) m.unplaced.push(Array.isArray(el) ? (el[0] as Element) : el);
-    else m.fields.push({ key, el, guessed: false });
+    else m.fields.push({ key, el, guessed: false, ...(pick ? { pick } : {}) });
   };
 
   for (const el of root.querySelectorAll("input, textarea, select")) {
@@ -143,10 +146,16 @@ function map(doc: Document): PageMap {
       continue;
     }
 
-    // Searchable dropdowns (location, country, react-select questions): typing does not choose an option.
+    // Searchable dropdowns (country, location, react-select questions): the engine picks an
+    // option through deps.pick; consent stays with the user and anything else is unplaced.
     if (isCombobox(el)) {
       const label = questionLabel(el);
-      (label !== "" && isConsentText(label) ? m.consent : m.unplaced).push(el as HTMLInputElement);
+      const isQuestion = el.id.startsWith("question_") || el.name.includes("answers_attributes");
+      if (label !== "" && isConsentText(label)) m.consent.push(el as HTMLInputElement);
+      else if (id === "country") field("basics.country", el, { value: countryName });
+      else if (CITY.test(idWords(el)) && !isQuestion) field("basics.city", el, { prefix: true });
+      else if (isQuestion && label !== "") m.questions.push({ label, el, maxLength: null });
+      else m.unplaced.push(el);
       continue;
     }
     if (simple) {
@@ -155,7 +164,7 @@ function map(doc: Document): PageMap {
     }
 
     // Location autocomplete: the text input only, and only when its id or name says so.
-    if (/\b(city|location)\b/.test(`${el.id} ${el.name}`.toLowerCase().replace(/[_\-[\]]+/g, " ")) && !el.id.startsWith("question_")) {
+    if (CITY.test(idWords(el)) && !el.id.startsWith("question_")) {
       if (has("basics.city")) m.unplaced.push(el);
       else field("basics.city", el);
       continue;

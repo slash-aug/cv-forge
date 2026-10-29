@@ -85,6 +85,28 @@ function inPlainLightDom(el: Element, ancestors: Element[]): boolean {
   return ![el, ...ancestors].some((e) => shadowOf(e) !== null);
 }
 
+/**
+ * Clicks one option of a searchable dropdown's own list (react-select and the like).
+ * Only a plain role=option element inside that listbox, never a button, link, label or
+ * input, nothing nested in one, and never an option whose text moves the form forward.
+ */
+export function clickOption(option: Element, listbox: Element): boolean {
+  if (!(option instanceof HTMLElement)) return false;
+  if (attr(option, "role") !== "option" || attr(listbox, "role") !== "listbox") return false;
+  if (!listbox.contains(option) || option === listbox) return false;
+  if (option.matches("button, a, label, input, select, textarea, summary") || option.localName.includes("-")) {
+    return false;
+  }
+  const ancestors = composedAncestors(option);
+  if (!inPlainLightDom(option, ancestors)) return false;
+  if (ancestors.some((a) => a.matches("button, a, label, [role=button], [role=link], summary"))) return false;
+  if (option.querySelector("button, a[href], input, select, textarea, [role=button], [role=link]")) return false;
+  if (attr(option, "aria-disabled") === "true" || option.hasAttribute("disabled")) return false;
+  if (FORBIDDEN.test(labels(option))) return false;
+  option.click();
+  return true;
+}
+
 export function safeClick(el: Element, allow: AllowList): boolean {
   if (!(el instanceof HTMLElement)) return false;
   if (!el.matches(CLICKABLE)) return false;
