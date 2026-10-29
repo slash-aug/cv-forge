@@ -159,7 +159,7 @@ LaTeX runs in `<build_dir>/.cvforge-jobs/<job>/`, which is wiped before each run
 
 ## Browser extension
 
-A small extension fills application forms from a job's `kit.json`. It only fills after you click Fill. It never fills the phone number, never ticks consent boxes or answers consent questions, and never clicks Submit or Next. Salary is filled only when it is confirmed and the form's currency and period, when the form states them, match the kit.
+A small extension fills application forms from a job's `kit.json`. It only fills after you click Fill. It never fills the phone number, never ticks consent boxes or answers consent questions, and never clicks Submit or Next. Salary is filled only when it is confirmed and the form's currency and period, when the form states them, match the kit. After a fill, required fields it left for you are outlined in orange; optional ones it left empty are only listed in the summary.
 
 Greenhouse has a dedicated adapter. Every other site, Gupy included for now, uses a label guesser. On Greenhouse, searchable dropdowns (country, location and dropdown questions) are filled by typing the kit's value and clicking the matching option in that dropdown's own list; it never clicks a button or link there, and a dropdown that already shows a value is left alone. Demographic and consent dropdowns are always left to you. On other sites, searchable dropdowns are left for you to pick from the list. Inside an embedded form the Fill button sits at the top of the form.
 

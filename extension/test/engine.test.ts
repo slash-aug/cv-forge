@@ -151,6 +151,7 @@ describe("questions", () => {
 
 describe("never filled", () => {
   test("phone highlighted, never filled", async () => {
+    input("phone").required = true;
     const s = await fill(map({ phone: [input("phone")] }), kit, deps);
     expect(input("phone").value).toBe("");
     expect(input("phone").hasAttribute("data-cvforge-reason")).toBe(true);
@@ -158,6 +159,7 @@ describe("never filled", () => {
   });
 
   test("consent never ticked", async () => {
+    input("consent").required = true;
     const s = await fill(map({ consent: [input("consent")] }), kit, deps);
     expect(input("consent").checked).toBe(false);
     expect(input("consent").hasAttribute("data-cvforge-reason")).toBe(true);
@@ -170,10 +172,30 @@ describe("never filled", () => {
     expect(s.needsYou[0]?.note).toBe("pick from the list by hand");
   });
 
-  test("unplaced elements are highlighted and reported", async () => {
+  test("required unplaced elements are highlighted and reported", async () => {
+    input("mystery").setAttribute("aria-required", "true");
     const s = await fill(map({ unplaced: [input("mystery")] }), kit, deps);
     expect(input("mystery").hasAttribute("data-cvforge-reason")).toBe(true);
     expect(s.needsYou).toHaveLength(1);
+  });
+
+  test("an optional field left empty is reported and marked but not outlined", async () => {
+    const s = await fill(map({ unplaced: [input("mystery")] }), kit, deps);
+    expect(input("mystery").style.outline).toBe("");
+    expect(input("mystery").hasAttribute("data-cvforge-reason")).toBe(true);
+    expect(s.needsYou).toHaveLength(1);
+  });
+
+  test("a star in the label counts as required and is outlined", async () => {
+    document.body.insertAdjacentHTML("beforeend", `<label for="starred">Location (City)*</label><input id="starred">`);
+    await fill(map({ unplaced: [input("starred")] }), kit, deps);
+    expect(input("starred").style.outline).not.toBe("");
+  });
+
+  test("an optional field that conflicts with the kit is still outlined", async () => {
+    const s = await fill(map({ fields: [{ key: "basics.email", el: input("email"), guessed: false }] }), kit, deps);
+    expect(s.needsYou[0]?.note).toContain("already filled");
+    expect(input("email").style.outline).not.toBe("");
   });
 });
 

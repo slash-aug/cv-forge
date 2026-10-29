@@ -1,4 +1,4 @@
-import { attachFile, checkRadio, highlight, isCombobox, isEmpty, labelText, selectOption, setValue } from "../content/dom";
+import { attachFile, checkRadio, highlight, isCombobox, isEmpty, isRequired, labelText, selectOption, setValue } from "../content/dom";
 import type { Kit } from "../shared/kit";
 import type { Result } from "../shared/messages";
 import { normaliseQuestion } from "../shared/normalise";
@@ -75,7 +75,8 @@ function nameOf(el: Element): string {
 export async function fill(map: PageMap, kit: Kit, deps: FillDeps): Promise<Summary> {
   const s: Summary = { filled: [], guessed: [], attached: [], suggested: [], needsYou: [] };
   const needs = (label: string, el: Element | null, note: string): void => {
-    if (el) highlight(el, note);
+    // An optional control left empty is listed but not outlined; conflicts are always outlined.
+    if (el) highlight(el, note, isRequired(el) || !isEmpty(el));
     s.needsYou.push({ label, el, note });
   };
 

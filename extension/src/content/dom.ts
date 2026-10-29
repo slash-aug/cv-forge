@@ -121,8 +121,17 @@ export function isEmpty(el: Element): boolean {
 const previousOutline = new WeakMap<HTMLElement, [string, string]>();
 
 /** Outline plus a reason attribute; outlines take no layout space. */
-export function highlight(el: Element, reason: string): void {
-  if (el instanceof HTMLElement) {
+/** True when the form marks the control as required: required, aria-required or a star in its label. */
+export function isRequired(el: Element): boolean {
+  if ((el as { required?: boolean }).required) return true;
+  if (el.getAttribute("aria-required") === "true") return true;
+  const legend = el.closest("fieldset")?.querySelector("legend")?.textContent ?? "";
+  return /\*/.test(`${labelText(el)} ${legend}`);
+}
+
+/** Marks el with the reason; `outline` false keeps the marker (save offers use it) without the outline. */
+export function highlight(el: Element, reason: string, outline = true): void {
+  if (outline && el instanceof HTMLElement) {
     if (!previousOutline.has(el)) previousOutline.set(el, [el.style.outline, el.style.outlineOffset]);
     el.style.outline = "2px solid #d97706";
     el.style.outlineOffset = "2px";

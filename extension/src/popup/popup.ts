@@ -1,5 +1,5 @@
 import { errorText, type Job, type Match, type Msg, type Result } from "../shared/messages";
-import { twoStep } from "./confirm";
+import { actionButton } from "./action";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -72,8 +72,7 @@ $<HTMLSelectElement>("choose").addEventListener("change", async (e) => {
   if (!showError(await send({ type: "chooseJob", tabId, slug: chosen, url: tabUrl }))) await renderTab();
 });
 
-// Two clicks instead of window.confirm, which closes the Firefox popup before the result shows.
-twoStep($<HTMLButtonElement>("applied"), $("status"), async () => {
+actionButton($<HTMLButtonElement>("applied"), $("status"), async () => {
   if (!slug) return "";
   const r = await send({ type: "markApplied", slug });
   return showError(r) ? "" : `Marked ${slug} as applied`;
