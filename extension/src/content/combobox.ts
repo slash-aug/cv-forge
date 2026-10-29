@@ -1,4 +1,4 @@
-import { normaliseQuestion } from "../shared/normalise";
+import { exact, plain, same } from "../shared/text";
 import { clickOption } from "./clicks";
 import { setValue } from "./dom";
 
@@ -13,8 +13,9 @@ export interface PickOptions {
 
 const POLL_MS = 50;
 const WAIT_MS = 3000;
+/** An open list that stays without options this long has nothing to offer. */
+const SETTLE_MS = 300;
 
-const plain = (t: string): string => t.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().trim().replace(/\s+/g, " ");
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 /** "Yes. I will need a permit." starts with the option "Yes"; plain "Yesterday" does not. */
@@ -25,9 +26,8 @@ function leads(option: string, value: string): boolean {
 }
 
 function matchLevel(text: string, value: string, opts: PickOptions): number {
-  if (plain(text) !== "" && plain(text) === plain(value)) return 1;
-  const n = normaliseQuestion(text);
-  if (n !== "" && n === normaliseQuestion(value)) return 2;
+  if (exact(text, value)) return 1;
+  if (same(text, value)) return 2;
   if (leads(text, value)) return 3;
   if (opts.prefix && plain(text).startsWith(`${plain(value)},`)) return 4;
   return 0;
@@ -54,11 +54,15 @@ function listboxOf(input: HTMLInputElement): Element | null {
   return null;
 }
 
-async function waitForOptions(input: HTMLInputElement, waitMs: number): Promise<Element | null> {
+/** The listbox once it has options; `opened` says whether any list showed up at all. */
+async function waitForOptions(input: HTMLInputElement, waitMs: number): Promise<{ list: Element | null; opened: boolean }> {
+  let emptySince: number | null = null;
   for (let waited = 0; ; waited += POLL_MS) {
     const list = listboxOf(input);
-    if (list && list.querySelector("[role=option]")) return list;
-    if (waited >= waitMs) return null;
+    if (list?.querySelector("[role=option]")) return { list, opened: true };
+    if (list) emptySince ??= waited;
+    if (emptySince !== null && waited - emptySince >= SETTLE_MS) return { list: null, opened: true };
+    if (waited >= waitMs) return { list: null, opened: emptySince !== null };
     await sleep(POLL_MS);
   }
 }
@@ -83,14 +87,14 @@ export async function pickOption(input: HTMLInputElement, value: string, opts: P
   for (const term of terms) {
     input.focus();
     setValue(input, term);
-    const list = await waitForOptions(input, opts.waitMs ?? WAIT_MS);
+    const { list, opened } = await waitForOptions(input, opts.waitMs ?? WAIT_MS);
+    if (!opened) break; // no list at all: another search would not open one either
     if (!list) continue;
     const ranked = [...list.querySelectorAll("[role=option]")]
       .map((o) => ({ o, level: matchLevel(o.textContent ?? "", want, opts) }))
       .filter((x) => x.level > 0)
       .sort((a, b) => a.level - b.level);
-    for (const { o } of ranked) {
-      if (!clickOption(o, list)) continue;
+    if (ranked.find(({ o }) => clickOption(o, list))) {
       await sleep(0);
       const now = shownValue(input);
       if (now !== null && matchLevel(now, want, opts) > 0) return "set";

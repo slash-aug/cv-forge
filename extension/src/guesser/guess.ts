@@ -1,5 +1,5 @@
 import { isConsent, isConsentText } from "../content/consent";
-import { isCombobox, labelText } from "../content/dom";
+import { isCombobox, labelText, legendText } from "../content/dom";
 import type { Control, FieldKey, FieldSlot, PageMap, QuestionSlot, SalarySlot, Target } from "../fill/pagemap";
 import { normaliseQuestion } from "../shared/normalise";
 
@@ -125,7 +125,7 @@ function signalsOf(el: Control): string[] {
   return [labelText(el), el.getAttribute("placeholder") ?? "", ...attr];
 }
 
-const legendOf = (el: Element): string => squash(el.closest("fieldset")?.querySelector("legend")?.textContent ?? "");
+const legendOf = (el: Element): string => squash(legendText(el));
 
 /** The legend, else the label of the enclosing role=radiogroup. */
 function groupLabelOf(el: Element): string {

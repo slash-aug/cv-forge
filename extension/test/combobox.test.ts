@@ -82,6 +82,13 @@ describe("pickOption", () => {
     expect(shown(input)).toBeUndefined();
   });
 
+  test("an open list with no options gives up quickly, without the full wait", async () => {
+    const input = widget("q", ["Maybe"]);
+    const start = Date.now();
+    expect(await pickOption(input, "Yes")).toBe("nomatch");
+    expect(Date.now() - start).toBeLessThan(1500);
+  });
+
   test("an answer that starts with the option word picks it (Yes. I will need a permit...)", async () => {
     const input = widget("q", ["Yes", "No"]);
     expect(await pickOption(input, "Yes. I will need an employment permit.")).toBe("set");

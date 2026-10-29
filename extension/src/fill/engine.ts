@@ -2,7 +2,8 @@ import { attachFile, checkRadio, highlight, isCombobox, isEmpty, isRequired, lab
 import type { Kit } from "../shared/kit";
 import type { Result } from "../shared/messages";
 import { normaliseQuestion } from "../shared/normalise";
-import { countryName, type PickOptions, type PickOutcome } from "../content/combobox";
+import { same } from "../shared/text";
+import type { PickOptions, PickOutcome } from "../content/combobox";
 import type { FieldSlot, ListSlot, PageMap, QuestionSlot, SummaryItem, Target } from "./pagemap";
 
 export type { SummaryItem } from "./pagemap";
@@ -23,14 +24,6 @@ export interface FillDeps {
   pick?(el: HTMLInputElement, value: string, opts?: PickOptions): Promise<PickOutcome>;
 }
 
-const plain = (t: string): string => t.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().trim().replace(/\s+/g, " ");
-
-// normaliseQuestion drops stopwords ("no"), so also compare accent-folded plain text.
-function same(a: string, b: string): boolean {
-  const na = normaliseQuestion(a);
-  if (na !== "" && na === normaliseQuestion(b)) return true;
-  return plain(a) !== "" && plain(a) === plain(b);
-}
 
 const first = (t: Target): Element => (Array.isArray(t) ? (t[0] as Element) : t);
 
@@ -107,22 +100,16 @@ export async function fill(map: PageMap, kit: Kit, deps: FillDeps): Promise<Summ
 type Needs = (label: string, el: Element | null, note: string) => void;
 type Step = (label: string, el: Element | null, run: () => void | Promise<void>) => Promise<void>;
 
-const dropdown = (t: Target): HTMLInputElement | null =>
-  !Array.isArray(t) && t instanceof HTMLInputElement && isCombobox(t) ? t : null;
-
-/** Picks value in a dropdown; returns place()'s outcomes, or null when there is no picker. */
-async function pickIn(el: HTMLInputElement, value: string, deps: FillDeps, opts?: PickOptions): Promise<Outcome | null> {
-  if (!deps.pick) return null;
-  return deps.pick(el, value, opts);
-}
+const dropdown = (t: Target): HTMLInputElement | null => (t instanceof HTMLInputElement && isCombobox(t) ? t : null);
 
 async function fillField(slot: FieldSlot, kit: Kit, deps: FillDeps, s: Summary, needs: Needs): Promise<void> {
   const field = kit.fields.find((f) => f.key === slot.key);
   if (!field || field.value.trim() === "") return;
   const el = first(slot.el);
   const combo = dropdown(slot.el);
-  const value = combo && slot.key === "basics.country" ? countryName(field.value) : field.value;
-  const outcome = combo ? await pickIn(combo, value, deps, { prefix: slot.key === "basics.city" }) : place(slot.el, value);
+  const value = combo && slot.pick?.value ? slot.pick.value(field.value) : field.value;
+  const outcome = !combo ? place(slot.el, value)
+    : deps.pick ? await deps.pick(combo, value, { prefix: slot.pick?.prefix }) : null;
   if (outcome === null) needs(field.label, el, "pick from the list by hand");
   else if (outcome === "set") (slot.guessed ? s.guessed : s.filled).push({ label: field.label, el });
   else if (outcome === "same") s.filled.push({ label: field.label, el, note: "already filled" });
@@ -147,7 +134,7 @@ async function fillQuestion(slot: QuestionSlot, kit: Kit, deps: FillDeps, s: Sum
         return;
       }
       const combo = dropdown(slot.el);
-      const outcome = combo ? await pickIn(combo, hit.answer, deps) : place(slot.el, hit.answer);
+      const outcome = !combo ? place(slot.el, hit.answer) : deps.pick ? await deps.pick(combo, hit.answer) : null;
       if (outcome === null) needs(slot.label, el, "pick from the list by hand");
       else if (outcome === "set") s.filled.push({ label: slot.label, el });
       else if (outcome === "same") s.filled.push({ label: slot.label, el, note: "already filled" });

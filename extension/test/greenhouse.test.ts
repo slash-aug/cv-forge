@@ -177,7 +177,10 @@ describe("new form", () => {
     const summary = await fill(map, kit, deps());
     expect(val("#phone")).toBe("");
     expect(map.phone).toEqual([$("#phone")]);
-    expect(map.fields.find((f) => f.key === "basics.country")?.el).toBe($("#country"));
+    const country = map.fields.find((f) => f.key === "basics.country");
+    expect(country?.el).toBe($("#country"));
+    expect(country?.pick?.value?.("BR")).toBe("Brazil");
+    expect(map.fields.find((f) => f.key === "basics.city")?.pick?.prefix).toBe(true);
     expect(summary.needsYou.map((n) => n.el)).toContain($("#phone"));
   });
 

@@ -531,17 +531,17 @@ describe("searchable dropdowns", () => {
     document.body.innerHTML = `<input id="country"><input id="city"><input id="q1">`;
   });
 
-  test("a country dropdown is picked with the country's English name", async () => {
+  test("a dropdown field is picked with the value the adapter asks for", async () => {
     kit.fields = [{ key: "basics.country", label: "Country", value: "BR", group: "personal" }];
-    const s = await fill(map({ fields: [{ key: "basics.country", el: combo("country"), guessed: false }] }), kit,
+    const s = await fill(map({ fields: [{ key: "basics.country", el: combo("country"), guessed: false, pick: { value: () => "Brazil" } }] }), kit,
       { ...deps, pick: picker("set") });
     expect(picks).toEqual([["country", "Brazil", false]]);
     expect(s.filled.map((f) => f.label)).toEqual(["Country"]);
   });
 
-  test("a city dropdown accepts an option that starts with the city", async () => {
+  test("a dropdown field passes the adapter's prefix option to the picker", async () => {
     kit.fields = [{ key: "basics.city", label: "City", value: "Londrina", group: "personal" }];
-    await fill(map({ fields: [{ key: "basics.city", el: combo("city"), guessed: false }] }), kit,
+    await fill(map({ fields: [{ key: "basics.city", el: combo("city"), guessed: false, pick: { prefix: true } }] }), kit,
       { ...deps, pick: picker("set") });
     expect(picks).toEqual([["city", "Londrina", true]]);
   });
@@ -558,7 +558,7 @@ describe("searchable dropdowns", () => {
     kit.fields = [{ key: "basics.country", label: "Country", value: "BR", group: "personal" }];
     const s = await fill(map({ fields: [{ key: "basics.country", el: combo("country"), guessed: false }] }), kit,
       { ...deps, pick: picker("nomatch") });
-    expect(s.needsYou.map((n) => n.note)).toEqual(["no option matches Brazil"]);
+    expect(s.needsYou.map((n) => n.note)).toEqual(["no option matches BR"]);
   });
 
   test("without a picker a dropdown field is left to pick by hand and nothing is typed", async () => {

@@ -21,6 +21,7 @@ const CSS = `
 .dock{position:fixed;right:16px;bottom:16px;z-index:2147483647;display:flex;flex-direction:column-reverse;gap:8px;align-items:flex-end;max-width:min(360px,calc(100vw - 32px))}
 button{cursor:pointer;border:1px solid #1f2937;background:#111827;color:#fff;border-radius:6px;padding:8px 12px}
 button:disabled{opacity:.6;cursor:default}
+.dock.framed{position:absolute;top:16px;bottom:auto}
 .panel{background:#fff;color:#111827;border:1px solid #9ca3af;border-radius:8px;padding:10px;max-height:60vh;overflow:auto;width:100%}
 .panel h3{margin:8px 0 4px;font-weight:600}
 .panel .item{display:block;width:100%;text-align:left;background:#f3f4f6;color:#111827;border:0;margin:2px 0;padding:4px 6px}
@@ -41,15 +42,6 @@ export function isFramed(win: Window): boolean {
   }
 }
 
-/**
- * Where the dock sits. In a frame the page often stretches the frame to the form's full
- * height, so a fixed bottom corner is the end of the form: use the frame's top instead.
- */
-export function dockPosition(framed: boolean): { position: string; top: string; bottom: string } {
-  return framed
-    ? { position: "absolute", top: "16px", bottom: "auto" }
-    : { position: "fixed", top: "auto", bottom: "16px" };
-}
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, cls?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -70,7 +62,9 @@ function ensure(): Ui {
   const style = document.createElement("style");
   style.textContent = CSS;
   const dock = el("div", undefined, "dock");
-  Object.assign(dock.style, dockPosition(isFramed(window)));
+  // In a frame the page often stretches the frame to the form's full height, so a fixed
+  // bottom corner is the end of the form: the framed dock sits at the frame's top instead.
+  dock.classList.toggle("framed", isFramed(window));
   const parts = { bar: el("div"), summary: el("div"), applied: el("div"), chips: el("div", undefined, "chips") };
   dock.append(parts.bar, parts.summary, parts.applied);
   root.append(style, dock, parts.chips);

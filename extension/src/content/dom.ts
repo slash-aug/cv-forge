@@ -1,4 +1,4 @@
-import { normaliseQuestion } from "../shared/normalise";
+import { exact, same } from "../shared/text";
 
 type TextField = HTMLInputElement | HTMLTextAreaElement;
 
@@ -54,23 +54,6 @@ export function isCombobox(el: Element): boolean {
     el.getAttribute("aria-haspopup") === "listbox";
 }
 
-function plain(text: string): string {
-  return text.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().trim().replace(/\s+/g, " ");
-}
-
-// normaliseQuestion drops stopwords, so answers like "No" (a Portuguese stopword) normalise
-// to nothing; fall back to the plain folded text for those.
-function same(a: string, b: string): boolean {
-  const na = normaliseQuestion(a);
-  const nb = normaliseQuestion(b);
-  if (na !== "" && na === nb) return true;
-  return plain(a) !== "" && plain(a) === plain(b);
-}
-
-function exact(a: string, b: string): boolean {
-  return plain(a) !== "" && plain(a) === plain(b);
-}
-
 /** First candidate whose texts match: exact folded pass over all, then the normalised pass. */
 function pick<T>(items: T[], texts: (item: T) => string[], value: string): T | undefined {
   return (
@@ -121,12 +104,16 @@ export function isEmpty(el: Element): boolean {
 const previousOutline = new WeakMap<HTMLElement, [string, string]>();
 
 /** Outline plus a reason attribute; outlines take no layout space. */
+/** Text of the legend of the fieldset holding el, or "". */
+export function legendText(el: Element): string {
+  return el.closest("fieldset")?.querySelector("legend")?.textContent ?? "";
+}
+
 /** True when the form marks the control as required: required, aria-required or a star in its label. */
 export function isRequired(el: Element): boolean {
   if ((el as { required?: boolean }).required) return true;
   if (el.getAttribute("aria-required") === "true") return true;
-  const legend = el.closest("fieldset")?.querySelector("legend")?.textContent ?? "";
-  return /\*/.test(`${labelText(el)} ${legend}`);
+  return /\*/.test(`${labelText(el)} ${legendText(el)}`);
 }
 
 /** Marks el with the reason; `outline` false keeps the marker (save offers use it) without the outline. */

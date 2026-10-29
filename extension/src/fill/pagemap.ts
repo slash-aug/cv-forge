@@ -14,6 +14,8 @@ export interface FieldSlot {
   key: FieldKey;
   el: Target;
   guessed: boolean;
+  /** For a searchable dropdown: how the adapter wants the kit value picked. */
+  pick?: { value?: (v: string) => string; prefix?: boolean };
 }
 
 export interface QuestionSlot {
