@@ -11,8 +11,12 @@ from dataclasses import dataclass
 
 from cvforge.money.rates import Rates, convert
 
-HOURS_PER_MONTH = 168
 MONTHS_PER_YEAR = 12
+WEEKS_PER_YEAR = 52
+WORKDAYS_PER_YEAR = WEEKS_PER_YEAR * 5
+HOURS_PER_YEAR = WEEKS_PER_YEAR * 40   # 8-hour days, so hour, day, week, month and year agree
+HOURS_PER_MONTH = HOURS_PER_YEAR / MONTHS_PER_YEAR
+PERIODS = ("hour", "day", "week", "month", "year")
 
 
 @dataclass(frozen=True)
@@ -36,6 +40,20 @@ def monthly(m: Money, currency: str, rates: Rates) -> float:
 
 def annual(m: Money, currency: str, rates: Rates) -> float:
     return monthly(m, currency, rates) * MONTHS_PER_YEAR
+
+
+def breakdown(m: Money, currency: str, rates: Rates) -> dict[str, float]:
+    """The amount in currency for every period a form may ask for."""
+    per_month = monthly(m, currency, rates)
+    year = per_month * MONTHS_PER_YEAR
+    values = {"hour": per_month / HOURS_PER_MONTH, "day": year / WORKDAYS_PER_YEAR,
+              "week": year / WEEKS_PER_YEAR, "month": per_month, "year": year}
+    return {p: round(values[p], 2) for p in PERIODS}
+
+
+def shown_amount(value: float, period: str) -> str:
+    """An amount as a form would take it: cents for hourly rates, whole units otherwise."""
+    return f"{value:,.{2 if period == 'hour' else 0}f}"
 
 
 def pj_equivalent(monthly_amount: float, contract: str, clt_factor: float) -> float:

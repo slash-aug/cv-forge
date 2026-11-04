@@ -41,6 +41,15 @@ export interface KitCertificate {
   issuer: string;
 }
 
+export type KitPeriod = "hour" | "day" | "week" | "month" | "year";
+
+/** The confirmed salary in one currency for every period (kits built before it have none). */
+export interface KitSalaryRow {
+  currency: string;
+  amounts: Record<KitPeriod, number>;
+  shown: Record<KitPeriod, string>;
+}
+
 export interface KitSalary {
   confirmed: boolean;
   text: string;
@@ -48,6 +57,7 @@ export interface KitSalary {
   amount: number | null;
   currency: string | null;
   period: "year" | "month" | "hour" | null;
+  breakdown?: KitSalaryRow[];
 }
 
 export interface KitAnswer {

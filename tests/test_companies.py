@@ -155,6 +155,7 @@ def test_slug_and_ghost_survive_other_writes(tmp_path):
     ({"ats": "greenhouse", "slug": "given", "careers_url": "https://boards.greenhouse.io/other"}, "given"),
     ({"ats": "greenhouse", "careers_url": "https://boards.greenhouse.io/acme"}, "acme"),
     ({"ats": "greenhouse", "careers_url": "https://job-boards.greenhouse.io/acme/"}, "acme"),
+    ({"ats": "greenhouse", "careers_url": "https://job-boards.eu.greenhouse.io/acme"}, "acme"),
     ({"ats": "ashby", "careers_url": "https://jobs.ashbyhq.com/acme"}, "acme"),
     ({"ats": "lever", "careers_url": "https://jobs.lever.co/acme"}, "acme"),
     ({"ats": "workable", "careers_url": "https://apply.workable.com/acme"}, "acme"),

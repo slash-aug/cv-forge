@@ -37,3 +37,18 @@ def test_hyphenated_term_matches_literally():
 def test_trailing_separator_term_needs_the_separator():
     assert not contains_term("Acme Payments", "ACME-")
     assert contains_term("ticket acme-123", "ACME-")
+
+
+@pytest.mark.parametrize("text", ["funnelacme-fullstack-engineer", "MegaAcme-Corp"])
+def test_hyphenated_term_needs_a_word_start(text):
+    assert not contains_term(text, "ACME-")
+
+
+@pytest.mark.parametrize("text", ["(ACME-42)", "acme-42", "my_acme-42", "x ACME-42"])
+def test_hyphenated_term_matches_at_a_word_start(text):
+    assert contains_term(text, "ACME-")
+
+
+def test_hyphenated_term_needs_a_word_end():
+    assert not contains_term("acme-corporation", "acme-corp")
+    assert contains_term("acme-corp.", "acme-corp")

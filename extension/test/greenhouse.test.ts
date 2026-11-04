@@ -47,6 +47,8 @@ describe("jobId mirrors the Python site_job_id Greenhouse rows", () => {
   test.each([
     ["https://boards.greenhouse.io/exampleco/jobs/4012345", "4012345"],
     ["https://job-boards.greenhouse.io/exampleco/jobs/4012345?gh_src=x", "4012345"],
+    ["https://job-boards.eu.greenhouse.io/exampleco/jobs/4012345?gh_src=x", "4012345"],
+    ["https://boards.eu.greenhouse.io/exampleco/jobs/4012345", "4012345"],
     ["https://boards.greenhouse.io/exampleco/jobs/4012345/", "4012345"],
     ["https://boards.greenhouse.io/embed/job_app?for=exampleco&token=4012345", "4012345"],
     ["https://careers.example.com/open-roles?gh_jid=4012345", "4012345"],

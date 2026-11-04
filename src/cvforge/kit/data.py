@@ -4,6 +4,7 @@ from __future__ import annotations
 import re
 
 from cvforge.answers.facts import ireland_facts, visa_text
+from cvforge.money.normalise import PERIODS, shown_amount
 from cvforge.profile.model import index, localized
 from cvforge.render.cv import build_cv_view
 from cvforge.text import split_name
@@ -118,12 +119,20 @@ def _salary(salary: dict | None, slug: str) -> dict | None:
         return None
     if not salary.get("confirmed"):
         return {"confirmed": False, "text": UNCONFIRMED.format(slug=slug), "sources": [],
-                "amount": None, "currency": None, "period": None}
+                "amount": None, "currency": None, "period": None, "breakdown": []}
     text = (f"{salary['amount']:,.0f} {salary['currency']}/{salary['period']}"
             f" (BRL {salary['brl_month']:,.0f}/month, EUR {salary['eur_year']:,.0f}/year,"
             f" USD {salary['usd_year']:,.0f}/year)")
     return {"confirmed": True, "text": text, "sources": list(salary.get("sources", [])),
-            "amount": salary["amount"], "currency": salary["currency"], "period": salary["period"]}
+            "amount": salary["amount"], "currency": salary["currency"], "period": salary["period"],
+            "breakdown": _breakdown(salary.get("breakdown") or {})}
+
+
+def _breakdown(per_currency: dict) -> list[dict]:
+    """One row per currency (the job's first, then BRL): amounts per period, and as a form takes them."""
+    return [{"currency": cur, "amounts": dict(v),
+             "shown": {p: shown_amount(v[p], p) for p in PERIODS}}
+            for cur, v in per_currency.items()]
 
 
 def _email(tailored: dict, master: dict, files: dict[str, str]) -> dict | None:

@@ -6,7 +6,11 @@ import { isLinkedInHost } from "../shared/linkedin";
 import { normaliseQuestion } from "../shared/normalise";
 import type { Adapter } from "./types";
 
-const HOSTS = new Set(["boards.greenhouse.io", "job-boards.greenhouse.io"]);
+// Keep in step with GREENHOUSE_HOSTS in src/cvforge/apply/posting.py.
+const HOSTS = new Set([
+  "boards.greenhouse.io", "job-boards.greenhouse.io",
+  "boards.eu.greenhouse.io", "job-boards.eu.greenhouse.io",
+]);
 // Classic boards use #application_form, the newer React boards #application-form.
 const FORM = "#application_form, #application-form";
 // The new boards keep EEO and demographic questions in this container; the classic ones in these.

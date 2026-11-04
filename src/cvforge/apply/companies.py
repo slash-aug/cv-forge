@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 
 import yaml
 
+from cvforge.apply.posting import GREENHOUSE_HOSTS
 from cvforge.profile.model import ProfileError, load_schema, read_yaml, schema_problems
 from cvforge.text import fold_accents
 
@@ -18,7 +19,7 @@ ATS = ("ashby", "greenhouse", "lever", "teamtailor", "gupy",
 FEED_ATS = ("greenhouse", "ashby", "lever", "workable")
 MANUAL_ATS = ("workday", "smartrecruiters", "personio", "teamtailor")
 BOARD_HOSTS = {
-    "greenhouse": ("boards.greenhouse.io", "job-boards.greenhouse.io"),
+    "greenhouse": GREENHOUSE_HOSTS,
     "ashby": ("jobs.ashbyhq.com",),
     "lever": ("jobs.lever.co",),
     "workable": ("apply.workable.com",),

@@ -9,7 +9,12 @@ from datetime import date
 from urllib.parse import quote, urlsplit
 
 from cvforge.apply import http
-from cvforge.apply.posting import Posting, canonical_url, guess_language
+from cvforge.apply.posting import (
+    GREENHOUSE_HOSTS,
+    Posting,
+    canonical_url,
+    guess_language,
+)
 from cvforge.apply.posting_guard import guard
 
 Get = Callable[..., str]
@@ -335,7 +340,7 @@ def fetch_posting(url: str, *, get: Get = http.get, today: date) -> Posting:
     seg = [quote(s, safe="-_.~") for s in path.split("/") if s]
     if host == "jobs.ashbyhq.com" and len(seg) >= 2:
         return _ashby(seg[0], seg[1], url, get, today)
-    if host in ("boards.greenhouse.io", "job-boards.greenhouse.io") and len(seg) >= 3 and seg[1] == "jobs":
+    if host in GREENHOUSE_HOSTS and len(seg) >= 3 and seg[1] == "jobs":
         return _greenhouse(seg[0], seg[2], url, get, today)
     if host == "jobs.lever.co" and len(seg) >= 2:
         return _lever(seg[0], seg[1], url, get, today)

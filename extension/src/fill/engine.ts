@@ -1,5 +1,5 @@
 import { attachFile, checkRadio, highlight, isCombobox, isEmpty, isRequired, labelText, selectOption, setValue } from "../content/dom";
-import type { Kit } from "../shared/kit";
+import type { Kit, KitSalary } from "../shared/kit";
 import type { Result } from "../shared/messages";
 import { normaliseQuestion } from "../shared/normalise";
 import { same } from "../shared/text";
@@ -156,6 +156,13 @@ async function fillQuestion(slot: QuestionSlot, kit: Kit, deps: FillDeps, s: Sum
   }
 }
 
+/** The kit's figure for another currency or period, as the kit shows it, without separators. */
+function breakdownText(sal: KitSalary, currency: string, period: KitSalary["period"]): string | null {
+  if (period === null) return null;
+  const shown = sal.breakdown?.find((r) => r.currency === currency)?.shown[period];
+  return shown === undefined ? null : shown.replace(/,/g, "");
+}
+
 function fillSalary(map: PageMap, kit: Kit, s: Summary, needs: Needs): void {
   const slot = map.salary;
   if (!slot) return;
@@ -165,16 +172,19 @@ function fillSalary(map: PageMap, kit: Kit, s: Summary, needs: Needs): void {
     needs(label, slot.el, "salary unconfirmed");
     return;
   }
-  const curOk = slot.currency === null || slot.currency === sal.currency;
-  const perOk = slot.period === null || slot.period === sal.period;
-  if (!curOk || !perOk) {
-    needs(label, slot.el, `salary wants ${slot.currency ?? sal.currency}/${slot.period ?? sal.period}`);
+  const currency = slot.currency ?? sal.currency;
+  const period = slot.period ?? sal.period;
+  const matches = currency === sal.currency && period === sal.period;
+  const text = matches ? String(Math.round(sal.amount)) : breakdownText(sal, currency, period);
+  if (text === null) {
+    needs(label, slot.el, `salary wants ${currency}/${period}`);
     return;
   }
-  const outcome = place(slot.el, String(Math.round(sal.amount)));
-  if (outcome === "set") s.filled.push({ label, el: slot.el });
+  const note = matches ? undefined : `from the kit's ${currency}/${period} figure`;
+  const outcome = place(slot.el, text);
+  if (outcome === "set") s.filled.push({ label, el: slot.el, ...(note ? { note } : {}) });
   else if (outcome === "same") s.filled.push({ label, el: slot.el, note: "already filled" });
-  else if (outcome === "differs") needs(label, slot.el, "already filled, kit says " + String(Math.round(sal.amount)));
+  else if (outcome === "differs") needs(label, slot.el, "already filled, kit says " + text);
   else needs(label, slot.el, "salary: pick by hand");
 }
 

@@ -58,6 +58,12 @@ def test_ashby_unknown_job_id():
 def test_greenhouse_adapter():
     p = fetch_posting("https://boards.greenhouse.io/fernwoodlabs/jobs/4040404", get=fake_get, today=TODAY)
     assert (p.title, p.company, p.source) == ("Data Engineer", "Fernwood Labs", "greenhouse")
+
+
+def test_greenhouse_eu_board_uses_the_same_board_api():
+    p = fetch_posting("https://job-boards.eu.greenhouse.io/fernwoodlabs/jobs/4040404?gh_src=x",
+                      get=fake_get, today=TODAY)
+    assert (p.title, p.company, p.source) == ("Data Engineer", "Fernwood Labs", "greenhouse")
     assert p.location == "Remote - Portugal"
     assert "<" not in p.description and "data engineer to join" in p.description
 

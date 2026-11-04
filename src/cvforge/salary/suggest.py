@@ -76,8 +76,9 @@ def _range(posted: dict | None, market: list[dict], floor: Money | None, rates: 
 
 def suggest(posted: dict | None, market: list[dict], floor: Money | None, rates: Rates,
             *, clt_factor: float, min_eur_year: float | None = None) -> Suggestion:
+    yearly = min_eur_year is not None or (bool(market) and all(r.get("period") == "year" for r in market))
     low, high, cur, period, basis, sources, contract = _range(
-        posted, market, floor, rates, "year" if min_eur_year is not None else "month")
+        posted, market, floor, rates, "year" if yearly else "month")
     amount = _round(low + POSITION * (high - low), period)
     factor = clt_factor if contract == "clt" else 1.0
     if floor is not None:

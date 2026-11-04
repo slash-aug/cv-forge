@@ -232,6 +232,35 @@ describe("salary", () => {
     expect(s.needsYou[0]?.note).toBe("salary wants EUR/month");
   });
 
+  const row = (currency: string, year: number) => {
+    const amounts = { hour: year / 2080, day: year / 260, week: year / 52, month: year / 12, year };
+    const fmt = (v: number, cents: boolean) =>
+      v.toLocaleString("en-US", { minimumFractionDigits: cents ? 2 : 0, maximumFractionDigits: cents ? 2 : 0 });
+    const shown = { hour: fmt(amounts.hour, true), day: fmt(amounts.day, false), week: fmt(amounts.week, false),
+                    month: fmt(amounts.month, false), year: fmt(year, false) };
+    return { currency, amounts, shown };
+  };
+
+  test("other currency or period filled from the breakdown", async () => {
+    kit.salary!.breakdown = [row("EUR", 60000), row("USD", 66000)];
+    const s = await fill(map({ salary: slot("USD", "month") }), kit, deps);
+    expect(input("salary").value).toBe("5500");
+    expect(s.filled[0]?.note).toBe("from the kit's USD/month figure");
+  });
+
+  test("hourly breakdown keeps cents", async () => {
+    kit.salary!.breakdown = [row("EUR", 60000)];
+    await fill(map({ salary: slot("EUR", "hour") }), kit, deps);
+    expect(input("salary").value).toBe("28.85");
+  });
+
+  test("currency missing from the breakdown still needs you", async () => {
+    kit.salary!.breakdown = [row("EUR", 60000)];
+    const s = await fill(map({ salary: slot("GBP", "year") }), kit, deps);
+    expect(input("salary").value).toBe("");
+    expect(s.needsYou[0]?.note).toBe("salary wants GBP/year");
+  });
+
   test("salary select with no matching option: pick by hand", async () => {
     document.body.insertAdjacentHTML(
       "beforeend",
