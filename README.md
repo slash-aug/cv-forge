@@ -99,7 +99,7 @@ The task runs only while you are logged in to Windows, which is why `cvforge job
 | --- | --- | --- |
 | 1 | Foundation: master profile, tailoring, audit, LaTeX CV and letter, ATS check, privacy guards, CI | Done |
 | 2 | Apply flow: job link or pasted text, eligibility check, company registry with visa sponsor marks, salary suggestion, answer bank, copy-ready kit page, tracker with stages and a due view | Done |
-| 3 | Firefox extension: fills job forms from the kit, never on linkedin.com, never submits. The next adapter decision (Workday is the likely candidate) comes after the Ireland work | Planned |
+| 3 | Firefox extension: fills job forms from the kit (Greenhouse adapter plus a general field guesser, salary from the per-period breakdown), never on linkedin.com, never submits. Next adapter: Workday is the likely candidate | Done |
 | 3a | Ireland as the primary market: permit rule in `check`, DETE sponsor import, Irish salary, CV variant, answers | Done |
 | 4 | Job discovery: daily read of public employer feeds, market and permit filters, ghost-job tags, a list page and `cvforge jobs`. Gupy stays manual intake | Done |
 | 5 | Feedback loop: email sync for replies, an application report and follow-up reminders | Planned |
