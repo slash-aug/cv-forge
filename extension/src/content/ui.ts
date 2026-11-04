@@ -129,13 +129,40 @@ function dropChip(field: Element): void {
   chipFor.delete(field);
 }
 
-function placeChip(field: Element, chip: HTMLElement): void {
+type Box = { top: number; left: number; right: number; height: number };
+
+/**
+ * Page position of a chip inside the field's right end, so it never covers the
+ * question label above or below. Centred on one-line inputs, near the top of taller ones.
+ */
+export function chipPosition(field: Box, chip: { width: number; height: number },
+                             scroll: { x: number; y: number }): { top: number; left: number } {
+  const inset = 4;
+  const top = field.top + Math.min(inset, (field.height - chip.height) / 2);
+  const left = Math.max(field.left, field.right - chip.width - inset);
+  return { top: top + scroll.y, left: left + scroll.x };
+}
+
+function positionChip(field: Element, chip: HTMLElement): void {
   const r = field.getBoundingClientRect();
-  chip.style.top = `${r.bottom + window.scrollY + 2}px`;
-  chip.style.left = `${r.left + window.scrollX}px`;
+  const c = chip.getBoundingClientRect();
+  const at = chipPosition(r, c, { x: window.scrollX, y: window.scrollY });
+  chip.style.top = `${at.top}px`;
+  chip.style.left = `${at.left}px`;
+}
+
+let followsResize = false;
+
+function placeChip(field: Element, chip: HTMLElement): void {
   dropChip(field);
   chipFor.set(field, chip);
   ensure().chips.append(chip);
+  positionChip(field, chip);
+  if (!followsResize) {
+    // Fields move when the window resizes; keep each chip inside its field.
+    window.addEventListener("resize", () => chipFor.forEach((c, f) => positionChip(f, c)));
+    followsResize = true;
+  }
 }
 
 const first = (t: Target): Element => (Array.isArray(t) ? (t[0] as Element) : t);
