@@ -78,7 +78,7 @@ def _salary(lo, hi, cur, period, contract="unknown"):
 
 
 CASES = [
-    ("remote-europe-silent", req(allowed=["Europe"]), None, "skip", {"location"}),
+    ("remote-us-silent", req(allowed=["United States"]), None, "skip", {"location"}),
     ("remote-ca-pl-uk", req(allowed=["Canada", "Poland", "United Kingdom"]), None, "skip",
      {"location"}),
     ("5plus-17-months", req(allowed=["worldwide"], years=_years(5)), None, "skip", {"years"}),
@@ -86,7 +86,7 @@ CASES = [
     ("hybrid-lisbon", req(workplace="hybrid", countries=["PT"]), None, "pass", set()),
     ("onsite-sao-paulo", req(workplace="onsite", countries=["BR"]), None, "pass", set()),
     ("onsite-de-sponsor", req(workplace="onsite", countries=["DE"]), SPONSOR, "pass", set()),
-    ("remote-europe-sponsor", req(allowed=["Europe"]), SPONSOR, "skip", {"location"}),
+    ("remote-us-sponsor", req(allowed=["United States"]), SPONSOR, "skip", {"location"}),
     ("hybrid-de-refused", req(workplace="hybrid", countries=["DE"], sponsorship="refused"),
      SPONSOR, "skip", {"location"}),
     ("onsite-nl-offered", req(workplace="onsite", countries=["NL"], sponsorship="offered"),
@@ -117,7 +117,7 @@ def test_batch_verdicts(case, requirements, company, expect, failing):
 
 
 def test_rule_quotes_and_messages():
-    v = check(req(allowed=["Europe"], years=_years(5)), posting(), MASTER, None, RATES, TODAY,
+    v = check(req(allowed=["United States"], years=_years(5)), posting(), MASTER, None, RATES, TODAY,
               clt_factor=1.4)
     years, location, salary, languages = v.results
     assert not years.ok and years.quote == "5+ years of experience"
@@ -145,6 +145,7 @@ def _refused(quote, **kw):
     ("Necess\u00e1rio residir no Brasil.", {"allowed": ["Brasil"]}),
     ("Candidates must have the right to work in Portugal.",
      {"workplace": "hybrid", "countries": ["PT"]}),
+    ("Candidates must have the right to work in the EU.", {"allowed": ["Europe"]}),
 ])
 def test_residence_in_home_country_passes(quote, kw):
     v = check(_refused(quote, **kw), posting(), MASTER, None, RATES, TODAY, clt_factor=1.4)
@@ -152,8 +153,7 @@ def test_residence_in_home_country_passes(quote, kw):
 
 
 @pytest.mark.parametrize("quote,kw", [
-    ("Candidates must have the right to work in the EU.", {"allowed": ["Europe"]}),
-    ("Must have the right to work in the EU.", {"allowed": ["Brazil"]}),
+    ("Must have the right to work in the United States.", {"allowed": ["United States"]}),
     ("We do not offer visa sponsorship.", {"workplace": "onsite", "countries": ["DE"]}),
 ])
 def test_residence_elsewhere_skips(quote, kw):
@@ -214,7 +214,7 @@ def test_language_warnings():
     ("LATAM", "latam"), ("Latin America", "latam"), ("South  America", "latam"),
     ("Americas", "latam"), ("South and Central America", "latam"), ("Worldwide", "worldwide"),
     ("anywhere", "worldwide"), ("Global", "worldwide"), ("Remote (Global)", "worldwide"),
-    ("International", "worldwide"), ("Europe", "other"), ("DE", "other"), ("North America", "other"),
+    ("International", "worldwide"), ("Europe", "eu"), ("DE", "other"), ("North America", "other"),
 ])
 def test_region_class(token, expected):
     assert region_class(token) == expected
@@ -239,7 +239,7 @@ def env(tmp_path, monkeypatch):
 
 
 DESCRIPTION = ("Senior Engineer. 5+ years of experience required.\n"
-               "Fully remote, Europe only. We pay 9000 EUR per month.")
+               "Fully remote, United States only. We pay 9000 EUR per month.")
 
 
 def _app(data_dir, requirements, slug="acme-senior-engineer"):
@@ -257,7 +257,7 @@ def _cli_req(allowed):
                                      "quote": "5+ years of experience required."}],
             salary=_salary(None, 9000, "EUR", "month"))
     r["salary"]["quote"] = "We pay 9000 EUR per month."
-    r["location"]["quote"] = "Fully remote, Europe only."
+    r["location"]["quote"] = "Fully remote, United States only."
     return r
 
 
@@ -266,12 +266,12 @@ def _run(*args):
 
 
 def test_skip_writes_tracker(env, capsys):
-    app = _app(env, _cli_req(["Europe"]))
+    app = _app(env, _cli_req(["United States"]))
     assert _run() == 2
     out = capsys.readouterr().out
     assert "PASS years: " in out
     assert "SKIP location: " in out
-    assert '    "Fully remote, Europe only."' in out
+    assert '    "Fully remote, United States only."' in out
     row = tracker.load(env / "tracker.csv")[0]
     assert row["status"] == "skipped"
     assert row["skip_reason"].startswith("location: ")
@@ -281,7 +281,7 @@ def test_skip_writes_tracker(env, capsys):
 
 
 def test_override_passes_and_notes(env, capsys):
-    app = _app(env, _cli_req(["Europe"]))
+    app = _app(env, _cli_req(["United States"]))
     assert _run("--override", "referral from a friend") == 0
     row = tracker.load(env / "tracker.csv")[0]
     assert row["status"] == "drafted"
@@ -318,7 +318,7 @@ def _rewrite(app, requirements):
 
 
 def test_pass_after_skip_resets_row(env, capsys):
-    app = _app(env, _cli_req(["Europe"]))
+    app = _app(env, _cli_req(["United States"]))
     assert _run() == 2
     _rewrite(app, _cli_req(["worldwide"]))
     assert _run() == 0
@@ -327,7 +327,7 @@ def test_pass_after_skip_resets_row(env, capsys):
 
 
 def test_override_after_skip_clears_skip_reason(env, capsys):
-    _app(env, _cli_req(["Europe"]))
+    _app(env, _cli_req(["United States"]))
     assert _run() == 2
     assert _run("--override", "referral") == 0
     row = tracker.load(env / "tracker.csv")[0]
@@ -471,9 +471,16 @@ def test_home_follows_work_rights():
     assert v.results[1].ok and "Brazil or Ireland" in v.results[1].message
 
 
-def test_remote_eu_only_still_skips_for_non_irish_employer():
-    v = check(req(allowed=["EU"]), posting(), MASTER, None, None, TODAY, clt_factor=1.4)
-    assert not v.passed and "remote limited to EU" in v.results[1].message
+@pytest.mark.parametrize("allowed", [["EU"], ["Europe"], ["EEA"]])
+def test_remote_in_a_region_that_includes_portugal_passes(allowed):
+    v = check(req(allowed=allowed), posting(), MASTER, None, None, TODAY, clt_factor=1.4)
+    assert v.passed and "includes Portugal" in v.results[1].message
+
+
+def test_eu_region_needs_an_eu_home_country():
+    master = {"x-preferences": {"workRights": {"BR": {"status": "citizen"}}}}
+    v = check(req(allowed=["Europe"]), posting(), master, None, None, TODAY, clt_factor=1.4)
+    assert not v.passed and "remote limited to Europe" in v.results[1].message
 
 
 def test_is_irish_job():
