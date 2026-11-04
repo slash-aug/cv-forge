@@ -3,6 +3,7 @@ import re
 import unicodedata
 
 SEPARATORS = re.compile(r"[\s_-]+")
+WORD_CHAR = r"[^\W_]"   # a letter or digit
 
 
 def fold(text: str) -> str:
@@ -27,13 +28,17 @@ def contains_term(text: str, term: str) -> bool:
     A term without separators also matches across them ("projectzebra" finds
     "Project Zebra"); a term that has its own separators keeps them significant
     ("acme-corp" does not find "AcmeCorp"), so a hyphenated slug or a ticket
-    prefix like "ACME-" does not match a plain name.
+    prefix like "ACME-" does not match a plain name. Such a term must also start
+    and end on a word edge, so "ACME-" does not match inside "megaacme-corp".
     """
     term = term.strip()
     if not term:
         return False
     if SEPARATORS.search(term):
-        return fold(term) in fold(text)
+        folded = fold(term)
+        start = f"(?<!{WORD_CHAR})" if folded[0].isalnum() else ""
+        end = f"(?!{WORD_CHAR})" if folded[-1].isalnum() else ""
+        return re.search(start + re.escape(folded) + end, fold(text)) is not None
     return squash(term) in squash(text)
 
 
