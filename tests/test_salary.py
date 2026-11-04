@@ -416,3 +416,51 @@ def test_br_salary_unchanged():
     s = suggest(posted(4500, 7500), [], FLOOR, RATES, clt_factor=1.4)
     assert (s.basis, s.amount, s.currency, s.period) == ("posting", 6800, "USD", "month")
     assert not any("CSEP" in x for x in s.sources)
+
+
+def _remote_unpriced(app):
+    (app / "requirements.yaml").write_text(yaml.safe_dump({
+        "years": [], "location": {"workplace": "remote", "job_countries": [], "allowed": []},
+        "sponsorship": {"status": "silent"}, "salary": None,
+    }), encoding="utf-8")
+
+
+def test_country_picks_the_market_for_a_remote_job(env, tmp_path, capsys):
+    _remote_unpriced(env)
+    market = _market(tmp_path, "frontend engineer,any,DE,EUR,year,55000,60000,75000,DE guide,2026\n")
+    assert cli.main(["salary", "acme-frontend", "--master", str(PERSONA), "--market", str(market),
+                     "--country", "DE", "--confirm", "58000"]) == 0
+    out = capsys.readouterr().out
+    assert "Suggested (market): 58,000 EUR/year" in out and "Market country: DE" in out
+    data = json.loads((env / "salary.json").read_text(encoding="utf-8"))
+    assert (data["amount"], data["currency"], data["period"], data["country"]) == (58000, "EUR", "year", "DE")
+
+
+def test_country_is_kept_across_reruns(env, tmp_path, capsys):
+    _remote_unpriced(env)
+    market = _market(tmp_path, "frontend engineer,any,DE,EUR,year,55000,60000,75000,DE guide,2026\n")
+    base = ["salary", "acme-frontend", "--master", str(PERSONA), "--market", str(market)]
+    assert cli.main([*base, "--country", "DE"]) == 0
+    capsys.readouterr()
+    assert cli.main(base) == 0
+    assert "Market country: DE" in capsys.readouterr().out
+
+
+def test_remote_job_without_country_uses_the_home_market(env, tmp_path, capsys):
+    _remote_unpriced(env)
+    market = _market(tmp_path, "frontend engineer,any,DE,EUR,year,55000,60000,75000,DE guide,2026\n")
+    assert cli.main(["salary", "acme-frontend", "--master", str(PERSONA), "--market", str(market)]) == 0
+    out = capsys.readouterr().out
+    assert "Suggested (floor)" in out and "Market country: DE" not in out
+
+
+def test_yearly_market_rows_give_a_yearly_suggestion():
+    s = suggest(None, [row(period="year", low=40000, high=60000, currency="EUR")], None, RATES, clt_factor=1.3)
+    assert (s.amount, s.currency, s.period) == (55000, "EUR", "year")
+
+
+def test_default_country_is_not_saved(env, tmp_path):
+    _remote_unpriced(env)
+    market = _market(tmp_path, "")
+    assert cli.main(["salary", "acme-frontend", "--master", str(PERSONA), "--market", str(market)]) == 0
+    assert "country" not in json.loads((env / "salary.json").read_text(encoding="utf-8"))

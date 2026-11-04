@@ -26,7 +26,7 @@ Venv: `.venv/bin/cvforge`
 - `cvforge company add|sponsor|show`: company registry with visa sponsor marks; `seed-ie` adds Irish employers, `import-ie` marks DETE permit holders
 - `cvforge company ghost <name>`: mark an employer as a ghost (`--clear` removes the mark)
 - `cvforge jobs [fetch]`: list discovered roles, refreshing when older than 23 hours; `fetch` reads the employer feeds now (`--market IE|BR|all`, `--source`, `--dry-run`)
-- `cvforge salary <slug>`: suggest an expected salary at the market rate (`--confirm [AMOUNT]`, `--note` keeps the reasoning in salary.json)
+- `cvforge salary <slug>`: suggest an expected salary at the market rate (`--confirm [AMOUNT]`, `--country` sets the market country for remote jobs, `--note` keeps the reasoning in salary.json)
 - `cvforge answers <slug>`: answer bank lookup and knock-out facts (`--save`)
 - `cvforge kit <slug>`: write kit.json and kit.html to copy into forms
 - `cvforge track add|status|stage|done|show`: record applications and stages

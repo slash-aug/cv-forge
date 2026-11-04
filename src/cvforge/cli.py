@@ -782,8 +782,9 @@ def cmd_answers(args) -> int:
 def cmd_salary(args) -> int:
     """Suggest an expected salary; the kit shows it only once confirmed.
 
-    Market country: requirements location.job_countries[0] when present, else the
-    master's basics.location.countryCode (a remote job open to the candidate's country).
+    Market country: --country (only this override is kept in salary.json), else requirements
+    location.job_countries[0], else the master's basics.location.countryCode (a remote
+    job open to the candidate's country). Irish jobs always use IE.
     """
     cfg = load_config()
     app_dir = cfg.data_dir / "applications" / args.slug
@@ -807,8 +808,11 @@ def cmd_salary(args) -> int:
     floor = (Money(pf["amount"], pf["currency"], pf["period"])
              if pf else None)
     countries = ((req or {}).get("location") or {}).get("job_countries") or []
-    country = "IE" if irish else countries[0] if countries else (
-        (master.get("basics") or {}).get("location") or {}).get("countryCode", "")
+    previous = _previous_salary(app_dir)
+    override = args.country or previous.get("country")
+    home = ((master.get("basics") or {}).get("location") or {}).get("countryCode", "")
+    job_country = countries[0] if countries else home
+    country = "IE" if irish else (override or job_country)
     market_path = Path(args.market) if args.market else cfg.data_dir / "salary" / "market.csv"
     rows = match_market(load_market(market_path), role=posting.title,
                         seniority=_seniority(posting.title), country=country)
@@ -848,7 +852,9 @@ def cmd_salary(args) -> int:
         print(str(exc), file=sys.stderr)
         return 1
     data = {**asdict(s), "confirmed": args.confirm is not None, "rates_day": rates.day}
-    explanation = args.note.strip() if args.note else _previous_explanation(app_dir)
+    if override and not irish:
+        data["country"] = override
+    explanation = args.note.strip() if args.note else previous.get("explanation")
     if explanation:
         data["explanation"] = explanation
     (app_dir / "salary.json").write_text(
@@ -858,6 +864,7 @@ def cmd_salary(args) -> int:
     print(f"  EUR/year:  {s.eur_year:,.0f}")
     print(f"  USD/year:  {s.usd_year:,.0f}")
     print(f"  Rates: ECB {rates.day}")
+    print(f"  Market country: {country}")
     for src in s.sources:
         print(f"  Source: {src}")
     if irish:
@@ -869,14 +876,17 @@ def cmd_salary(args) -> int:
     return 0
 
 
-def _previous_explanation(app_dir: Path) -> str | None:
-    """The explanation kept in an earlier salary.json, so a rerun without --note keeps it."""
+def _previous_salary(app_dir: Path) -> dict[str, str]:
+    """Text values kept in an earlier salary.json (the --country override and the
+    explanation), so a rerun without the flags keeps them."""
     try:
         old = json.loads((app_dir / "salary.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return None
-    value = old.get("explanation") if isinstance(old, dict) else None
-    return value if isinstance(value, str) and value.strip() else None
+        return {}
+    if not isinstance(old, dict):
+        return {}
+    return {k: v for k in ("country", "explanation")
+            if isinstance(v := old.get(k), str) and v.strip()}
 
 
 def _windows_path(path: Path) -> str | None:
@@ -1112,6 +1122,8 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--confirm", nargs="?", const="", metavar="AMOUNT",
                    help="confirm the suggestion, optionally replacing the amount")
     p.add_argument("--market", help="market CSV (default: <data_dir>/salary/market.csv)")
+    p.add_argument("--country", help="market country as written in market.csv (default: the job country, "
+                   "else your home country; kept in salary.json for reruns)")
     p.add_argument("--master", help="master profile (default: <data_dir>/profile/master.yaml)")
     p.add_argument("--note", metavar="TEXT",
                    help="why this amount; kept in salary.json across reruns until replaced")
