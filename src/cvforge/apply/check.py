@@ -21,13 +21,16 @@ REGIONS = {
     "portugal": ("pt", "portugal"),
     "ireland": ("ie", "ireland", "republic of ireland", "dublin", "cork", "galway", "limerick",
                 "waterford"),
-    "eu": ("eu", "eea", "european union", "emea"),
+    "eu": ("eu", "eea", "european union", "europe", "emea"),
     "latam": ("latam", "latin america", "south america", "americas", "south and central america"),
     "worldwide": ("worldwide", "anywhere", "global", "remote (global)", "international"),
 }
 TOKEN_REGION = {token: region for region, tokens in REGIONS.items() for token in tokens}
 CODE_REGION = {"BR": "brazil", "PT": "portugal", "IE": "ireland"}
 OPEN = {"latam", "worldwide"}
+# Home regions a wider region includes: work rights in Portugal or Ireland count for "EU" or "Europe".
+# Add any EU country added to CODE_REGION here too.
+WITHIN = {"eu": {"portugal", "ireland"}}
 
 LANG_NAMES = {
     "en": ("English", "english", "ingles"),
@@ -108,13 +111,19 @@ def home_regions(master: dict) -> set[str]:
     return {CODE_REGION[c] for c in home_codes(master) if c in CODE_REGION}
 
 
+def home_within(regions: set[str], home: set[str]) -> set[str]:
+    """Home regions among regions, or inside a wider one ("EU" includes Portugal)."""
+    return (regions | {h for r in regions for h in WITHIN.get(r, ())}) & home
+
+
 def home_named(quote: str | None, home: set[str]) -> set[str]:
     """Home regions named in a quote ("must reside in Brazil" names his own country)."""
-    tokens = sorted((t for r in home for t in REGIONS[r]), key=len, reverse=True)
+    regions = home | {r for r in WITHIN if WITHIN[r] & home}
+    tokens = sorted((t for r in regions for t in REGIONS[r]), key=len, reverse=True)
     if not tokens:
         return set()
     word = re.compile(r"\b(" + "|".join(map(re.escape, tokens)) + r")\b")
-    return {region_class(w) for w in word.findall(_fold(quote or ""))} & home
+    return home_within({region_class(w) for w in word.findall(_fold(quote or ""))}, home)
 
 
 def is_irish_job(req: dict) -> bool:
@@ -168,6 +177,8 @@ def _location(req: dict, company: dict | None, home: set[str]) -> RuleResult:
                       sponsorship.get("quote"))
     if countries & home or (remote and allowed & home):
         return result(True, f"{workplace} job in {_home_names(home)}")
+    if remote and (inside := home_within(allowed, home)):
+        return result(True, f"remote in {', '.join(loc['allowed'])}, which includes {_home_names(inside)}")
     if remote and allowed & OPEN:
         return result(True, "remote, open to Latin America or worldwide")
     if sponsorship["status"] == "offered":
