@@ -15,6 +15,8 @@ from cvforge.track import tracker
 @pytest.mark.parametrize("url,expected", [
     ("https://boards.greenhouse.io/exampleco/jobs/4012345", ("greenhouse", "4012345")),
     ("https://job-boards.greenhouse.io/exampleco/jobs/4012345?gh_src=x", ("greenhouse", "4012345")),
+    ("https://job-boards.eu.greenhouse.io/exampleco/jobs/4012345?gh_src=x", ("greenhouse", "4012345")),
+    ("https://boards.eu.greenhouse.io/exampleco/jobs/4012345", ("greenhouse", "4012345")),
     ("https://boards.greenhouse.io/embed/job_app?for=exampleco&token=4012345", ("greenhouse", "4012345")),
     ("https://careers.example.com/open-roles?gh_jid=4012345", ("greenhouse", "4012345")),
     ("https://ventania.gupy.io/job/eyJqb2JJZCI6NTU1MDAwMX0=?jobBoardSource=gupy_portal", ("gupy", "5550001")),

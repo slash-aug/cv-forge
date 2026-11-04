@@ -10,10 +10,8 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from cvforge.apply.http import host_of, is_linkedin, on_domain
-from cvforge.apply.posting import Posting, canonical_url
+from cvforge.apply.posting import GREENHOUSE_HOSTS, Posting, canonical_url
 from cvforge.track import tracker
-
-GREENHOUSE_HOSTS = ("boards.greenhouse.io", "job-boards.greenhouse.io")
 
 
 class LinkedInRefused(Exception):

@@ -8,6 +8,10 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
+# Greenhouse job board hosts; EU-hosted boards are served by the same board API.
+# Keep in step with HOSTS in extension/src/adapters/greenhouse.ts.
+GREENHOUSE_HOSTS = ("boards.greenhouse.io", "job-boards.greenhouse.io",
+                    "boards.eu.greenhouse.io", "job-boards.eu.greenhouse.io")
 TRACKING_PARAMS = frozenset({"referral", "ref", "src", "source", "gh_src", "lever-source"})
 
 # Fixed stopword lists, about 30 words each. Words that are common in both languages are left out.
