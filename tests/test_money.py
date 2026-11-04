@@ -6,7 +6,7 @@ import pytest
 
 from cvforge.apply.http import FetchError
 from cvforge.config import load_config
-from cvforge.money.normalise import Money, annual, monthly, pj_equivalent
+from cvforge.money.normalise import Money, annual, breakdown, monthly, pj_equivalent
 from cvforge.money.rates import MoneyError, Rates, convert, load_rates, parse_ecb
 
 XML = (Path(__file__).parent / "fixtures" / "ecb_daily.xml").read_text()
@@ -35,7 +35,7 @@ def test_convert_brl_usd_via_eur():
 
 def test_monthly_from_year_and_hour():
     assert monthly(Money(120000, "BRL", "year"), "BRL", RATES) == pytest.approx(10000)
-    assert monthly(Money(10, "EUR", "hour"), "EUR", RATES) == pytest.approx(1680)
+    assert monthly(Money(10, "EUR", "hour"), "EUR", RATES) == pytest.approx(10 * 2080 / 12)
     assert monthly(Money(6000, "BRL", "month"), "USD", RATES) == pytest.approx(1100)
     assert annual(Money(1000, "EUR", "month"), "EUR", RATES) == pytest.approx(12000)
     with pytest.raises(ValueError):
@@ -83,3 +83,14 @@ def test_clt_factor_config(tmp_path):
     assert load_config(env={"CVFORGE_CLT_FACTOR": "1.25"}, file=None).clt_factor == 1.25
     with pytest.raises(ValueError, match="clt_factor"):
         load_config(env={"CVFORGE_CLT_FACTOR": "abc"}, file=None)
+
+
+def test_breakdown_covers_every_period():
+    b = breakdown(Money(52000, "EUR", "year"), "EUR", RATES)
+    assert b == {"hour": 25.0, "day": 200.0, "week": 1000.0,
+                 "month": pytest.approx(4333.33, abs=0.01), "year": 52000.0}
+
+
+def test_breakdown_converts_currency():
+    b = breakdown(Money(1000, "EUR", "month"), "BRL", RATES)
+    assert (b["month"], b["year"]) == (6000.0, 72000.0)

@@ -62,9 +62,17 @@
         "sources": {"type": "array", "items": {"type": "string"}},
         "amount": {"type": ["number", "null"]},
         "currency": {"type": ["string", "null"]},
-        "period": {"enum": ["year", "month", "hour", null]}
+        "period": {"enum": ["year", "month", "hour", null]},
+        "breakdown": {"type": "array", "items": {
+          "type": "object",
+          "properties": {"currency": {"type": "string"},
+                         "amounts": {"$ref": "#/$defs/perPeriodNumber"},
+                         "shown": {"$ref": "#/$defs/perPeriodText"}},
+          "required": ["currency", "amounts", "shown"],
+          "additionalProperties": false
+        }}
       },
-      "required": ["confirmed", "text", "sources", "amount", "currency", "period"],
+      "required": ["confirmed", "text", "sources", "amount", "currency", "period", "breakdown"],
       "additionalProperties": false
     },
     "answers": {
@@ -109,5 +117,21 @@
   "required": ["schema_version", "slug", "lang", "company", "role", "links", "fields", "work",
                "education", "languages", "certificates", "salary", "answers", "recruiter_note",
                "email", "tracker"],
-  "additionalProperties": false
+  "additionalProperties": false,
+  "$defs": {
+    "perPeriodNumber": {
+      "type": "object",
+      "properties": {"hour": {"type": "number"}, "day": {"type": "number"}, "week": {"type": "number"},
+                     "month": {"type": "number"}, "year": {"type": "number"}},
+      "required": ["hour", "day", "week", "month", "year"],
+      "additionalProperties": false
+    },
+    "perPeriodText": {
+      "type": "object",
+      "properties": {"hour": {"type": "string"}, "day": {"type": "string"}, "week": {"type": "string"},
+                     "month": {"type": "string"}, "year": {"type": "string"}},
+      "required": ["hour", "day", "week", "month", "year"],
+      "additionalProperties": false
+    }
+  }
 }

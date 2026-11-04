@@ -20,7 +20,10 @@ POSTING = Posting(
     source="test", fetched="2026-10-22", description="A fictional role.")
 SALARY = {"confirmed": True, "basis": "market", "amount": 60000, "currency": "EUR",
           "period": "year", "brl_month": 30000, "eur_year": 60000, "usd_year": 66000,
-          "sources": ["market example 2026"], "rates_day": "2026-10-21"}
+          "sources": ["market example 2026"], "rates_day": "2026-10-21",
+          "breakdown": {"EUR": {"hour": 29.76, "day": 230.77, "week": 1153.85, "month": 5000.0, "year": 60000.0},
+                        "BRL": {"hour": 178.57, "day": 1384.62, "week": 6923.08, "month": 30000.0,
+                                "year": 360000.0}}}
 EM = chr(0x2014)
 FILES = {"cv_pdf": "Ana_Exemplo_CV_Example_Corp.pdf"}
 
@@ -45,7 +48,7 @@ def test_kit_json_keys_stable():
     work = k["work"][0]
     assert set(work) == {"key", "title", "company", "start", "end", "description"}
     assert list(work["description"]) == ["200", "500", "1000", "2000"]
-    assert set(k["salary"]) == {"confirmed", "text", "sources", "amount", "currency", "period"}
+    assert set(k["salary"]) == {"confirmed", "text", "sources", "amount", "currency", "period", "breakdown"}
     assert "email" in k
     assert schema_problems(k, load_schema("cvforge.kit", "kit.schema.json")) == []
 
@@ -321,3 +324,19 @@ def test_kit_includes_risks_and_ireland_answers():
     assert html.index("no permit record") < html.index("<h2>Personal data</h2>")
     plain = render_kit(kit())
     assert "Work authorisation" not in plain.split("</style>")[1]
+
+
+def test_salary_breakdown_in_kit_and_html():
+    k = kit()
+    rows = k["salary"]["breakdown"]
+    assert [r["currency"] for r in rows] == ["EUR", "BRL"]
+    assert rows[0]["shown"]["week"] == "1,154" and rows[0]["shown"]["hour"] == "29.76"
+    assert rows[1]["amounts"]["year"] == 360000.0
+    html = render_kit(k)
+    assert "1,154" in html and "360,000" in html and "Per week" in html
+
+
+def test_salary_without_breakdown_still_renders():
+    k = kit({kk: v for kk, v in SALARY.items() if kk != "breakdown"})
+    assert k["salary"]["breakdown"] == []
+    assert "Per week" not in render_kit(k)

@@ -262,7 +262,7 @@ def test_missing_soc_warns_and_needs_lmnt():
 
 def test_gbp_hourly_converted():
     r = v(salary=40, currency="GBP", period="hour")
-    expected = 40 * 168 * 12 / 0.85
+    expected = 40 * 2080 / 0.85
     assert r.ireland["salary_eur_year"] == pytest.approx(expected)
     assert r.ireland["route"] == "csep"  # about 94,870 EUR/year
 

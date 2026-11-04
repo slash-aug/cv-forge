@@ -181,7 +181,9 @@ def _audit(d):
 def _salary_json(d, confirmed):
     data = {"basis": "posting", "amount": 3500.0, "currency": "EUR", "period": "month",
             "brl_month": 21012.34, "eur_year": 42000.0, "usd_year": 46199.6, "sources": [],
-            "confirmed": confirmed, "rates_day": "2026-10-21"}
+            "confirmed": confirmed, "rates_day": "2026-10-21",
+            "breakdown": {"EUR": {"hour": 20.83, "day": 161.54, "week": 807.69, "month": 3500.0,
+                                  "year": 42000.0}}}
     (d / "salary.json").write_text(json.dumps(data), encoding="utf-8")
 
 
@@ -335,3 +337,9 @@ def test_ireland_facts_use_the_range_minimum():
     assert "Critical Skills Employment Permit" not in f["sponsorship"]
     f = ireland_facts(_ie_master("unknown"), {**straddle, "salary_eur_year_min": 70000}, "en")
     assert "Critical Skills Employment Permit" in f["sponsorship"]
+
+
+def test_salary_breakdown_figures_audit_clean(app, capsys):
+    _answers(app, "My expected rate is 20.83 EUR per hour, 162 EUR per day or 808 EUR per week.")
+    _salary_json(app, confirmed=True)
+    assert _audit(app) == 0, capsys.readouterr().out

@@ -464,3 +464,12 @@ def test_default_country_is_not_saved(env, tmp_path):
     market = _market(tmp_path, "")
     assert cli.main(["salary", "acme-frontend", "--master", str(PERSONA), "--market", str(market)]) == 0
     assert "country" not in json.loads((env / "salary.json").read_text(encoding="utf-8"))
+
+
+def test_salary_json_has_local_and_brl_breakdown(env, capsys):
+    assert _run("--confirm", "7000") == 0
+    data = json.loads((env / "salary.json").read_text(encoding="utf-8"))
+    assert list(data["breakdown"]) == ["USD", "BRL"]
+    assert data["breakdown"]["USD"]["month"] == 7000 and data["breakdown"]["USD"]["year"] == 84000
+    assert set(data["breakdown"]["BRL"]) == {"hour", "day", "week", "month", "year"}
+    assert "Per week:" in capsys.readouterr().out

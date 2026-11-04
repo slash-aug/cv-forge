@@ -52,7 +52,7 @@ from cvforge.discover.sources import clean_text
 from cvforge.guard import GuardError, check_message_file, check_staged, check_tree
 from cvforge.kit.data import build_kit
 from cvforge.kit.render import render_kit
-from cvforge.money.normalise import Money
+from cvforge.money.normalise import PERIODS, Money, breakdown, shown_amount
 from cvforge.money.rates import MoneyError, load_rates
 from cvforge.profile.model import ProfileError, load_master, localized
 from cvforge.profile.prefs import degree_recognised, ireland_pay_floor
@@ -851,7 +851,11 @@ def cmd_salary(args) -> int:
     except MoneyError as exc:
         print(str(exc), file=sys.stderr)
         return 1
-    data = {**asdict(s), "confirmed": args.confirm is not None, "rates_day": rates.day}
+    money = Money(s.amount, s.currency, s.period)
+    shown = [s.currency] + ([] if s.currency == "BRL" else ["BRL"])
+    per_period = {cur: breakdown(money, cur, rates) for cur in shown}
+    data = {**asdict(s), "confirmed": args.confirm is not None, "rates_day": rates.day,
+            "breakdown": per_period}
     if override and not irish:
         data["country"] = override
     explanation = args.note.strip() if args.note else previous.get("explanation")
@@ -863,6 +867,9 @@ def cmd_salary(args) -> int:
     print(f"  BRL/month: {s.brl_month:,.0f}")
     print(f"  EUR/year:  {s.eur_year:,.0f}")
     print(f"  USD/year:  {s.usd_year:,.0f}")
+    for period in PERIODS:
+        cells = ", ".join(f"{shown_amount(per_period[cur][period], period)} {cur}" for cur in shown)
+        print(f"  Per {period}: {cells}")
     print(f"  Rates: ECB {rates.day}")
     print(f"  Market country: {country}")
     for src in s.sources:

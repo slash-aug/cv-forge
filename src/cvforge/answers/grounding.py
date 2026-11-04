@@ -7,6 +7,7 @@ from pathlib import Path
 
 from cvforge.answers.facts import knockout_facts
 from cvforge.apply.experience import engineering_months
+from cvforge.money.normalise import shown_amount
 from cvforge.tailor.audit import figures
 
 
@@ -48,7 +49,15 @@ def answer_figures(master: dict, lang: str, app_dir: Path, today: date) -> set[s
     salary = load_salary(app_dir)
     if salary and salary.get("confirmed"):
         amount = salary["amount"]
-        found |= figures(f"{amount:g}", f"{amount:.0f}", f"{amount:,.0f}", f"{amount:,.2f}")
+        found |= figures(f"{amount:g}", f"{amount:,.2f}", *_whole(amount))
         for key in ("brl_month", "eur_year", "usd_year"):
-            found |= figures(f"{salary[key]:.0f}", f"{salary[key]:,.0f}")
+            found |= figures(*_whole(salary[key]))
+        for per_period in (salary.get("breakdown") or {}).values():
+            for period, value in per_period.items():
+                found |= figures(*_whole(value), shown_amount(value, period))
     return found
+
+
+def _whole(value: float) -> tuple[str, str]:
+    """A salary figure as a whole number, with and without thousands separators."""
+    return f"{value:.0f}", f"{value:,.0f}"

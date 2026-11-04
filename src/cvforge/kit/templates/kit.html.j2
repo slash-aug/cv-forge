@@ -157,6 +157,11 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
 <h2>Expected salary</h2>
 {% if kit.salary.confirmed %}
 {{ block("salary", "Expected salary", kit.salary.text) }}
+{% for row in kit.salary.breakdown %}
+{% for period, shown in row.shown.items() %}
+{{ block("sal-" ~ row.currency ~ "-" ~ period, "Per " ~ period ~ " (" ~ row.currency ~ ")", shown) }}
+{% endfor %}
+{% endfor %}
 {% for s in kit.salary.sources %}
 <p class="sub">Source: {{ s }}</p>
 {% endfor %}
