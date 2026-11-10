@@ -30,6 +30,9 @@ skills:
     keywords: [Python, PostgreSQL, REST]
   - ref: sk-frontend
     keywords: [TypeScript, React]
+projects:
+  - ref: pr-tasklog
+    text: Open-source task tracker with 3 calendar integrations.
 education: [ed-example-univ]
 certificates: [cert-cloud]
 languages: [lang-en, lang-pt]

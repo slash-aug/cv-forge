@@ -86,7 +86,7 @@ def test_index_kinds():
     assert idx["h-load-time"][1]["impact"].startswith("Cut load time by 40%")
     kinds = {kind for kind, _ in idx.values()}
     assert kinds == {
-        "summary", "work", "position", "highlight",
+        "summary", "work", "position", "highlight", "project",
         "skill", "education", "certificate", "language",
     }
 
@@ -156,3 +156,19 @@ def test_id_with_trailing_newline_rejected(tmp_path):
 
     with pytest.raises(ProfileError, match="skills.0.id"):
         load_master(_write_variant(tmp_path, newline_id))
+
+
+def test_projects_are_indexed():
+    assert index(load_master(PERSONA))["pr-tasklog"][0] == "project"
+
+
+def test_project_id_clash_is_a_duplicate(tmp_path):
+    path = _write_variant(tmp_path, lambda d: d["projects"][0].update(id="cert-cloud"))
+    with pytest.raises(ProfileError, match="duplicate id 'cert-cloud'"):
+        load_master(path)
+
+
+def test_project_rejects_unknown_key(tmp_path):
+    path = _write_variant(tmp_path, lambda d: d["projects"][0].update(stars=10))
+    with pytest.raises(ProfileError, match="projects.0.*stars"):
+        load_master(path)

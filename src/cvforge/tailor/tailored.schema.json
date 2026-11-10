@@ -105,6 +105,26 @@
         "additionalProperties": false
       }
     },
+    "projects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$(?!\n)"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref",
+          "text"
+        ],
+        "additionalProperties": false
+      }
+    },
     "skills": {
       "type": "array",
       "items": {

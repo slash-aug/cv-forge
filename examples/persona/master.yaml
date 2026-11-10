@@ -128,6 +128,19 @@ education:
     area: Computer Science
     endDate: "2019"
 
+projects:
+  - id: pr-tasklog
+    name: Tasklog
+    url: https://example.com/tasklog
+    status:
+      en: In production
+      pt-BR: Em produção
+      pt-PT: Em produção
+    description:
+      en: Open-source task tracker with 3 calendar integrations, built and run on her own.
+      pt-BR: Gerenciador de tarefas open source com 3 integrações de calendário, criado e mantido por ela.
+      pt-PT: Gestor de tarefas open source com 3 integrações de calendário, criado e mantido por ela.
+
 certificates:
   - id: cert-cloud
     name: Example Cloud Practitioner

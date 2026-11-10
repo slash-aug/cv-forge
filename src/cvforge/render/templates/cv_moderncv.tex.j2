@@ -121,6 +121,15 @@
 %% endfor
 %% endif
 
+%% if projects
+\keepnext{8\baselineskip}
+\section{\VAR{headings.projects | tex}}
+%% for project in projects
+\keepnext{3\baselineskip}
+\cvitem{\VAR{project.name | tex}}{\VAR{project.text | tex}\BLOCK{if project.status or project.link}\newline{}\emph{\VAR{project.status | tex}\BLOCK{if project.status and project.link}: \BLOCK{endif}\BLOCK{if project.link}\href{\VAR{project.link.href | url}}{\VAR{project.link.text | tex}}\BLOCK{endif}}\BLOCK{endif}}
+%% endfor
+%% endif
+
 %% if skills
 \keepnext{8\baselineskip}
 \section{\VAR{headings.skills | tex}}

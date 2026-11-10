@@ -643,3 +643,42 @@ def test_compiled_ie_region_cv_passes_ats(cfg, tmp_path, monkeypatch):
     for line in ("Requires employment permit (Critical Skills occupation)", "Relocating to Ireland",
                  "References available on request"):
         assert line in text
+
+
+def test_projects_section_after_experience():
+    tex = render_cv(T, M)
+    assert tex.index(r"\section{Experience}") < tex.index(r"\section{Projects}") < tex.index(r"\section{Skills}")
+
+
+def test_project_shows_name_text_status_and_link():
+    project = build_cv_view(T, M)["projects"][0]
+    assert project == {
+        "name": "Tasklog",
+        "text": "Open-source task tracker with 3 calendar integrations.",
+        "status": "In production",
+        "link": {"text": "example.com/tasklog", "href": "https://example.com/tasklog"},
+    }
+    tex = render_cv(T, M)
+    assert r"\href{https://example.com/tasklog}{example.com/tasklog}" in tex
+    assert "In production" in tex
+
+
+def test_project_status_localized_and_pt_heading():
+    view = build_cv_view(T_PT, M)
+    assert view["projects"][0]["status"] == "Em produção"
+    assert r"\section{Projetos}" in render_view(view)
+
+
+def test_no_projects_no_section():
+    tailored = {k: v for k, v in T.items() if k != "projects"}
+    assert r"\section{Projects}" not in render_cv(tailored, M)
+
+
+def test_ie_region_spelling_on_project_text():
+    from cvforge.render.irish import ireland_region
+
+    master = _ie_master()
+    tailored = copy.deepcopy(T)
+    tailored["projects"][0]["text"] = "Organized the color pipeline."
+    view = build_cv_view(tailored, master, ireland_region(master, city=None, ireland=IE_BLOCK))
+    assert view["projects"][0]["text"] == "Organised the colour pipeline."

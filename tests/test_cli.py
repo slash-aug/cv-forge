@@ -165,3 +165,12 @@ def test_build_defaults_to_tailored_folder(monkeypatch, tmp_path):
     assert main(["build", str(app / "tailored.yaml"), "--master", P, "--no-letter",
                  "--out", str(tmp_path / "elsewhere")]) == 0
     assert outs[-1] == tmp_path / "elsewhere"
+
+
+def test_untailored_includes_every_project():
+    from cvforge.cli import untailored
+    from cvforge.profile.model import load_master
+
+    master = load_master(Path(P))
+    assert untailored(master, "en")["projects"] == [
+        {"ref": "pr-tasklog", "text": "Open-source task tracker with 3 calendar integrations, built and run on her own."}]

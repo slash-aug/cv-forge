@@ -67,7 +67,7 @@ from cvforge.track import stages as stages_mod
 from cvforge.track import tracker
 from cvforge.track.due import due_report
 
-SECTIONS = ("summary", "experience", "skills", "education", "certificates", "languages")
+SECTIONS = ("summary", "experience", "projects", "skills", "education", "certificates", "languages")
 LARGE_PAGE_CAP = 1000
 
 
@@ -98,6 +98,8 @@ def untailored(master: dict, lang: str, angle: str | None = None) -> dict:
         "lang": lang,
         "summary": summary,
         "experience": experience,
+        "projects": [{"ref": p["id"], "text": localized(p["description"], lang, item_id=p["id"])}
+                     for p in master.get("projects", [])],
         "skills": [{"ref": s["id"], "keywords": s["keywords"]} for s in master.get("skills", [])],
         "education": [e["id"] for e in master.get("education", [])],
         "certificates": [c["id"] for c in master.get("certificates", [])],

@@ -88,6 +88,7 @@ def _iter_items(master: dict):
             for highlight in position.get("highlights", []):
                 yield "highlight", highlight
     for kind, key in (
+        ("project", "projects"),
         ("skill", "skills"),
         ("education", "education"),
         ("certificate", "certificates"),

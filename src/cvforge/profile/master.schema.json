@@ -245,6 +245,39 @@
         "additionalProperties": false
       }
     },
+    "projects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$(?!\n)"
+          },
+          "name": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/$defs/L"
+          },
+          "description": {
+            "$ref": "#/$defs/L"
+          },
+          "explain": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description"
+        ],
+        "additionalProperties": false
+      }
+    },
     "skills": {
       "type": "array",
       "items": {
