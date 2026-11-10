@@ -48,10 +48,12 @@
 % Each contact item is its own header element, so moderncv wraps the line between
 % items instead of clipping it at the page edge. \extrainfo normally adds one element;
 % the patch lets it add several. Plain visible text: no icons or labels in the text layer.
+% \cvheadnewline ends the current contact line, the way moderncv ends the address line.
 \usepackage{etoolbox}
 \makeatletter
 \patchcmd{\makehead}{\addtomakeheaddetails{\@extrainfo}}{\@extrainfo}{}%
   {\PackageError{cvforge}{cannot patch moderncv \string\makehead\space for the contact line}{}}
+\newcommand*{\cvheadnewline}{\flushmakeheaddetails\@firstmakeheaddetailselementtrue\\}
 % The name stays on one centred line: 34pt when it fits, otherwise scaled down to the
 % header width. The title goes on its own centred line under it (no "|" separator before
 % it), smaller than the name; it breaks only after a " | " between its parts, and each
@@ -87,6 +89,9 @@
 \makeatother
 \extrainfo{%
 %% for link in contact.links
+%% if link.newline
+\cvheadnewline%
+%% endif
 %% if link.href
 \addtomakeheaddetails{\href{\VAR{link.href | url}}{\VAR{link.text | tex}}}%
 %% else

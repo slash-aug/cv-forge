@@ -172,3 +172,9 @@ def test_project_rejects_unknown_key(tmp_path):
     path = _write_variant(tmp_path, lambda d: d["projects"][0].update(stars=10))
     with pytest.raises(ProfileError, match="projects.0.*stars"):
         load_master(path)
+
+
+def test_profile_line_must_be_positive(tmp_path):
+    path = _write_variant(tmp_path, lambda d: d["basics"]["profiles"][0].update(line=0))
+    with pytest.raises(ProfileError, match="profiles.0.line"):
+        load_master(path)

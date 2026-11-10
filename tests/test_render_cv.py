@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from cvforge.profile.model import ProfileError, load_master
+from cvforge.render.contact import contact_links
 from cvforge.render.cv import build_cv_view, render_cv, render_view
 from cvforge.render.latex import (
     escape_tex,
@@ -222,6 +223,39 @@ def test_profiles_are_visible_urls_without_scheme_or_www():
     tex = render_cv(T, master)
     assert r"\href{https://uk.linkedin.com/in/ana-exemplo}{uk.linkedin.com/in/ana-exemplo}" in tex
     assert r"{ana.example.com/me\_x}" in tex
+
+
+def test_contact_lines_group_profiles_by_line():
+    basics = {"phone": "+1 555", "email": "a@example.com", "profiles": [
+        {"network": "Shop", "url": "https://shop.example.com", "line": 2},
+        {"network": "LinkedIn", "url": "https://linkedin.com/in/a"},
+        {"network": "GitHub", "url": "https://github.com/a"},
+        {"network": "Blog", "url": "https://blog.example.com", "line": 2},
+    ]}
+    links = contact_links(basics)
+    assert [(l["text"], l["newline"]) for l in links] == [
+        ("+1 555", False), ("a@example.com", False),
+        ("linkedin.com/in/a", True), ("github.com/a", False),
+        ("shop.example.com", True), ("blog.example.com", False),
+    ]
+
+
+def test_profiles_alone_start_on_the_first_line():
+    links = contact_links({"profiles": [{"network": "GitHub", "url": "https://github.com/a"}]})
+    assert links[0]["newline"] is False
+
+
+def test_contact_line_break_in_template():
+    master = copy.deepcopy(M)
+    master["basics"]["profiles"] = [
+        {"network": "LinkedIn", "url": "https://linkedin.com/in/ana"},
+        {"network": "Shop", "url": "https://shop.example.com", "line": 2},
+    ]
+    tex = render_cv(T, master)
+    head = tex[tex.index(r"\extrainfo{"):]
+    assert head.count(r"\cvheadnewline%") == 2
+    assert head.index(r"\cvheadnewline%") < head.index("linkedin.com/in/ana")
+    assert head.rindex(r"\cvheadnewline%") < head.index("shop.example.com")
 
 
 def _compiled_text(cfg, tailored, jobname):

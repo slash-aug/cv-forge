@@ -60,6 +60,15 @@ def test_letter_href_target_keeps_tilde():
     assert r"\href{https://linkedin.com/in/~ana}" in render_letter(T, master, today=TODAY)
 
 
+def test_letter_header_keeps_only_phone_email_and_linkedin():
+    master = {**M, "basics": {**M["basics"], "profiles": [
+        {"network": "LinkedIn", "url": "https://linkedin.com/in/ana"},
+        {"network": "Shop", "url": "https://shop.example.com", "line": 2}]}}
+    out = render_letter(T, master, today=TODAY)
+    assert "linkedin.com/in/ana" in out and "ana.exemplo@example.com" in out
+    assert "shop.example.com" not in out
+
+
 def test_letter_missing_raises():
     t = {k: v for k, v in T.items() if k != "letter"}
     with pytest.raises(ProfileError, match="tailored has no letter"):
