@@ -31,9 +31,9 @@ def format_letter_date(day: date, lang: str) -> str:
 
 
 def _header_links(basics: dict) -> list[dict]:
-    """Phone, email and LinkedIn only (the CV also lists GitHub)."""
-    return [l for l in contact_links(basics)
-            if "github.com" not in l["text"]]
+    """Phone, email and LinkedIn only (the CV also lists GitHub and other profiles)."""
+    profiles = [p for p in basics.get("profiles", []) if p["network"].casefold() == "linkedin"]
+    return contact_links({**basics, "profiles": profiles})
 
 
 def letter_context(tailored: dict, master: dict, today: date | None = None,
