@@ -50,12 +50,16 @@ def _texts(value) -> list[str]:
     return [value] if isinstance(value, str) else list(value.values())
 
 
-def _highlight_numbers(highlight: dict) -> set[str]:
-    found: set[str] = set()
-    for key in ("impact", "technical"):
-        for text in _texts(highlight.get(key)):
-            found |= _numbers(text)
-    return found
+# The master fields whose numbers each citable kind grounds.
+NUMBER_FIELDS = {
+    "highlight": ("impact", "technical"),
+    "project": ("status", "description"),
+    "summary": ("text",),
+}
+
+
+def _item_numbers(kind: str, item: dict) -> set[str]:
+    return figures(*(t for key in NUMBER_FIELDS[kind] for t in _texts(item.get(key))))
 
 
 def _para_text(paragraph) -> str:
@@ -72,6 +76,8 @@ def _strings(tailored: dict):
         for position in work.get("positions", []):
             for bullet in position.get("bullets", []):
                 yield bullet.get("ref", "bullet"), bullet.get("text", "")
+    for project in tailored.get("projects", []):
+        yield project.get("ref", "project"), project.get("text", "")
     for skill in tailored.get("skills", []):
         for keyword in skill.get("keywords", []):
             yield skill.get("ref", "skill"), keyword
@@ -129,8 +135,15 @@ def _audit_experience(tailored: dict, ids: dict, findings: list[Finding]):
                         Finding("wrong-parent", bullet["ref"], f"not a highlight of {position['id']}")
                     )
                 _check_numbers(
-                    bullet["ref"], bullet.get("text", ""), _highlight_numbers(highlight), findings
+                    bullet["ref"], bullet.get("text", ""), _item_numbers("highlight", highlight), findings
                 )
+
+
+def _audit_projects(tailored: dict, ids: dict, findings: list[Finding]):
+    for selection in tailored.get("projects", []):
+        project = _resolve(ids, selection.get("ref"), "project", findings)
+        if project is not None:
+            _check_numbers(selection["ref"], selection.get("text", ""), _item_numbers("project", project), findings)
 
 
 def _audit_summary(tailored: dict, ids: dict, findings: list[Finding]):
@@ -144,32 +157,26 @@ def _audit_summary(tailored: dict, ids: dict, findings: list[Finding]):
 
 
 def _broad_numbers(ids: dict, summary: dict | None = None) -> set[str]:
-    """Numbers allowed in free prose: all highlights plus the given summary (or every summary)."""
+    """Numbers allowed in free prose: all highlights and projects plus the given summary (or every summary)."""
     allowed: set[str] = set()
     for kind, item in ids.values():
-        if kind == "highlight":
-            allowed |= _highlight_numbers(item)
-        elif kind == "summary" and (summary is None or item is summary):
-            for text in _texts(item.get("text")):
-                allowed |= _numbers(text)
+        if kind in NUMBER_FIELDS and (kind != "summary" or summary is None or item is summary):
+            allowed |= _item_numbers(kind, item)
     return allowed
 
 
 def _ref_numbers(refs: list, ids: dict, findings: list[Finding]) -> set[str]:
-    """Numbers found in the cited highlights and summaries; unknown refs become findings."""
+    """Numbers found in the cited highlights, projects and summaries; unknown refs become findings."""
     allowed: set[str] = set()
     for ref in refs:
         entry = ids.get(ref)
-        if entry is None or entry[0] not in ("highlight", "summary"):
+        if entry is None or entry[0] not in NUMBER_FIELDS:
             found = "no such id" if entry is None else f"is a {entry[0]}"
             findings.append(
-                Finding("unknown-ref", str(ref), f"expected a highlight or summary id, {found}")
+                Finding("unknown-ref", str(ref), f"expected a {', '.join(NUMBER_FIELDS)} id, {found}")
             )
-        elif entry[0] == "highlight":
-            allowed |= _highlight_numbers(entry[1])
         else:
-            for text in _texts(entry[1].get("text")):
-                allowed |= _numbers(text)
+            allowed |= _item_numbers(*entry)
     return allowed
 
 
@@ -294,6 +301,7 @@ def audit(tailored: dict, master: dict, *,
     findings: list[Finding] = []
     _audit_summary(tailored, ids, findings)
     _audit_experience(tailored, ids, findings)
+    _audit_projects(tailored, ids, findings)
     _audit_skills(tailored, ids, findings)
     _audit_id_lists(tailored, ids, findings)
     _audit_letter(tailored, ids, findings)

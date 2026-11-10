@@ -181,6 +181,8 @@ experience:
       - ref: <position id>
         bullets:
           - {ref: <highlight id>, text: "..."}
+projects:                    # optional, side projects shown after Experience
+  - {ref: <project id>, text: "..."}
 skills:
   - {ref: <skill group id>, keywords: [ ... ]}   # keywords only from that group
 education: [<id>, ...]
@@ -209,7 +211,7 @@ email:                       # only when the candidate applies by email
 ```
 
 - **Language:** English posting: `en`. Brazilian Portuguese posting: `pt-BR`. Portuguese posting from a company based in Portugal: `pt-PT`.
-- **CV selection:** pick the angle and the summary that fit the role; keep the work entries, positions and highlights that match the posting's requirements, most relevant first; keep the CV to at most 2 pages.
+- **CV selection:** pick the angle and the summary that fit the role; keep the work entries, positions and highlights that match the posting's requirements, most relevant first; pick the projects that support the role (each `text` may shorten its master description, with no new numbers); keep the CV to at most 2 pages. Letter and note `refs` may cite project ids.
 - **Letter:** exactly one page. Every paragraph is `{text, refs}`, and `refs` lists the master ids behind each fact in it. Concrete, specific to this company and role, no generic praise.
 - **recruiter_note.connect:** for a LinkedIn connection request. At most **160 characters**. One or two natural, plain sentences: who the candidate is, the role, one hook. No list of skills, no pitch, no flattery.
 - **recruiter_note.message:** at most about 1,200 characters, for an InMail or email to the recruiter. Same tone, a little more detail.

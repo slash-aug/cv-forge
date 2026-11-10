@@ -9,6 +9,11 @@ def contact_links(basics: dict) -> list[dict]:
     if basics.get("email"):
         links.append({"text": basics["email"], "href": "mailto:" + basics["email"]})
     for profile in basics.get("profiles", []):
-        bare = profile["url"].split("://", 1)[-1].strip("/")
-        links.append({"text": bare.removeprefix("www."), "href": "https://" + bare})
+        links.append(url_link(profile["url"]))
     return links
+
+
+def url_link(url: str) -> dict:
+    """A URL as visible text without scheme or www, linking to its https address."""
+    bare = url.split("://", 1)[-1].strip("/")
+    return {"text": bare.removeprefix("www."), "href": "https://" + bare}

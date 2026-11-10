@@ -322,3 +322,39 @@ def test_audit_answer_confidential_em_dash_and_limit():
         ("confidential", "answer"),
         ("length", "answer"),
     ]
+
+
+def _project(data):
+    return data["projects"][0]
+
+
+def test_project_number_not_in_master_flagged():
+    t = _variant(lambda d: _project(d).update(text="Task tracker with 7 calendar integrations."))
+    findings = audit(t, M)
+    assert [(f.kind, f.ref) for f in findings] == [("number", "pr-tasklog")]
+
+
+def test_project_unknown_ref():
+    t = _variant(lambda d: _project(d).update(ref="pr-missing"))
+    assert _kinds(t) == ["unknown-ref"]
+
+
+def test_project_ref_must_be_a_project():
+    t = _variant(lambda d: _project(d).update(ref="h-load-time"))
+    assert _kinds(t) == ["unknown-ref"]
+
+
+def test_letter_may_cite_a_project():
+    t = _variant(lambda d: d["letter"]["paragraphs"].append(
+        {"text": "I built Tasklog with 3 calendar integrations.", "refs": ["pr-tasklog"]}))
+    assert audit(t, M) == []
+
+
+def test_em_dash_and_confidential_in_project_text():
+    t = _variant(lambda d: _project(d).update(text=f"Task tracker {EM_DASH} projectzebra."))
+    assert [(f.kind, f.ref) for f in audit(t, M)] == [("em-dash", "pr-tasklog"), ("confidential", "pr-tasklog")]
+
+
+def test_unreferenced_letter_may_use_project_numbers():
+    t = _variant(lambda d: d["letter"]["paragraphs"].append("Tasklog has 3 calendar integrations."))
+    assert audit(t, M) == []

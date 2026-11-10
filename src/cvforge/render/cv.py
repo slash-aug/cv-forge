@@ -2,16 +2,18 @@
 import re
 
 from cvforge.profile.model import ProfileError, index, localized
-from cvforge.render.contact import contact_links
+from cvforge.render.contact import contact_links, url_link
 from cvforge.render.irish import REFERENCES, Region, irish_spelling, skill_keywords
 from cvforge.render.latex import format_date, format_range, jinja_env
 
 HEADINGS = {
-    "en": {"summary": "Summary", "experience": "Experience", "skills": "Skills",
+    "en": {"summary": "Summary", "experience": "Experience", "projects": "Projects", "skills": "Skills",
            "education": "Education", "certificates": "Certifications", "languages": "Languages"},
-    "pt-BR": {"summary": "Resumo", "experience": "Experiência Profissional", "skills": "Competências",
+    "pt-BR": {"summary": "Resumo", "experience": "Experiência Profissional", "projects": "Projetos",
+              "skills": "Competências",
               "education": "Formação", "certificates": "Certificações", "languages": "Idiomas"},
-    "pt-PT": {"summary": "Resumo", "experience": "Experiência Profissional", "skills": "Competências",
+    "pt-PT": {"summary": "Resumo", "experience": "Experiência Profissional", "projects": "Projetos",
+              "skills": "Competências",
               "education": "Formação", "certificates": "Certificações", "languages": "Línguas"},
 }
 INTERNATIONAL = {
@@ -65,6 +67,19 @@ def _positions(employer: dict, entry: dict, lang: str, ids: dict) -> list[dict]:
     return sorted(rows, key=lambda r: r["start"], reverse=True)
 
 
+def _projects(tailored: dict, lang: str, ids: dict) -> list[dict]:
+    rows = []
+    for selection in tailored.get("projects", []):
+        project = _lookup(ids, selection["ref"], "project")
+        rows.append({
+            "name": project["name"],
+            "text": selection["text"],
+            "status": localized(project["status"], lang, item_id=project["id"]) if project.get("status") else "",
+            "link": url_link(project["url"]) if project.get("url") else None,
+        })
+    return rows
+
+
 def build_cv_view(tailored: dict, master: dict, region: Region | None = None) -> dict:
     """Resolve refs and localise everything; the template only formats.
 
@@ -108,18 +123,22 @@ def build_cv_view(tailored: dict, master: dict, region: Region | None = None) ->
         fluency = localized(item["fluency"], lang, item_id=ref)
         detail = ", ".join(p for p in (fluency, item.get("cefr")) if p)
         languages.append({"name": localized(item["language"], lang, item_id=ref), "detail": detail})
+    projects = _projects(tailored, lang, ids)
     summary = (tailored.get("summary") or {}).get("text", "")
     if region is not None and region.spelling and lang == "en":
         keep = skill_keywords(master)
         summary = irish_spelling(summary, keep)
         for job in experience:
             job["bullets"] = [irish_spelling(b, keep) for b in job["bullets"]]
+        for project in projects:
+            project["text"] = irish_spelling(project["text"], keep)
     view = {
         "lang": lang,
         "headings": HEADINGS[lang],
         "contact": _contact(master["basics"], lang, region),
         "summary": summary,
         "experience": experience,
+        "projects": projects,
         "skills": skills,
         "education": education,
         "certificates": certificates,
