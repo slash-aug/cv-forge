@@ -140,13 +140,19 @@ def test_track_url_refuses_bad_links_and_unknown_slugs(data, capsys):
     main(["track", "add", "other", "--company", "Z", "--role", "Q", "--url", "https://jobs.example/z"])
     before = (data / "tracker.csv").read_text(encoding="utf-8")
     capsys.readouterr()
-    assert main(["track", "url", "acme-dev", "https://www.linkedin.com/jobs/view/1"]) == 1
-    assert "LinkedIn" in capsys.readouterr().err
+    assert main(["track", "url", "acme-dev", "jobs.example/dev"]) == 1
+    assert "not a web link" in capsys.readouterr().err
     assert main(["track", "url", "nope", "https://jobs.example/x"]) == 1
     assert "unknown slug" in capsys.readouterr().err
     assert main(["track", "url", "acme-dev", "https://jobs.example/z"]) == 3
     assert "already tracked: other" in capsys.readouterr().out
     assert (data / "tracker.csv").read_text(encoding="utf-8") == before
+
+
+def test_track_url_stores_a_linkedin_link(data):
+    _pasted(data)
+    assert main(["track", "url", "acme-dev", "https://www.linkedin.com/jobs/view/1"]) == 0
+    assert tracker.load(data / "tracker.csv")[0]["url"] == "https://www.linkedin.com/jobs/view/1"
 
 
 def test_track_url_without_posting_updates_the_tracker_only(data):

@@ -33,6 +33,7 @@ from cvforge.apply.intake import (
     fetch_posting,
     job_link,
     posting_from_text,
+    refuse_linkedin,
     resolve_shortlink,
 )
 from cvforge.apply.ireland import route_for
@@ -296,6 +297,7 @@ def cmd_intake(args) -> int:
                                         url=url, today=today)
         else:
             url = job_link(resolve_shortlink(args.target, apply_http.get))
+            refuse_linkedin(url)
             if tracked(url=url):
                 return 3
             posting = fetch_posting(url, get=apply_http.get, today=today)
@@ -1101,7 +1103,7 @@ def _parser() -> argparse.ArgumentParser:
     t.add_argument("--role", required=True)
     for opt in ("url", "channel", "source", "deadline"):
         t.add_argument(f"--{opt}")
-    t = track.add_parser("url", help="set the job link of an application (never LinkedIn)")
+    t = track.add_parser("url", help="set the job link of an application (stored, never fetched)")
     t.add_argument("slug")
     t.add_argument("link")
     t = track.add_parser("status", help="set an application status")
@@ -1124,7 +1126,7 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--company")
     p.add_argument("--role")
     p.add_argument("--channel")
-    p.add_argument("--url", help="with pasted text: the job's own link (never LinkedIn)")
+    p.add_argument("--url", help="with pasted text: the job link, kept for the kit and never fetched")
     p.add_argument("--force", action="store_true", help="intake even if already tracked")
     p.set_defaults(func=cmd_intake)
     p = sub.add_parser("company", help="company registry and visa sponsor marks")

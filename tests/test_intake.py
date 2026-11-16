@@ -411,8 +411,6 @@ def test_paste_keeps_the_job_link(env, monkeypatch, capsys):
 
 
 @pytest.mark.parametrize("args, message", [
-    (["-", "--company", "Acme", "--role", "Dev", "--url", "https://www.linkedin.com/jobs/view/1"],
-     "LinkedIn"),
     (["-", "--company", "Acme", "--role", "Dev", "--url", "jobs.example/dev"], "not a web link"),
     (["https://jobs.example/dev", "--url", "https://jobs.example/dev"], "only with pasted text"),
 ])
@@ -422,3 +420,12 @@ def test_paste_link_is_checked(env, monkeypatch, capsys, args, message):
     assert main(["intake", *args]) == 1
     assert message in capsys.readouterr().err
     assert not (env / "applications").exists()
+
+
+def test_paste_keeps_a_linkedin_link_without_fetching(env, monkeypatch, capsys):
+    monkeypatch.setattr(http, "get", _no_fetch)
+    _stdin(monkeypatch)
+    link = "https://www.linkedin.com/jobs/view/4000000001"
+    assert main(["intake", "-", "--company", "Acme", "--role", "Dev", "--url", link + "?utm_source=li"]) == 0
+    slug = capsys.readouterr().out.splitlines()[0]
+    assert Posting.load(env / "applications" / slug).url == link

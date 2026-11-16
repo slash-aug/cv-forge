@@ -58,8 +58,12 @@ def refuse_linkedin(url: str) -> None:
 
 
 def job_link(url: str) -> str:
-    """A job link given by hand: refused when it is LinkedIn or not http(s), else canonical."""
-    refuse_linkedin(url)
+    """A job link stored for the candidate to click, never fetched: http(s) only, canonical.
+
+    LinkedIn links are allowed here; refuse_linkedin guards the links intake fetches.
+    """
+    if urlsplit(url.strip()).scheme.lower() not in ("http", "https"):
+        raise IntakeError(f"not a web link: {url.strip()!r}; include https://")
     return canonical_url(url)
 
 

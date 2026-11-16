@@ -66,7 +66,7 @@ Ireland is the primary market. When the job is in Ireland, or remote and limited
      .venv/bin/cvforge intake "<url>" --channel <channel>
      ```
      For `jobs.ashbyhq.com/<org>/...` and `jobs.lever.co/<org>/...` links the API gives only the lowercase `<org>` slug as the company name, so also pass `--company "<Proper Name>"` (the company's real display name, from the candidate's message or the slug with normal capitalisation; ask if unsure). Pass `--role "<title>"` too when the candidate gave the title.
-   - **Pasted text:** both `--company` and `--role` are required. Pipe the text on stdin with a quoted heredoc, unchanged. When the candidate gave a job link that intake could not fetch, always pass it with `--url` so the kit header links to the posting (never a LinkedIn link; leave `--url` out for LinkedIn-only jobs):
+   - **Pasted text:** both `--company` and `--role` are required. Pipe the text on stdin with a quoted heredoc, unchanged. When the candidate gave a job link that intake could not fetch, always pass it with `--url` so the kit header links to the posting. A LinkedIn job link is fine here: it is only stored for the candidate to click, never opened or fetched:
      ```
      .venv/bin/cvforge intake - --company "<Company>" --role "<Role title>" --channel <channel> --url "<job link>" <<'POSTING'
      <the pasted posting, exactly as given>
