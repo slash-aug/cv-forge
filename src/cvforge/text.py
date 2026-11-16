@@ -17,6 +17,11 @@ def fold_accents(text: str) -> str:
     return "".join(ch for ch in plain if not unicodedata.combining(ch))
 
 
+def words(text: str) -> list[str]:
+    """Accent-folded words, split on anything that is not a letter or digit."""
+    return re.findall(WORD_CHAR + "+", fold_accents(text))
+
+
 def squash(text: str) -> str:
     """Folded text without whitespace, underscores or hyphens."""
     return SEPARATORS.sub("", fold(text))

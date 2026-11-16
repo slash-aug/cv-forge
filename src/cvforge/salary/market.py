@@ -3,10 +3,10 @@ from __future__ import annotations
 
 import csv
 import math
-import unicodedata
 from pathlib import Path
 
 from cvforge.profile.model import ProfileError
+from cvforge.text import words as _words
 
 MARKET_COLUMNS = ("role", "seniority", "country", "currency", "period",
                   "low", "mid", "high", "source", "year")
@@ -14,11 +14,6 @@ MARKET_COLUMNS = ("role", "seniority", "country", "currency", "period",
 
 class MarketError(ProfileError):
     pass
-
-
-def _fold(text: str) -> str:
-    plain = unicodedata.normalize("NFKD", text.casefold())
-    return "".join(c for c in plain if not unicodedata.combining(c))
 
 
 def load_market(path: Path) -> list[dict]:
@@ -52,10 +47,10 @@ def match_market(rows: list[dict], *, role: str, seniority: str, country: str) -
 
     A row's seniority matches when it is `any` or equals the posting's.
     """
-    title_words = set(_fold(role).split())
+    title_words = set(_words(role))
     out = []
     for r in rows:
-        words = _fold(r.get("role", "")).split()
+        words = _words(r.get("role", ""))
         if (r.get("country", "").upper() == country.upper()
                 and r.get("seniority", "any") in ("any", seniority)
                 and words and all(w in title_words for w in words)):

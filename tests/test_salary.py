@@ -95,6 +95,14 @@ def test_match_role_words_folded():
                         country="BR") == []
 
 
+def test_match_role_words_ignore_punctuation():
+    rows = [row(role="software developer"), row(role="full-stack developer")]
+    title = "Software Developer: Evaluate an AI Coding Assistant (Full-Stack)"
+    assert match_market(rows, role=title, seniority="any", country="BR") == rows
+    assert match_market(rows, role="Software Developmental Lead", seniority="any",
+                        country="BR") == []
+
+
 def test_template_columns_match():
     with TEMPLATE.open(encoding="utf-8", newline="") as fh:
         assert tuple(next(csv.reader(fh))) == MARKET_COLUMNS
@@ -473,3 +481,15 @@ def test_salary_json_has_local_and_brl_breakdown(env, capsys):
     assert data["breakdown"]["USD"]["month"] == 7000 and data["breakdown"]["USD"]["year"] == 84000
     assert set(data["breakdown"]["BRL"]) == {"hour", "day", "week", "month", "year"}
     assert "Per week:" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("title, level", [
+    ("Software Engineer (Senior)", "senior"),
+    ("Tech Lead, Payments", "senior"),
+    ("Sr. Developer", "senior"),
+    ("Jr. Developer", "junior"),
+    ("Full-Stack Intern", "junior"),
+    ("Software Developer: Evaluate an AI Coding Assistant", "mid"),
+])
+def test_seniority_ignores_punctuation(title, level):
+    assert cli._seniority(title) == level
