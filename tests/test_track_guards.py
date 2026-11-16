@@ -114,3 +114,49 @@ def test_stage_and_done_report_bad_stages_file(data, capsys, args):
     err = capsys.readouterr().err
     assert "bad stages file" in err and "stages.yaml" in err
     assert (app / "stages.yaml").read_text(encoding="utf-8") == "stages: {"
+
+
+def _pasted(data, slug="acme-dev"):
+    from cvforge.apply.intake import posting_from_text
+    posting_from_text("We need a developer to join the team.", company="Acme", role="Dev",
+                      url="", today=date(2026, 5, 1)).save(data / "applications" / slug)
+    main(["track", "add", slug, "--company", "Acme", "--role", "Dev"])
+
+
+def test_track_url_sets_the_link_in_tracker_and_posting(data, capsys):
+    from cvforge.apply.posting import Posting
+    _pasted(data)
+    capsys.readouterr()
+    assert main(["track", "url", "acme-dev", "https://jobs.example/acme/dev?utm_source=li"]) == 0
+    assert capsys.readouterr().out.strip() == "acme-dev: https://jobs.example/acme/dev"
+    assert tracker.load(data / "tracker.csv")[0]["url"] == "https://jobs.example/acme/dev"
+    app = data / "applications" / "acme-dev"
+    assert Posting.load(app).url == "https://jobs.example/acme/dev"
+    assert "- Link: https://jobs.example/acme/dev" in (app / "posting.md").read_text()
+
+
+def test_track_url_refuses_bad_links_and_unknown_slugs(data, capsys):
+    _pasted(data)
+    main(["track", "add", "other", "--company", "Z", "--role", "Q", "--url", "https://jobs.example/z"])
+    before = (data / "tracker.csv").read_text(encoding="utf-8")
+    capsys.readouterr()
+    assert main(["track", "url", "acme-dev", "jobs.example/dev"]) == 1
+    assert "not a web link" in capsys.readouterr().err
+    assert main(["track", "url", "nope", "https://jobs.example/x"]) == 1
+    assert "unknown slug" in capsys.readouterr().err
+    assert main(["track", "url", "acme-dev", "https://jobs.example/z"]) == 3
+    assert "already tracked: other" in capsys.readouterr().out
+    assert (data / "tracker.csv").read_text(encoding="utf-8") == before
+
+
+def test_track_url_stores_a_linkedin_link(data):
+    _pasted(data)
+    assert main(["track", "url", "acme-dev", "https://www.linkedin.com/jobs/view/1"]) == 0
+    assert tracker.load(data / "tracker.csv")[0]["url"] == "https://www.linkedin.com/jobs/view/1"
+
+
+def test_track_url_without_posting_updates_the_tracker_only(data):
+    main(["track", "add", "manual", "--company", "Acme", "--role", "Dev"])
+    assert main(["track", "url", "manual", "https://jobs.example/acme/dev"]) == 0
+    assert tracker.load(data / "tracker.csv")[0]["url"] == "https://jobs.example/acme/dev"
+    assert not (data / "applications" / "manual").exists()

@@ -31,12 +31,13 @@ from cvforge.apply.ie_permits import load_permit_table
 from cvforge.apply.intake import (
     IntakeError,
     fetch_posting,
+    job_link,
     posting_from_text,
     refuse_linkedin,
     resolve_shortlink,
 )
 from cvforge.apply.ireland import route_for
-from cvforge.apply.posting import Posting, canonical_url
+from cvforge.apply.posting import Posting
 from cvforge.apply.requirements import load_requirements, posting_text, quote_problems
 from cvforge.apply.seed import seed_ie
 from cvforge.apply.workspace import create_app_dir
@@ -276,6 +277,9 @@ def cmd_intake(args) -> int:
     if paste and not (args.company and args.role):
         print("pasted text needs --company and --role", file=sys.stderr)
         return 1
+    if args.url and not paste:
+        print("--url goes only with pasted text; a link target is already the job link", file=sys.stderr)
+        return 1
 
     def tracked(**kw) -> bool:
         existing = tracker.find(tracker.load(path), **kw)
@@ -286,12 +290,13 @@ def cmd_intake(args) -> int:
 
     try:
         if paste:
-            if tracked(company=args.company, role=args.role):
+            url = job_link(args.url) if args.url else ""
+            if tracked(url=url) or tracked(company=args.company, role=args.role):
                 return 3
             posting = posting_from_text(sys.stdin.read(), company=args.company, role=args.role,
-                                        url="", today=today)
+                                        url=url, today=today)
         else:
-            url = canonical_url(resolve_shortlink(args.target, apply_http.get))
+            url = job_link(resolve_shortlink(args.target, apply_http.get))
             refuse_linkedin(url)
             if tracked(url=url):
                 return 3
@@ -330,7 +335,7 @@ def cmd_track(args) -> int:
     today = _today()
     if args.action == "show":
         return _show_application(path, app_dir, args.slug, today)
-    if args.action in ("stage", "done") and not any(
+    if args.action in ("stage", "done", "url") and not any(
             r["slug"] == args.slug for r in tracker.load(path)
         ):
         print(f"unknown slug '{args.slug}'", file=sys.stderr)
@@ -363,6 +368,8 @@ def cmd_track(args) -> int:
             print(str(exc.args[0]), file=sys.stderr)
             return 1
         print(f"{args.slug}: {args.status}")
+    elif args.action == "url":
+        return _set_job_link(path, app_dir, args.slug, args.link)
     elif args.action == "stage":
         try:
             due = date.fromisoformat(args.due) if args.due else None
@@ -384,6 +391,26 @@ def cmd_track(args) -> int:
             print(str(exc.args[0]), file=sys.stderr)
             return 1
         print(f"stage done: {args.name}")
+    return 0
+
+
+def _set_job_link(path: Path, app_dir: Path, slug: str, link: str) -> int:
+    """Set an application's job link in the tracker and, when there is one, its posting."""
+    try:
+        url = job_link(link)
+    except IntakeError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    other = tracker.find(tracker.load(path), url=url)
+    if other and other["slug"] != slug:
+        print(f"already tracked: {other['slug']} ({other['status']})")
+        return 3
+    if (app_dir / "posting.json").exists():
+        posting = Posting.load(app_dir)
+        posting.url = url
+        posting.save(app_dir)
+    tracker.upsert(path, {"slug": slug, "url": url})
+    print(f"{slug}: {url}")
     return 0
 
 
@@ -1076,6 +1103,9 @@ def _parser() -> argparse.ArgumentParser:
     t.add_argument("--role", required=True)
     for opt in ("url", "channel", "source", "deadline"):
         t.add_argument(f"--{opt}")
+    t = track.add_parser("url", help="set the job link of an application (stored, never fetched)")
+    t.add_argument("slug")
+    t.add_argument("link")
     t = track.add_parser("status", help="set an application status")
     t.add_argument("slug")
     t.add_argument("status", choices=tracker.STATUSES)
@@ -1096,6 +1126,7 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--company")
     p.add_argument("--role")
     p.add_argument("--channel")
+    p.add_argument("--url", help="with pasted text: the job link, kept for the kit and never fetched")
     p.add_argument("--force", action="store_true", help="intake even if already tracked")
     p.set_defaults(func=cmd_intake)
     p = sub.add_parser("company", help="company registry and visa sponsor marks")
