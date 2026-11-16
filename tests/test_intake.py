@@ -1,3 +1,4 @@
+import io
 import json
 from datetime import date
 from pathlib import Path
@@ -175,7 +176,6 @@ def test_intake_creates_workspace_and_row(env, capsys):
 
 
 def test_paste_requires_company_and_role(env, monkeypatch, capsys):
-    import io
     monkeypatch.setattr("sys.stdin", io.StringIO("We need a dev."))
     assert main(["intake", "-"]) == 1
     assert "--company" in capsys.readouterr().err
@@ -388,3 +388,37 @@ def test_flight_data_without_greenhouse_job_still_asks_for_paste():
     page = GH_EMBED_PAGE.replace('\\"job\\":', '\\"other\\":')
     with pytest.raises(IntakeError, match="paste the text instead"):
         fetch_posting(GH_EMBED_URL, get=lambda u, **k: page, today=TODAY)
+
+
+LINK = "https://jobs.example/acme/dev"
+
+
+def _stdin(monkeypatch):
+    monkeypatch.setattr("sys.stdin", io.StringIO("We need a developer to join the team."))
+
+
+def test_paste_keeps_the_job_link(env, monkeypatch, capsys):
+    _stdin(monkeypatch)
+    assert main(["intake", "-", "--company", "Acme", "--role", "Dev",
+                 "--url", LINK + "?utm_source=li&source=linkedin"]) == 0
+    slug = capsys.readouterr().out.splitlines()[0]
+    assert Posting.load(env / "applications" / slug).url == LINK
+    assert f"- Link: {LINK}" in (env / "applications" / slug / "posting.md").read_text()
+    assert tracker.load(env / "tracker.csv")[0]["url"] == LINK
+    # the same link pasted again is already tracked
+    _stdin(monkeypatch)
+    assert main(["intake", "-", "--company", "Other", "--role", "Role", "--url", LINK]) == 3
+
+
+@pytest.mark.parametrize("args, message", [
+    (["-", "--company", "Acme", "--role", "Dev", "--url", "https://www.linkedin.com/jobs/view/1"],
+     "LinkedIn"),
+    (["-", "--company", "Acme", "--role", "Dev", "--url", "jobs.example/dev"], "not a web link"),
+    (["https://jobs.example/dev", "--url", "https://jobs.example/dev"], "only with pasted text"),
+])
+def test_paste_link_is_checked(env, monkeypatch, capsys, args, message):
+    monkeypatch.setattr(http, "get", _no_fetch)
+    _stdin(monkeypatch)
+    assert main(["intake", *args]) == 1
+    assert message in capsys.readouterr().err
+    assert not (env / "applications").exists()

@@ -57,6 +57,12 @@ def refuse_linkedin(url: str) -> None:
         raise IntakeError(LINKEDIN_REFUSED)
 
 
+def job_link(url: str) -> str:
+    """A job link given by hand: refused when it is LinkedIn or not http(s), else canonical."""
+    refuse_linkedin(url)
+    return canonical_url(url)
+
+
 def resolve_shortlink(url: str, get: Get) -> str:
     """For lnkd.in, the first link in the interstitial that is not LinkedIn's; else the url unchanged."""
     refuse_linkedin(url)
