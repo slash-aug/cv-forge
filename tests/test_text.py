@@ -1,6 +1,6 @@
 import pytest
 
-from cvforge.text import contains_term, fold, squash
+from cvforge.text import contains_term, fold, squash, words
 
 
 def test_fold_is_nfkc_casefold():
@@ -52,3 +52,8 @@ def test_hyphenated_term_matches_at_a_word_start(text):
 def test_hyphenated_term_needs_a_word_end():
     assert not contains_term("acme-corporation", "acme-corp")
     assert contains_term("acme-corp.", "acme-corp")
+
+
+def test_words_drop_punctuation_and_accents():
+    assert words("Sênior Developer: (Full-Stack), node_js") == [
+        "senior", "developer", "full", "stack", "node", "js"]

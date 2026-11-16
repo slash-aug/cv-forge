@@ -64,6 +64,7 @@ from cvforge.salary.market import load_market, match_market
 from cvforge.salary.suggest import Suggestion, below_floor, displays, suggest
 from cvforge.tailor.audit import Finding, audit, audit_rendered, load_tailored
 from cvforge.text import file_part, split_name
+from cvforge.text import words as text_words
 from cvforge.track import stages as stages_mod
 from cvforge.track import tracker
 from cvforge.track.due import due_report
@@ -726,10 +727,10 @@ def cmd_check(args) -> int:
 
 
 def _seniority(title: str) -> str:
-    words = set(title.casefold().replace("-", " ").split())
-    if words & {"senior", "sr", "sr.", "staff", "principal", "lead"}:
+    words = set(text_words(title))
+    if words & {"senior", "sr", "staff", "principal", "lead"}:
         return "senior"
-    if words & {"junior", "jr", "jr.", "intern", "trainee"}:
+    if words & {"junior", "jr", "intern", "trainee"}:
         return "junior"
     return "mid"
 
