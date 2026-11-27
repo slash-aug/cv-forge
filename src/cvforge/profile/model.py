@@ -103,22 +103,51 @@ def _duplicate_id_problems(master: dict) -> list[str]:
     return [f"duplicate id '{item_id}' ({n} times)" for item_id, n in counts.items() if n > 1]
 
 
+def text_in(value: str | dict | None, lang: str) -> str | None:
+    """A localized value in `lang`, or None when it has no text for that language."""
+    if isinstance(value, dict):
+        return value.get(lang)
+    return value
+
+
+def positions(master: dict):
+    return (item for kind, item in _iter_items(master) if kind == "position")
+
+
+def reference_problems(master: dict) -> list[str]:
+    """Broken `x-form` and `x-labels` references."""
+    problems = []
+    for position in positions(master):
+        own = {h["id"] for h in position["highlights"]}
+        pins = [pin["ref"] for pin in (position.get("x-form") or {}).get("pinned", [])]
+        problems.extend(f"x-form pins '{ref}' twice in {position['id']}"
+                        for ref, n in Counter(pins).items() if n > 1)
+        for pin in (position.get("x-form") or {}).get("pinned", []):
+            if pin["ref"] not in own:
+                problems.append(
+                    f"x-form pinned '{pin['ref']}' is not a highlight of {position['id']}")
+    for skill in master.get("skills", []):
+        for keyword in skill.get("x-labels") or {}:
+            if keyword not in skill["keywords"]:
+                problems.append(f"x-labels '{keyword}' is not a keyword of {skill['id']}")
+    return problems
+
+
 def load_master(path: Path) -> dict:
     master = read_yaml(path, "master profile")
     problems = schema_problems(master, load_schema())
     if not problems:
-        problems = _duplicate_id_problems(master)
+        problems = _duplicate_id_problems(master) + reference_problems(master)
     if problems:
         raise ProfileError(f"{path}: " + "; ".join(problems))
     return master
 
 
 def localized(value: str | dict, lang: str, *, item_id: str) -> str:
-    if isinstance(value, str):
-        return value
-    if lang not in value:
+    text = text_in(value, lang)
+    if text is None:
         raise ProfileError(f"{item_id}: missing translation '{lang}'")
-    return value[lang]
+    return text
 
 
 def index(master: dict) -> dict[str, tuple[str, dict]]:

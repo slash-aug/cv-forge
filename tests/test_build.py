@@ -171,3 +171,25 @@ def test_timeout_raises_latex_error(tmp_path):
     stub.chmod(0o755)
     with pytest.raises(LatexError, match="timed out"):
         compile_tex("x", engine=str(stub), build_dir=tmp_path / "b", jobname="t", timeout=1)
+
+
+@pytest.mark.latex
+def test_letter_pdf_is_a4_and_one_page(cfg):
+    pdf = compile_tex(render_letter(T, M), engine=_need(cfg, "xelatex"),
+                      build_dir=cfg.build_dir / "test", jobname="letter_a4", assets=ASSETS_DIR)
+    pages = PdfReader(pdf).pages
+    assert len(pages) == 1
+    assert (round(float(pages[0].mediabox.width)), round(float(pages[0].mediabox.height))) == (595, 842)
+
+
+@pytest.mark.latex
+@pytest.mark.parametrize("padding", [22, 24, 26, 27, 28, 29, 30, 32])
+def test_a_grouped_role_never_opens_a_page_without_its_employer(cfg, padding):
+    tailored = copy.deepcopy(T)
+    lead = tailored["experience"][1]["positions"][0]
+    lead["bullets"] = [{"ref": "h-team-lead", "text": f"Padding bullet {n}."} for n in range(padding)]
+    pdf = compile_tex(render_cv(tailored, M), engine=_need(cfg, "lualatex"),
+                      build_dir=cfg.build_dir / "test", jobname=f"grouped{padding}", assets=ASSETS_DIR)
+    pages = [p.extract_text() for p in PdfReader(pdf).pages]
+    role_page = next(text for text in pages if "Software Engineer" in text)
+    assert "ExamplePay" in role_page

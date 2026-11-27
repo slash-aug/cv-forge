@@ -1,7 +1,7 @@
 """Render a tailored CV to moderncv LaTeX: view-model builder, then template."""
 import re
 
-from cvforge.profile.model import ProfileError, index, localized
+from cvforge.profile.model import ProfileError, index, localized, text_in
 from cvforge.render.contact import contact_links, url_link
 from cvforge.render.irish import REFERENCES, Region, irish_spelling, skill_keywords
 from cvforge.render.latex import format_date, format_range, jinja_env
@@ -62,6 +62,7 @@ def _positions(employer: dict, entry: dict, lang: str, ids: dict) -> list[dict]:
             "title": localized(position["title"], lang, item_id=position["id"]),
             "employer": localized(employer["name"], lang, item_id=employer["id"]),
             "location": location,
+            "employer_id": employer["id"],
             "bullets": [b["text"] for b in ref["bullets"]],
         })
     return sorted(rows, key=lambda r: r["start"], reverse=True)
@@ -80,6 +81,23 @@ def _projects(tailored: dict, lang: str, ids: dict) -> list[dict]:
     return rows
 
 
+def _skill_row(skill: dict, keywords: list[str], lang: str) -> dict:
+    """The printed skill line: `x-labels` renames a keyword in a language, nothing else does."""
+    labels = skill.get("x-labels") or {}
+    return {"name": localized(skill["name"], lang, item_id=skill["id"]),
+            "keywords": ", ".join(text_in(labels.get(k), lang) or k for k in keywords)}
+
+
+def _mark_grouped(rows: list[dict]) -> list[dict]:
+    """`grouped` marks a row under the same employer as the one above it."""
+    previous = None
+    for row in rows:
+        employer_id = row.pop("employer_id")
+        row["grouped"] = employer_id == previous
+        previous = employer_id
+    return rows
+
+
 def build_cv_view(tailored: dict, master: dict, region: Region | None = None) -> dict:
     """Resolve refs and localise everything; the template only formats.
 
@@ -91,11 +109,8 @@ def build_cv_view(tailored: dict, master: dict, region: Region | None = None) ->
     for entry in tailored.get("experience", []):
         employer = _lookup(ids, entry["ref"], "work")
         experience.extend(_positions(employer, entry, lang, ids))
-    skills = [
-        {"name": localized(_lookup(ids, s["ref"], "skill")["name"], lang, item_id=s["ref"]),
-         "keywords": ", ".join(s["keywords"])}
-        for s in tailored.get("skills", [])
-    ]
+    skills = [_skill_row(_lookup(ids, s["ref"], "skill"), s["keywords"], lang)
+              for s in tailored.get("skills", [])]
     education = []
     for ref in tailored.get("education", []):
         ed = _lookup(ids, ref, "education")
@@ -137,7 +152,7 @@ def build_cv_view(tailored: dict, master: dict, region: Region | None = None) ->
         "headings": HEADINGS[lang],
         "contact": _contact(master["basics"], lang, region),
         "summary": summary,
-        "experience": experience,
+        "experience": _mark_grouped(experience),
         "projects": projects,
         "skills": skills,
         "education": education,

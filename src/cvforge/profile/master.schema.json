@@ -189,6 +189,27 @@
                     }
                   ]
                 },
+                "x-form": {
+                  "type": "object",
+                  "properties": {
+                    "context": {"$ref": "#/$defs/L"},
+                    "pinned": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "ref": {"type": "string"},
+                          "short": {"$ref": "#/$defs/L"}
+                        },
+                        "required": ["ref"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "cv_lead": {"type": "boolean"}
+                  },
+                  "required": ["context", "pinned"],
+                  "additionalProperties": false
+                },
                 "highlights": {
                   "type": "array",
                   "items": {
@@ -299,6 +320,10 @@
             "items": {
               "type": "string"
             }
+          },
+          "x-labels": {
+            "type": "object",
+            "additionalProperties": {"$ref": "#/$defs/L"}
           }
         },
         "required": [

@@ -3,7 +3,14 @@ from pathlib import Path
 import pytest
 import yaml
 
-from cvforge.profile.model import ProfileError, index, load_master, localized
+from cvforge import cli
+from cvforge.kit.describe import form_length_problems
+from cvforge.profile.model import (
+    ProfileError,
+    index,
+    load_master,
+    localized,
+)
 
 PERSONA = Path(__file__).resolve().parent.parent / "examples" / "persona" / "master.yaml"
 
@@ -178,3 +185,72 @@ def test_profile_line_must_be_positive(tmp_path):
     path = _write_variant(tmp_path, lambda d: d["basics"]["profiles"][0].update(line=0))
     with pytest.raises(ProfileError, match="profiles.0.line"):
         load_master(path)
+
+
+def _form(data, **extra):
+    form = {"context": {"en": "Payments team at a made-up company."},
+            "pinned": [{"ref": "h-team-lead", "short": {"en": "Led 5 engineers."}}], **extra}
+    data["work"][0]["positions"][0]["x-form"] = form
+    return form
+
+
+def test_form_and_skill_labels_accepted(tmp_path):
+    def add(data):
+        _form(data, cv_lead=True)
+        data["skills"][2]["x-labels"] = {"Testing": {"pt-BR": "Testes"}}
+
+    master = load_master(_write_variant(tmp_path, add))
+    assert master["work"][0]["positions"][0]["x-form"]["cv_lead"] is True
+    assert form_length_problems(master) == []
+
+
+def test_pinned_ref_of_another_position_rejected(tmp_path):
+    def add(data):
+        _form(data)["pinned"][0]["ref"] = "h-load-time"
+
+    with pytest.raises(ProfileError, match="h-load-time.*p-examplepay-lead"):
+        load_master(_write_variant(tmp_path, add))
+
+
+def test_label_for_unknown_keyword_rejected(tmp_path):
+    def add(data):
+        data["skills"][2]["x-labels"] = {"Juggling": {"pt-BR": "Malabarismo"}}
+
+    with pytest.raises(ProfileError, match="Juggling"):
+        load_master(_write_variant(tmp_path, add))
+
+
+def test_long_context_loads_but_fails_length_check(tmp_path):
+    def add(data):
+        _form(data)["context"] = {"en": "x" * 201}
+
+    problems = form_length_problems(load_master(_write_variant(tmp_path, add)))
+    assert any("context" in p and "201" in p for p in problems)
+
+
+@pytest.mark.parametrize("short", [True, False])
+def test_context_plus_first_pinned_must_fit_200(tmp_path, short):
+    def add(data):
+        form = _form(data)
+        form["context"] = {"en": "x" * 190}
+        if not short:
+            del form["pinned"][0]["short"]
+
+    problems = form_length_problems(load_master(_write_variant(tmp_path, add)))
+    assert any("p-examplepay-lead" in p and "first pinned" in p for p in problems)
+
+
+def test_validate_fails_on_length_problem(tmp_path, capsys):
+    def add(data):
+        _form(data)["context"] = {"en": "x" * 201}
+
+    assert cli.main(["validate", str(_write_variant(tmp_path, add))]) == 1
+    assert "context" in capsys.readouterr().out
+
+
+def test_duplicate_pinned_ref_rejected(tmp_path):
+    def add(data):
+        _form(data)["pinned"].append({"ref": "h-team-lead"})
+
+    with pytest.raises(ProfileError, match="h-team-lead.*twice"):
+        load_master(_write_variant(tmp_path, add))

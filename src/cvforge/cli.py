@@ -43,6 +43,7 @@ from cvforge.apply.seed import seed_ie
 from cvforge.apply.workspace import create_app_dir
 from cvforge.build import LatexError, compile_tex
 from cvforge.checks.ats import AtsReport, ats_check
+from cvforge.checks.quality import cv_warnings, kit_warnings
 from cvforge.config import Config, ConfigError, load_config
 from cvforge.discover import store as jobs_store
 from cvforge.discover.page import render_jobs
@@ -52,10 +53,15 @@ from cvforge.discover.screen import DROP_REASONS
 from cvforge.discover.sources import clean_text
 from cvforge.guard import GuardError, check_message_file, check_staged, check_tree
 from cvforge.kit.data import build_kit
+from cvforge.kit.describe import form_length_problems
 from cvforge.kit.render import render_kit
 from cvforge.money.normalise import PERIODS, Money, breakdown, shown_amount
 from cvforge.money.rates import MoneyError, load_rates
-from cvforge.profile.model import ProfileError, load_master, localized
+from cvforge.profile.model import (
+    ProfileError,
+    load_master,
+    localized,
+)
 from cvforge.profile.prefs import degree_recognised, ireland_pay_floor
 from cvforge.render.cv import build_cv_view, render_view
 from cvforge.render.irish import Region, ireland_region, irish_city
@@ -151,8 +157,17 @@ def _confidential_blocked(master: dict, **rendered) -> bool:
     return bool(findings)
 
 
+def _print_warnings(warnings: list[str]) -> None:
+    for warning in warnings:
+        print(f"warning: {warning}")
+
+
 def cmd_validate(args) -> int:
-    load_master(Path(args.master))
+    problems = form_length_problems(load_master(Path(args.master)))
+    if problems:
+        for problem in problems:
+            print(problem)
+        return 1
     print("ok")
     return 0
 
@@ -203,6 +218,7 @@ def cmd_build(args) -> int:
               if tailored.get("letter") and not args.no_letter else None)
     if _confidential_blocked(master, cv=view, letter=letter):
         return 1
+    _print_warnings(cv_warnings(tailored, master))
     cfg = load_config()
     target = tailored["target"]
     first, last = name_parts(master["basics"]["name"])
@@ -700,8 +716,7 @@ def cmd_check(args) -> int:
             print(f'    "{r.quote}"')
     for risk in verdict.risks:
         print(f"RISK {risk}")
-    for warning in verdict.warnings:
-        print(f"warning: {warning}")
+    _print_warnings(verdict.warnings)
     _print_caveats(verdict.caveats)
     path = cfg.data_dir / "tracker.csv"
     current = next((r["status"] for r in tracker.load(path) if r["slug"] == args.slug), "")
@@ -967,6 +982,7 @@ def cmd_kit(args) -> int:
         json.dumps(kit, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     html = app_dir / "kit.html"
     html.write_text(render_kit(kit), encoding="utf-8")
+    _print_warnings(cv_warnings(tailored, master) + kit_warnings(tailored, master))
     print(_windows_path(html) or html)
     return 0
 
