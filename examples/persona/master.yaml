@@ -79,6 +79,16 @@ work:
         title: Senior Engineer
         startDate: "2024-06"
         endDate: null
+        x-form:
+          context:
+            en: Product engineering for a made-up software company.
+            pt-BR: Engenharia de produto em uma empresa de software fictícia.
+            pt-PT: Engenharia de produto numa empresa de software fictícia.
+          pinned:
+            - ref: h-onboarding
+              short:
+                en: Rebuilt onboarding, doubling activation.
+                pt-BR: Reconstruiu o onboarding, dobrando a ativação.
         highlights:
           - id: h-roadmap
             impact: Shaped the product roadmap with customer interviews and usage data.
@@ -117,6 +127,10 @@ skills:
   - id: sk-practices
     name: Practices
     keywords: [Testing, Code review, CI/CD]
+    x-labels:
+      Testing:
+        pt-BR: Testes
+        pt-PT: Testes
 
 education:
   - id: ed-example-univ

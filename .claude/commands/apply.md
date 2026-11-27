@@ -213,6 +213,9 @@ email:                       # only when the candidate applies by email
 
 - **Language:** English posting: `en`. Brazilian Portuguese posting: `pt-BR`. Portuguese posting from a company based in Portugal: `pt-PT`.
 - **CV selection:** pick the angle and the summary that fit the role; keep the work entries, positions and highlights that match the posting's requirements, most relevant first; pick the projects that support the role (each `text` may shorten its master description, with no new numbers); keep the CV to at most 2 pages. Letter and note `refs` may cite project ids.
+- **Non-engineering jobs:** include one only when the posting involves automation or AI, ERP, business processes, logistics, sales, product or customer service; otherwise leave it out. When included, lead with its first pinned highlight (`x-form` in the master).
+- **Bullets:** at most 6 per position, strongest match first. Say what a product is the first time you name it.
+- **Letter opening:** open with the strongest match, never with a gap. A gap worth stating comes later, in one sentence. Do not default to one closing formula (the gap, then "I learn fast", then the same proof): pick the proof that fits this posting.
 - **Letter:** exactly one page. Every paragraph is `{text, refs}`, and `refs` lists the master ids behind each fact in it. Concrete, specific to this company and role, no generic praise.
 - **recruiter_note.connect:** for a LinkedIn connection request. At most **160 characters**. One or two natural, plain sentences: who the candidate is, the role, one hook. No list of skills, no pitch, no flattery.
 - **recruiter_note.message:** at most about 1,200 characters, for an InMail or email to the recruiter. Same tone, a little more detail.
@@ -229,6 +232,12 @@ email:                       # only when the candidate applies by email
 
 Exit `1` prints findings (unknown id, number not in the master, keyword outside its group, confidential term, length, em dash). Fix every finding by changing the wording or refs in `tailored.yaml`, never by changing the master, and rerun until it exits 0 with no findings (a clean audit prints nothing).
 
+**Claim review.** The audit checks numbers and refs, not meaning. Reread every sentence of the CV, letter, recruiter note, email and answers next to the master items it cites, and fix:
+
+- merged facts: a quality of one item given to two ("both integrations have retries" when only one does);
+- added cause and effect ("this change made that metric faster" when the item only lists both);
+- wider scope than the item states.
+
 ---
 
 ## Step 6: Build
@@ -238,6 +247,8 @@ Exit `1` prints findings (unknown id, number not in the master, keyword outside 
 ```
 
 This renders and compiles the CV and the letter PDFs into `<app>` and runs the ATS checks. If a check fails (page count, text layer), shorten or adjust `tailored.yaml`, rerun the audit, then rebuild. The region follows `requirements.yaml` (an Irish job gets the Irish variant); `--region none` turns the variant off.
+
+Fix every `warning:` line the build prints, then rerun the audit and rebuild. When one is right to keep, say why in the hand-off.
 
 ---
 
@@ -292,7 +303,19 @@ Usually for the `external` and `trainee` channels, whenever the candidate pastes
 .venv/bin/cvforge kit <slug>
 ```
 
-It writes `kit.json` and `kit.html` and prints the path of `kit.html` (a Windows path when available). Give the candidate that path: the page has copy buttons for the personal data, each work entry, the salary, the answers, the recruiter note and, when `tailored.yaml` has one, the email (to, subject, signed body and the files to attach).
+**Form review.** Each work description in `kit.json` is pasted into a form and read on its own. After running the command, read every one: it must say what the role or product was and show the strongest results. A position gets its context line and fixed highlights from `x-form` in the master:
+
+```yaml
+x-form:                      # on a position
+  context: {en: "...", pt-BR: "..."}     # what the role or product was, and the candidate's part
+  pinned:                                # every kit entry carries these, in order
+    - {ref: <highlight id>, short: {en: "..."}}   # short: optional wording for the 200 variant
+  cv_lead: true                          # optional: warn when the CV does not lead with the first one
+```
+
+New `x-form` text is master text: show it to the candidate, write it only after they approve, then run `.venv/bin/cvforge validate <master>`. A skill keyword is translated on a Portuguese CV with `x-labels` on its skill group (`{<keyword>: {pt-BR: "...", pt-PT: "..."}}`); `tailored.yaml` keeps the original keyword.
+
+It writes `kit.json` and `kit.html` and prints the path of `kit.html` (a Windows path when available), after any `warning:` lines (treat them as in Step 6). Give the candidate that path: the page has copy buttons for the personal data, each work entry, the salary, the answers, the recruiter note and, when `tailored.yaml` has one, the email (to, subject, signed body and the files to attach).
 
 Then check whether the browser extension server is up:
 
