@@ -103,10 +103,6 @@ def _duplicate_id_problems(master: dict) -> list[str]:
     return [f"duplicate id '{item_id}' ({n} times)" for item_id, n in counts.items() if n > 1]
 
 
-LANGS = ("en", "pt-BR", "pt-PT")
-CONTEXT_LIMIT = FIRST_VARIANT = 200
-
-
 def text_in(value: str | dict | None, lang: str) -> str | None:
     """A localized value in `lang`, or None when it has no text for that language."""
     if isinstance(value, dict):
@@ -114,15 +110,14 @@ def text_in(value: str | dict | None, lang: str) -> str | None:
     return value
 
 
-def _positions(master: dict):
-    for employer in master.get("work", []):
-        yield from employer.get("positions", [])
+def positions(master: dict):
+    return (item for kind, item in _iter_items(master) if kind == "position")
 
 
 def reference_problems(master: dict) -> list[str]:
     """Broken `x-form` and `x-labels` references."""
     problems = []
-    for position in _positions(master):
+    for position in positions(master):
         own = {h["id"] for h in position["highlights"]}
         for pin in (position.get("x-form") or {}).get("pinned", []):
             if pin["ref"] not in own:
@@ -133,37 +128,6 @@ def reference_problems(master: dict) -> list[str]:
             if keyword not in skill["keywords"]:
                 problems.append(f"x-labels '{keyword}' is not a keyword of {skill['id']}")
     return problems
-
-
-def form_length_problems(master: dict) -> list[str]:
-    """Form text that cannot fit the 200 character variant. Only `validate` fails on these."""
-    problems = []
-    for position in _positions(master):
-        form = position.get("x-form")
-        if not form:
-            continue
-        highlights = {h["id"]: h for h in position["highlights"]}
-        for lang in LANGS:
-            context = text_in(form["context"], lang)
-            if context is None:
-                continue
-            where = f"{position['id']} ({lang})"
-            if len(context) > CONTEXT_LIMIT:
-                problems.append(
-                    f"{where}: context is {len(context)} characters, limit {CONTEXT_LIMIT}")
-                continue
-            if not form["pinned"]:
-                continue
-            pin = form["pinned"][0]
-            line = text_in(pin.get("short"), lang) or text_in(highlights[pin["ref"]]["impact"], lang)
-            if line is None:
-                continue
-            size = len(f"{context}\n- {line}")
-            if size > FIRST_VARIANT:
-                problems.append(
-                    f"{where}: context plus first pinned line is {size} characters, "
-                    f"limit {FIRST_VARIANT}")
-    return list(dict.fromkeys(problems))
 
 
 def load_master(path: Path) -> dict:
@@ -177,11 +141,10 @@ def load_master(path: Path) -> dict:
 
 
 def localized(value: str | dict, lang: str, *, item_id: str) -> str:
-    if isinstance(value, str):
-        return value
-    if lang not in value:
+    text = text_in(value, lang)
+    if text is None:
         raise ProfileError(f"{item_id}: missing translation '{lang}'")
-    return value[lang]
+    return text
 
 
 def index(master: dict) -> dict[str, tuple[str, dict]]:

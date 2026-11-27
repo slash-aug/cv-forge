@@ -1,7 +1,7 @@
 """Advice on weak CV and kit content. Warnings never block a build."""
 from __future__ import annotations
 
-from cvforge.kit.describe import describe
+from cvforge.kit.describe import FIRST_VARIANT, describe, first_variant_size
 from cvforge.profile.model import index, text_in
 
 MAX_BULLETS = 6
@@ -44,16 +44,16 @@ def _form_warnings(position: dict, bullets: list[dict], lang: str) -> list[str]:
     if text_in(form["context"], lang) is None:
         return [f"{pid}: x-form context has no {lang} text"]
     warnings = []
-    tailored = {b["ref"] for b in bullets}
+    selected_refs = {b["ref"] for b in bullets}
     highlights = {h["id"]: h for h in position["highlights"]}
     for pin in form["pinned"]:
         ref = pin["ref"]
-        if ref not in tailored and text_in(highlights[ref]["impact"], lang) is None:
+        if ref not in selected_refs and text_in(highlights[ref]["impact"], lang) is None:
             warnings.append(f"{pid}: pinned {ref} has no text in {lang}, left out")
         if "short" in pin and text_in(pin["short"], lang) is None:
             warnings.append(f"{pid}: pinned {ref} has no {lang} short text")
-    # The 200 variant is the context line followed by the first pinned highlight.
-    if form["pinned"] and "\n" not in describe(position, bullets, lang, 200):
+    size = first_variant_size(position, bullets, lang)
+    if size is not None and size > FIRST_VARIANT:
         warnings.append(f"{pid}: the 200 variant lacks the context or the first pinned highlight")
     return warnings
 

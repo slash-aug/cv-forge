@@ -53,12 +53,12 @@ from cvforge.discover.screen import DROP_REASONS
 from cvforge.discover.sources import clean_text
 from cvforge.guard import GuardError, check_message_file, check_staged, check_tree
 from cvforge.kit.data import build_kit
+from cvforge.kit.describe import form_length_problems
 from cvforge.kit.render import render_kit
 from cvforge.money.normalise import PERIODS, Money, breakdown, shown_amount
 from cvforge.money.rates import MoneyError, load_rates
 from cvforge.profile.model import (
     ProfileError,
-    form_length_problems,
     load_master,
     localized,
 )
@@ -716,8 +716,7 @@ def cmd_check(args) -> int:
             print(f'    "{r.quote}"')
     for risk in verdict.risks:
         print(f"RISK {risk}")
-    for warning in verdict.warnings:
-        print(f"warning: {warning}")
+    _print_warnings(verdict.warnings)
     _print_caveats(verdict.caveats)
     path = cfg.data_dir / "tracker.csv"
     current = next((r["status"] for r in tracker.load(path) if r["slug"] == args.slug), "")

@@ -6,8 +6,8 @@ from pathlib import Path
 
 from cvforge import cli
 from cvforge.apply.posting import Posting
-from cvforge.kit.data import build_kit, cut
-from cvforge.kit.describe import describe
+from cvforge.kit.data import build_kit
+from cvforge.kit.describe import cut, describe
 from cvforge.kit.render import render_kit
 from cvforge.profile.model import load_master, load_schema, schema_problems
 from cvforge.tailor.audit import load_tailored
@@ -340,24 +340,20 @@ def test_salary_without_breakdown_still_renders():
     assert "Per week" not in render_kit(k)
 
 
-def _form_kit(form, bullets, lang="en"):
-    master = copy.deepcopy(MASTER)
-    master["work"][0]["positions"][0]["x-form"] = form
-    tailored = {**TAILORED, "lang": lang, "experience": [{"ref": "w-examplepay", "positions": [
-        {"ref": "p-examplepay-lead",
-         "bullets": [{"ref": r, "text": t} for r, t in bullets]}]}]}
-    master["basics"]["label"] = "Engineer"
-    return describe(master["work"][0]["positions"][0], tailored["experience"][0]["positions"][0]["bullets"],
-                    lang, 2000), master["work"][0]["positions"][0]
+def _position(form):
+    position = copy.deepcopy(MASTER["work"][0]["positions"][0])
+    position["x-form"] = form
+    return position
 
 
 CONTEXT = {"en": "Payments team at a made-up company."}
 
 
 def test_describe_orders_context_pinned_then_bullets_once():
-    text, _ = _form_kit({"context": CONTEXT, "pinned": [{"ref": "h-mentoring"}, {"ref": "h-team-lead"}]},
-                        [("h-payments-integration", "Integrated payments."),
-                         ("h-team-lead", "Led the team, tailored.")])
+    position = _position({"context": CONTEXT,
+                          "pinned": [{"ref": "h-mentoring"}, {"ref": "h-team-lead"}]})
+    text = describe(position, [{"ref": "h-payments-integration", "text": "Integrated payments."},
+                               {"ref": "h-team-lead", "text": "Led the team, tailored."}], "en", 2000)
     assert text.split("\n") == [
         "Payments team at a made-up company.",
         "- Mentored 3 junior engineers into mid-level roles.",
@@ -366,9 +362,8 @@ def test_describe_orders_context_pinned_then_bullets_once():
 
 
 def test_describe_uses_short_when_full_does_not_fit_and_stops_at_first_misfit():
-    _, position = _form_kit(
-        {"context": CONTEXT, "pinned": [{"ref": "h-team-lead", "short": {"en": "Led 5."}}]},
-        [])
+    position = _position(
+        {"context": CONTEXT, "pinned": [{"ref": "h-team-lead", "short": {"en": "Led 5."}}]})
     bullets = [{"ref": "h-team-lead", "text": "A" * 100 + "."},
                {"ref": "h-mentoring", "text": "B" * 100 + "."},
                {"ref": "h-payments-integration", "text": "C."}]
@@ -378,14 +373,14 @@ def test_describe_uses_short_when_full_does_not_fit_and_stops_at_first_misfit():
 
 
 def test_describe_without_context_translation_falls_back_to_bullets():
-    _, position = _form_kit({"context": CONTEXT, "pinned": [{"ref": "h-mentoring"}]}, [])
+    position = _position({"context": CONTEXT, "pinned": [{"ref": "h-mentoring"}]})
     bullets = [{"ref": "h-team-lead", "text": "Liderou o time."}]
     assert describe(position, bullets, "pt-BR", 500) == "- Liderou o time."
 
 
 def test_describe_skips_pinned_without_text_in_language():
-    _, position = _form_kit({"context": {"pt-BR": "Time de pagamentos."},
-                             "pinned": [{"ref": "h-mentoring"}]}, [])
+    position = _position({"context": {"pt-BR": "Time de pagamentos."},
+                          "pinned": [{"ref": "h-mentoring"}]})
     position["highlights"][2]["impact"] = {"en": "Mentored."}
     bullets = [{"ref": "h-team-lead", "text": "Liderou o time."}]
     assert describe(position, bullets, "pt-BR", 500) == "Time de pagamentos.\n- Liderou o time."

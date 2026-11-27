@@ -4,9 +4,9 @@ import pytest
 import yaml
 
 from cvforge import cli
+from cvforge.kit.describe import form_length_problems
 from cvforge.profile.model import (
     ProfileError,
-    form_length_problems,
     index,
     load_master,
     localized,

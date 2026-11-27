@@ -2,13 +2,11 @@
 from __future__ import annotations
 
 from cvforge.answers.facts import ireland_facts, visa_text
-from cvforge.kit.describe import cut, describe
+from cvforge.kit.describe import describe
 from cvforge.money.normalise import PERIODS, shown_amount
 from cvforge.profile.model import index, localized
 from cvforge.render.cv import build_cv_view
 from cvforge.text import split_name
-
-__all__ = ["LIMITS", "SCHEMA_VERSION", "build_kit", "cut"]
 
 SCHEMA_VERSION = 2
 LIMITS = (200, 500, 1000, 2000)
