@@ -399,3 +399,11 @@ def test_build_kit_uses_form_and_empty_variant_fits_schema():
     assert lead["description"]["2000"].startswith("ccc")
     assert schema_problems(k, load_schema("cvforge.kit", "kit.schema.json")) == []
     assert render_kit(k)
+
+
+def test_kit_prints_warnings_and_keeps_the_path_last(tmp_path, monkeypatch, capsys):
+    _kit_app(tmp_path, monkeypatch)
+    assert cli.main(["kit", "example-corp", "--master", str(PERSONA / "master.yaml")]) == 0
+    lines = capsys.readouterr().out.strip().splitlines()
+    assert any(line.startswith("warning: ") for line in lines[:-1])
+    assert lines[-1].endswith("kit.html")

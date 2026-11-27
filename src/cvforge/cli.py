@@ -43,6 +43,7 @@ from cvforge.apply.seed import seed_ie
 from cvforge.apply.workspace import create_app_dir
 from cvforge.build import LatexError, compile_tex
 from cvforge.checks.ats import AtsReport, ats_check
+from cvforge.checks.quality import cv_warnings, kit_warnings
 from cvforge.config import Config, ConfigError, load_config
 from cvforge.discover import store as jobs_store
 from cvforge.discover.page import render_jobs
@@ -156,6 +157,11 @@ def _confidential_blocked(master: dict, **rendered) -> bool:
     return bool(findings)
 
 
+def _print_warnings(warnings: list[str]) -> None:
+    for warning in warnings:
+        print(f"warning: {warning}")
+
+
 def cmd_validate(args) -> int:
     problems = form_length_problems(load_master(Path(args.master)))
     if problems:
@@ -212,6 +218,7 @@ def cmd_build(args) -> int:
               if tailored.get("letter") and not args.no_letter else None)
     if _confidential_blocked(master, cv=view, letter=letter):
         return 1
+    _print_warnings(cv_warnings(tailored, master))
     cfg = load_config()
     target = tailored["target"]
     first, last = name_parts(master["basics"]["name"])
@@ -976,6 +983,7 @@ def cmd_kit(args) -> int:
         json.dumps(kit, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     html = app_dir / "kit.html"
     html.write_text(render_kit(kit), encoding="utf-8")
+    _print_warnings(cv_warnings(tailored, master) + kit_warnings(tailored, master))
     print(_windows_path(html) or html)
     return 0
 
