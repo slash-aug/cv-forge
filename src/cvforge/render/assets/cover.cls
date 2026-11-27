@@ -7,10 +7,10 @@
   \PassOptionsToClass{\CurrentOption}{article}
 }
 \ProcessOptions\relax
-\LoadClass{article}
+\LoadClass[a4paper]{article}
 
 % Package Imports
-\usepackage[hmargin=2.3cm, vmargin=2.3cm]{geometry}
+\usepackage[a4paper, hmargin=2.3cm, vmargin=2.3cm]{geometry}
 \usepackage[hidelinks]{hyperref}
 \usepackage[usenames,dvipsnames]{xcolor}
 \usepackage{titlesec}

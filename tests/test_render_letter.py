@@ -211,3 +211,9 @@ def test_letter_ie_spelling_on_paragraphs():
     ctx = letter_context(t, master, TODAY, ireland_region(master, city=None, ireland=IE_BLOCK))
     assert ctx["letter"]["paragraphs"][0] == "I organised the colour centre."
     assert render_letter(t, M, today=TODAY).count("organized") == 1
+
+
+def test_letter_class_is_a4():
+    cls = (ASSETS_DIR / "cover.cls").read_text(encoding="utf-8")
+    assert r"\LoadClass[a4paper]{article}" in cls
+    assert r"\usepackage[a4paper, hmargin=2.3cm, vmargin=2.3cm]{geometry}" in cls

@@ -87,6 +87,8 @@
   \setlength{\partopsep}{0pt}\setlength{\itemsep}{0pt}\setlength{\parsep}{0pt}}}%
   {\endlist\addvspace{.25em}}
 \makeatother
+% A further role at the employer above: its title and dates only, in the entry's second-line style.
+\newcommand*{\cvrole}[2]{\par\noindent{\itshape #1\hfill #2}\par\nopagebreak}
 \extrainfo{%
 %% for link in contact.links
 %% if link.newline
@@ -115,7 +117,11 @@
 \section{\VAR{headings.experience | tex}}
 %% for job in experience
 \keepnext{5\baselineskip}
+%% if job.grouped
+\cvrole{\VAR{job.title | tex}}{\VAR{job.dates | tex}}
+%% else
 \cventry{\VAR{job.dates | tex}}{\VAR{job.title | tex}}{\VAR{job.employer | tex}}{\VAR{job.location | tex}}{}{}
+%% endif
 %% if job.bullets
 \begin{cvbullets}
 %% for bullet in job.bullets

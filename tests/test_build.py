@@ -171,3 +171,12 @@ def test_timeout_raises_latex_error(tmp_path):
     stub.chmod(0o755)
     with pytest.raises(LatexError, match="timed out"):
         compile_tex("x", engine=str(stub), build_dir=tmp_path / "b", jobname="t", timeout=1)
+
+
+@pytest.mark.latex
+def test_letter_pdf_is_a4_and_one_page(cfg):
+    pdf = compile_tex(render_letter(T, M), engine=_need(cfg, "xelatex"),
+                      build_dir=cfg.build_dir / "test", jobname="letter_a4", assets=ASSETS_DIR)
+    pages = PdfReader(pdf).pages
+    assert len(pages) == 1
+    assert (round(float(pages[0].mediabox.width)), round(float(pages[0].mediabox.height))) == (595, 842)

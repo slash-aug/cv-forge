@@ -716,3 +716,20 @@ def test_ie_region_spelling_on_project_text():
     tailored["projects"][0]["text"] = "Organized the color pipeline."
     view = build_cv_view(tailored, master, ireland_region(master, city=None, ireland=IE_BLOCK))
     assert view["projects"][0]["text"] == "Organised the colour pipeline."
+
+
+def test_skill_labels_print_in_the_cv_language():
+    master = copy.deepcopy(M)
+    master["skills"][0]["x-labels"] = {"Python": {"pt-BR": "Pitão"}}
+    pt = build_cv_view(T_PT, master)["skills"][0]["keywords"]
+    en = build_cv_view(T, master)["skills"][0]["keywords"]
+    assert "Pitão" in pt and "Python" not in pt
+    assert en.startswith("Python")
+
+
+def test_second_position_of_an_employer_is_grouped():
+    view = build_cv_view(T, M)
+    assert [j["grouped"] for j in view["experience"]] == [False, False, True]
+    tex = render_view(view)
+    assert tex.count("{ExamplePay}") == 1
+    assert "Software Engineer" in tex
