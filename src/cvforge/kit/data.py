@@ -1,54 +1,18 @@
 """Build the kit data: form fields, jobs with descriptions cut to portal limits, salary, answers."""
 from __future__ import annotations
 
-import re
-
 from cvforge.answers.facts import ireland_facts, visa_text
+from cvforge.kit.describe import cut, describe
 from cvforge.money.normalise import PERIODS, shown_amount
 from cvforge.profile.model import index, localized
 from cvforge.render.cv import build_cv_view
 from cvforge.text import split_name
 
+__all__ = ["LIMITS", "SCHEMA_VERSION", "build_kit", "cut"]
+
 SCHEMA_VERSION = 2
 LIMITS = (200, 500, 1000, 2000)
 UNCONFIRMED = "unconfirmed: run cvforge salary {slug} --confirm"
-_SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
-_TRAILING = " ,;:-"
-
-
-def _fit_words(text: str, limit: int) -> str:
-    out = ""
-    for word in text.split():
-        candidate = f"{out} {word}" if out else word
-        if len(candidate) > limit:
-            break
-        out = candidate
-    return out.rstrip(_TRAILING) if out.rstrip(_TRAILING) else ""
-
-
-def _fit_sentences(line: str, limit: int) -> str:
-    out = ""
-    for sentence in _SENTENCE_END.split(line):
-        candidate = f"{out} {sentence}" if out else sentence
-        if len(candidate) > limit:
-            break
-        out = candidate
-    return out or _fit_words(line, limit)
-
-
-def cut(text: str, limit: int) -> str:
-    """At most `limit` characters: whole bullet lines, else whole sentences, else whole words."""
-    if len(text) <= limit:
-        return text
-    kept: list[str] = []
-    for line in text.split("\n"):
-        candidate = "\n".join([*kept, line])
-        if len(candidate) > limit:
-            break
-        kept.append(line)
-    if kept:
-        return "\n".join(kept)
-    return _fit_sentences(text.split("\n", 1)[0], limit)
 
 
 def _field(key: str, label: str, value, group: str) -> dict | None:
@@ -102,14 +66,14 @@ def _work(master: dict, tailored: dict) -> list[dict]:
         rows = sorted(((ids[p["ref"]][1], p) for p in entry["positions"]),
                       key=lambda pair: pair[0]["startDate"], reverse=True)
         for position, ref in rows:
-            text = "\n".join(f"- {b['text']}" for b in ref["bullets"])
             jobs.append({
                 "key": f"work.{len(jobs)}",
                 "title": localized(position["title"], lang, item_id=position["id"]),
                 "company": company,
                 "start": position["startDate"],
                 "end": position.get("endDate"),
-                "description": {str(limit): cut(text, limit) for limit in LIMITS},
+                "description": {str(limit): describe(position, ref["bullets"], lang, limit)
+                                for limit in LIMITS},
             })
     return jobs
 

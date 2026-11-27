@@ -1,3 +1,4 @@
+import copy
 import json
 import re
 import shutil
@@ -6,6 +7,7 @@ from pathlib import Path
 from cvforge import cli
 from cvforge.apply.posting import Posting
 from cvforge.kit.data import build_kit, cut
+from cvforge.kit.describe import describe
 from cvforge.kit.render import render_kit
 from cvforge.profile.model import load_master, load_schema, schema_problems
 from cvforge.tailor.audit import load_tailored
@@ -53,14 +55,10 @@ def test_kit_json_keys_stable():
     assert schema_problems(k, load_schema("cvforge.kit", "kit.schema.json")) == []
 
 
-def test_cut_respects_limit_and_words():
-    text = "Alpha beta gamma delta epsilon zeta eta theta iota kappa lambda"
-    for limit in (10, 20, 33, 50):
-        out = cut(text, limit)
-        assert len(out) <= limit
-        assert out and set(out.split()) <= set(text.split())
+def test_cut_never_splits_a_sentence():
+    assert cut("Alpha beta gamma delta epsilon", 10) == ""
+    assert cut("One two. Three four five six.", 12) == "One two."
     assert cut("short", 200) == "short"
-    assert cut("x" * 50, 20) == ""  # a single word longer than the limit is dropped, never split
 
 
 def test_cut_prefers_bullet_boundary():
@@ -340,3 +338,64 @@ def test_salary_without_breakdown_still_renders():
     k = kit({kk: v for kk, v in SALARY.items() if kk != "breakdown"})
     assert k["salary"]["breakdown"] == []
     assert "Per week" not in render_kit(k)
+
+
+def _form_kit(form, bullets, lang="en"):
+    master = copy.deepcopy(MASTER)
+    master["work"][0]["positions"][0]["x-form"] = form
+    tailored = {**TAILORED, "lang": lang, "experience": [{"ref": "w-examplepay", "positions": [
+        {"ref": "p-examplepay-lead",
+         "bullets": [{"ref": r, "text": t} for r, t in bullets]}]}]}
+    master["basics"]["label"] = "Engineer"
+    return describe(master["work"][0]["positions"][0], tailored["experience"][0]["positions"][0]["bullets"],
+                    lang, 2000), master["work"][0]["positions"][0]
+
+
+CONTEXT = {"en": "Payments team at a made-up company."}
+
+
+def test_describe_orders_context_pinned_then_bullets_once():
+    text, _ = _form_kit({"context": CONTEXT, "pinned": [{"ref": "h-mentoring"}, {"ref": "h-team-lead"}]},
+                        [("h-payments-integration", "Integrated payments."),
+                         ("h-team-lead", "Led the team, tailored.")])
+    assert text.split("\n") == [
+        "Payments team at a made-up company.",
+        "- Mentored 3 junior engineers into mid-level roles.",
+        "- Led the team, tailored.",
+        "- Integrated payments."]
+
+
+def test_describe_uses_short_when_full_does_not_fit_and_stops_at_first_misfit():
+    _, position = _form_kit(
+        {"context": CONTEXT, "pinned": [{"ref": "h-team-lead", "short": {"en": "Led 5."}}]},
+        [])
+    bullets = [{"ref": "h-team-lead", "text": "A" * 100 + "."},
+               {"ref": "h-mentoring", "text": "B" * 100 + "."},
+               {"ref": "h-payments-integration", "text": "C."}]
+    assert describe(position, bullets, "en", 60) == "Payments team at a made-up company.\n- Led 5."
+    assert describe(position, bullets, "en", 2000).count("A" * 100) == 1
+    assert describe(position, bullets, "en", 20) == ""
+
+
+def test_describe_without_context_translation_falls_back_to_bullets():
+    _, position = _form_kit({"context": CONTEXT, "pinned": [{"ref": "h-mentoring"}]}, [])
+    bullets = [{"ref": "h-team-lead", "text": "Liderou o time."}]
+    assert describe(position, bullets, "pt-BR", 500) == "- Liderou o time."
+
+
+def test_describe_skips_pinned_without_text_in_language():
+    _, position = _form_kit({"context": {"pt-BR": "Time de pagamentos."},
+                             "pinned": [{"ref": "h-mentoring"}]}, [])
+    position["highlights"][2]["impact"] = {"en": "Mentored."}
+    bullets = [{"ref": "h-team-lead", "text": "Liderou o time."}]
+    assert describe(position, bullets, "pt-BR", 500) == "Time de pagamentos.\n- Liderou o time."
+
+
+def test_build_kit_uses_form_and_empty_variant_fits_schema():
+    master = copy.deepcopy(MASTER)
+    master["work"][0]["positions"][0]["x-form"] = {"context": {"en": "c" * 199 + "."}, "pinned": []}
+    k = build_kit(master, TAILORED, POSTING, None, slug="s", files={})
+    lead = next(w for w in k["work"] if w["title"] == "Tech Lead")
+    assert lead["description"]["2000"].startswith("ccc")
+    assert schema_problems(k, load_schema("cvforge.kit", "kit.schema.json")) == []
+    assert render_kit(k)
