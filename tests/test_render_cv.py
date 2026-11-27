@@ -731,5 +731,5 @@ def test_second_position_of_an_employer_is_grouped():
     view = build_cv_view(T, M)
     assert [j["grouped"] for j in view["experience"]] == [False, False, True]
     tex = render_view(view)
-    assert tex.count("{ExamplePay}") == 1
+    assert "\\cvrole{Software Engineer}" in tex
     assert "Software Engineer" in tex

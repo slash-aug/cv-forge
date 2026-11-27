@@ -246,3 +246,11 @@ def test_validate_fails_on_length_problem(tmp_path, capsys):
 
     assert cli.main(["validate", str(_write_variant(tmp_path, add))]) == 1
     assert "context" in capsys.readouterr().out
+
+
+def test_duplicate_pinned_ref_rejected(tmp_path):
+    def add(data):
+        _form(data)["pinned"].append({"ref": "h-team-lead"})
+
+    with pytest.raises(ProfileError, match="h-team-lead.*twice"):
+        load_master(_write_variant(tmp_path, add))

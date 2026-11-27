@@ -119,6 +119,9 @@ def reference_problems(master: dict) -> list[str]:
     problems = []
     for position in positions(master):
         own = {h["id"] for h in position["highlights"]}
+        pins = [pin["ref"] for pin in (position.get("x-form") or {}).get("pinned", [])]
+        problems.extend(f"x-form pins '{ref}' twice in {position['id']}"
+                        for ref, n in Counter(pins).items() if n > 1)
         for pin in (position.get("x-form") or {}).get("pinned", []):
             if pin["ref"] not in own:
                 problems.append(

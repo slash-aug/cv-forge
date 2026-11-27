@@ -87,8 +87,20 @@
   \setlength{\partopsep}{0pt}\setlength{\itemsep}{0pt}\setlength{\parsep}{0pt}}}%
   {\endlist\addvspace{.25em}}
 \makeatother
-% A further role at the employer above: its title and dates only, in the entry's second-line style.
-\newcommand*{\cvrole}[2]{\par\noindent{\itshape #1\hfill #2}\par\nopagebreak}
+% A further role at the employer above: title and dates only, in the entry's second-line
+% style. With less than 5 lines left on the page it moves to the next one as a full entry,
+% so no page opens on a role without its employer. \pagegoal is \maxdimen on a new page.
+\makeatletter
+\newcommand*{\cvrole}[4]{\par
+  \dimen@\pagegoal\advance\dimen@-\pagetotal
+  \ifdim\pagegoal=\maxdimen\dimen@\z@\fi
+  \ifdim\dimen@<5\baselineskip
+    \ifdim\pagegoal<\maxdimen\vfil\break\fi
+    \cventry{#2}{#1}{#3}{#4}{}{}%
+  \else
+    \noindent{\itshape #1\hfill #2}\par\nopagebreak
+  \fi}
+\makeatother
 \extrainfo{%
 %% for link in contact.links
 %% if link.newline
@@ -116,10 +128,10 @@
 \keepnext{8\baselineskip}
 \section{\VAR{headings.experience | tex}}
 %% for job in experience
-\keepnext{5\baselineskip}
 %% if job.grouped
-\cvrole{\VAR{job.title | tex}}{\VAR{job.dates | tex}}
+\cvrole{\VAR{job.title | tex}}{\VAR{job.dates | tex}}{\VAR{job.employer | tex}}{\VAR{job.location | tex}}
 %% else
+\keepnext{5\baselineskip}
 \cventry{\VAR{job.dates | tex}}{\VAR{job.title | tex}}{\VAR{job.employer | tex}}{\VAR{job.location | tex}}{}{}
 %% endif
 %% if job.bullets
