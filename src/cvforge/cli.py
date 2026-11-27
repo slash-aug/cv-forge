@@ -55,7 +55,12 @@ from cvforge.kit.data import build_kit
 from cvforge.kit.render import render_kit
 from cvforge.money.normalise import PERIODS, Money, breakdown, shown_amount
 from cvforge.money.rates import MoneyError, load_rates
-from cvforge.profile.model import ProfileError, load_master, localized
+from cvforge.profile.model import (
+    ProfileError,
+    form_length_problems,
+    load_master,
+    localized,
+)
 from cvforge.profile.prefs import degree_recognised, ireland_pay_floor
 from cvforge.render.cv import build_cv_view, render_view
 from cvforge.render.irish import Region, ireland_region, irish_city
@@ -152,7 +157,11 @@ def _confidential_blocked(master: dict, **rendered) -> bool:
 
 
 def cmd_validate(args) -> int:
-    load_master(Path(args.master))
+    problems = form_length_problems(load_master(Path(args.master)))
+    if problems:
+        for problem in problems:
+            print(problem)
+        return 1
     print("ok")
     return 0
 
